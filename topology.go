@@ -1,8 +1,8 @@
 package meritop
 
+// The Topology will be implemented by the application.
+// Each Topology might have many epochs. The topology of each epoch might be different.
 type Topology interface {
-	// This should be called by framework at beginning of each epoch.
-
 	// GetParents returns the parents' IDs of the given taskID at the
 	// given epoch.
 	GetParents(epochID, taskID uint64) []uint64
