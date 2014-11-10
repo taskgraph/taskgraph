@@ -8,7 +8,7 @@ type testInfo struct {
 }
 
 func TestTreeToplogy27(t *testing.T) {
-	var tests27 = []testInfo{
+	tests27 := []testInfo{
 		{uint64(0), []uint64{}, []uint64{1, 2}},
 		{uint64(1), []uint64{0}, []uint64{3, 4}},
 		{uint64(5), []uint64{2}, []uint64{}},
@@ -17,7 +17,7 @@ func TestTreeToplogy27(t *testing.T) {
 }
 
 func TestTreeToplogy28(t *testing.T) {
-	var tests28 = []testInfo{
+	tests28 := []testInfo{
 		{uint64(0), []uint64{}, []uint64{1, 2}},
 		{uint64(1), []uint64{0}, []uint64{3, 4}},
 		{uint64(3), []uint64{1}, []uint64{7}},
@@ -29,7 +29,7 @@ func TreeTopologyTesting(tests []testInfo, t *testing.T) {
 	for _, tt := range tests {
 		// For each row, we construct the tree topology and then
 		// set up the task id.
-		var treeTopology = NewTreeTopology(2, 7)
+		treeTopology := NewTreeTopology(2, 7)
 		treeTopology.SetTaskID(tt.in)
 
 		parents := treeTopology.GetParents(0)
