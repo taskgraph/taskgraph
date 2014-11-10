@@ -5,8 +5,8 @@ topology defined here. The main usage is:
 a. At beginning of the framework initialization for each task, framework
    call the SetTaskID so that the singleton Topology knows which taskID it
    represents.
-b. At beginning of each epock, the framework implementation (on each task)
-   will call GetParents and GetChildren with given epoch, so that it know
+b. At beginning of each epoch, the framework implementation (on each task)
+   will call GetParents and GetChildren with given epoch, so that it knows
    how to setup watcher for node failures. 
 */
 package meritop
