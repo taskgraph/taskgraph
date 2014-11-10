@@ -20,6 +20,9 @@ type Framework interface {
 	// nodes will get into the event loop to run the application.
 	Start()
 
-	// Node can inform all participate task to exit.
+	// Some task can inform all participating tasks to exit.
 	Exit()
+
+	// Some task can inform all participating tasks to new epoch
+	SetEpoch(epochID)
 }
