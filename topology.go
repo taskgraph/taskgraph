@@ -1,6 +1,6 @@
 /*
-The topology is a data structure that implemented by application, and
-used by frameework implementation to setup/manage the event according to
+The topology is a data structure implemented by application, and
+used by framework implementation to setup/manage the event according to
 topology defined here. The main usage is:
 a. At beginning of the framework initialization for each task, framework
    call the SetTaskID so that the singleton Topology knows which taskID it
