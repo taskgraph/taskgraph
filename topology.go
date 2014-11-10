@@ -7,12 +7,12 @@ a. At beginning of the framework initialization for each task, framework
    represents.
 b. At beginning of each epoch, the framework implementation (on each task)
    will call GetParents and GetChildren with given epoch, so that it knows
-   how to setup watcher for node failures. 
+   how to setup watcher for node failures.
 */
 package meritop
 
 // The Topology will be implemented by the application.
-// Each Topology might have many epochs. The topology of each epoch 
+// Each Topology might have many epochs. The topology of each epoch
 // might be different.
 type Topology interface {
 	// This method is called once by framework implementation. So that
@@ -26,4 +26,7 @@ type Topology interface {
 	// GetChlidren returns the children's IDs of this task at the
 	// given epoch.
 	GetChildren(epochID uint64) []uint64
+
+	// NumberOfTasks returns the number of tasks this topology requires.
+	NumberOfTasks() uint64
 }
