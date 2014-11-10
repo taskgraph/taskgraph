@@ -13,16 +13,11 @@ An TaskNet application usually has three layers. And application implementation 
       
 An example of driver can be:
 
-Framework mgr = framework.Framework()
-
-mgr.AddTask(&ParameterServerTask())
-
-mgr.AddTask(&DataShardTask())
-
-mgr.SetTaskConfig(&SimpleTreeConfig())
-
-mgr.SetTopology(NewTreeTopology(2, 127))
-
-mgr.Start()
+Framework mgr = framework.Framework()  
+mgr.AddTask(&ParameterServerTask())  
+mgr.AddTask(&DataShardTask())  
+mgr.SetTaskConfig(&SimpleTreeConfig())  
+mgr.SetTopology(NewTreeTopology(2, 127))  
+mgr.Start()  
 
 Note, for now, the completion of TaskNet is not defined explicitly. Instead, each application will have their way of exit based on application dependent logic. As an example, the above application can stop if task 0 stops. We have the hooks in Framework so any node can potentially exit the entire TaskNet. We also have hook in Task so that task implementation get a change to save the work. 
