@@ -14,7 +14,21 @@ var tests27 = []testInfo{
 }
 
 func TestTreeToplogy27(t *testing.T) {
-	for _, tt := range tests27 {
+	TreeTopologyTesting(tests27, t)
+}
+
+var tests28 = []testInfo{
+	{uint64(0), []uint64{}, []uint64{1, 2}},
+	{uint64(1), []uint64{0}, []uint64{3, 4}},
+	{uint64(3), []uint64{1}, []uint64{7}},
+}
+
+func TestTreeToplogy28(t *testing.T) {
+	TreeTopologyTesting(tests28, t)
+}
+
+func TreeTopologyTesting(tests []testInfo, t *testing.T) {
+	for _, tt := range tests {
 		// For each row, we construct the tree topology and then
 		// set up the task id.
 		var treeTopology = NewTreeTopology(2, 7)
