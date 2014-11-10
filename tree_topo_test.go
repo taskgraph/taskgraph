@@ -7,23 +7,21 @@ type testInfo struct {
 	parents, children []uint64
 }
 
-var tests27 = []testInfo{
-	{uint64(0), []uint64{}, []uint64{1, 2}},
-	{uint64(1), []uint64{0}, []uint64{3, 4}},
-	{uint64(5), []uint64{2}, []uint64{}},
-}
-
 func TestTreeToplogy27(t *testing.T) {
+	var tests27 = []testInfo{
+		{uint64(0), []uint64{}, []uint64{1, 2}},
+		{uint64(1), []uint64{0}, []uint64{3, 4}},
+		{uint64(5), []uint64{2}, []uint64{}},
+	}
 	TreeTopologyTesting(tests27, t)
 }
 
-var tests28 = []testInfo{
-	{uint64(0), []uint64{}, []uint64{1, 2}},
-	{uint64(1), []uint64{0}, []uint64{3, 4}},
-	{uint64(3), []uint64{1}, []uint64{7}},
-}
-
 func TestTreeToplogy28(t *testing.T) {
+	var tests28 = []testInfo{
+		{uint64(0), []uint64{}, []uint64{1, 2}},
+		{uint64(1), []uint64{0}, []uint64{3, 4}},
+		{uint64(3), []uint64{1}, []uint64{7}},
+	}
 	TreeTopologyTesting(tests28, t)
 }
 
