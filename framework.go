@@ -25,4 +25,8 @@ type Framework interface {
 
 	// Some task can inform all participating tasks to new epoch
 	SetEpoch(epochID uint64)
+
+	// This allow task implementation to node corresponding to taskID so that
+	// it can carry out application dependent communication.
+	GetNode(taskID uint64) Node
 }
