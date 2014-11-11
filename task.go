@@ -5,7 +5,7 @@ package meritop
 // Each task has exact one master Node and might have multiple salve Nodes.
 type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
-	Init(config Config, taskID uint64)
+	Init(taskID uint64, framework Framework, config Config)
 
 	// Task need to finish up for exit, last chance to save work?
 	Exit()
