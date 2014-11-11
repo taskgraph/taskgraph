@@ -7,6 +7,9 @@ type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(config Config)
 
+	// Task need to finish up for exit, last chance to save work?
+	Exit()
+
 	// Nodes returns the IDs of the node associated with this task.
 	Nodes() []Node
 	Master() Node
@@ -30,4 +33,7 @@ type Task interface {
 	// Some hooks that need for master slave etc.
 	BecameMaster(nodeID uint64)
 	BecameSlave(nodeID uint64)
+
+	// This method make framework available to task implementation.
+	SetFramework(framework FrameWork)
 }
