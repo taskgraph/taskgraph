@@ -20,7 +20,7 @@ type Task interface {
 
 	// Ideally, we should also have the following:
 	ParentReady(parentID uint64, data []byte)
-	ClientReady(childID uint64, data []byte)
+	ChildReady(childID uint64, data []byte)
 
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epochID uint64)
@@ -28,7 +28,4 @@ type Task interface {
 	// Some hooks that need for master slave etc.
 	BecameMaster(nodeID uint64)
 	BecameSlave(nodeID uint64)
-
-	// This method make framework available to task implementation.
-	SetFramework(framework Framework)
 }
