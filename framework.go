@@ -24,5 +24,5 @@ type Framework interface {
 	Exit()
 
 	// Some task can inform all participating tasks to new epoch
-	SetEpoch(epochID)
+	SetEpoch(epochID uint64)
 }
