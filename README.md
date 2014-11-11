@@ -1,6 +1,6 @@
 TaskNet
 
-TaskNet is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology. To make writing the fault tolerent application easy, ramework defines a set of events that commonly arise such as parent fail/restart, children fail/restart. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on these event to task implementation so that it can do application dependent recovery.
+TaskNet is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology. To make writing the fault tolerent application easy, framework defines a set of events that commonly arise such as parent fail/restart, children fail/restart. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on these event to task implementation so that it can do application dependent recovery.
 
 An TaskNet application usually has three layers. And application implementation need to take care of two of them. 
 

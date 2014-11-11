@@ -3,24 +3,48 @@ package meritop
 import "testing"
 
 type testInfo struct {
-	in                uint64
+	in         		  uint64
 	parents, children []uint64
 }
 
 func TestTreeToplogy27(t *testing.T) {
-	tests27 := []testInfo{
-		{uint64(0), []uint64{}, []uint64{1, 2}},
-		{uint64(1), []uint64{0}, []uint64{3, 4}},
-		{uint64(5), []uint64{2}, []uint64{}},
+	tests27 := []struct{
+		in                uint64
+		parents, children []uint64
+	}{
+		{
+			uint64(0),
+			[]uint64{}, []uint64{1, 2}
+		},
+		{
+			uint64(1),
+			[]uint64{0}, []uint64{3, 4}
+		},
+		{
+			uint64(5),
+			[]uint64{2}, []uint64{}
+		},
 	}
 	TreeTopologyTesting(tests27, t)
 }
 
 func TestTreeToplogy28(t *testing.T) {
-	tests28 := []testInfo{
-		{uint64(0), []uint64{}, []uint64{1, 2}},
-		{uint64(1), []uint64{0}, []uint64{3, 4}},
-		{uint64(3), []uint64{1}, []uint64{7}},
+	tests28 := []struct{
+    	in 				  uint64
+    	parents, children []uint64
+	}{
+		{
+			uint64(0),
+			[]uint64{}, []uint64{1, 2}
+		},
+		{
+			uint64(1),
+			[]uint64{0}, []uint64{3, 4}
+		},
+		{
+			uint64(3),
+			[]uint64{1}, []uint64{7}
+		},
 	}
 	TreeTopologyTesting(tests28, t)
 }
