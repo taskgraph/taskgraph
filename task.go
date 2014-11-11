@@ -24,8 +24,12 @@ type Task interface {
 
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epochID uint64)
+}
 
+// Backupable is an interface that task need to implement if they want to have
+// hot standby copy. This is another can of beans.
+type Backupable interface {
 	// Some hooks that need for master slave etc.
-	BecameMaster(nodeID uint64)
-	BecameSlave(nodeID uint64)
+	BecameMaster()
+	BecameBackup()
 }
