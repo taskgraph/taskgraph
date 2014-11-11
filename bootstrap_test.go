@@ -9,6 +9,7 @@ import (
 
 // start an etcd server at localhost:4001 before start this test.
 func TestBootstrap(t *testing.T) {
+	t.Skip("")
 	c := etcd.NewClient([]string{"http://localhost:4001"})
 	ctl := controller{etcdclient: c}
 	err := ctl.initTopo(20, 2)
