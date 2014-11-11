@@ -35,5 +35,5 @@ type Task interface {
 	BecameSlave(nodeID uint64)
 
 	// This method make framework available to task implementation.
-	SetFramework(framework FrameWork)
+	SetFramework(framework Framework)
 }
