@@ -3,7 +3,7 @@ package meritop
 import "log"
 
 // This interface is used by application during taskgraph configuration phase.
-type FrameworkInit interface {
+type Bootstrapper interface {
 	// These allow application developer to set the task configuration so framework
 	// implementation knows which task to invoke at each node.
 	SetTaskBuilder(taskBuilder TaskBuilder)
