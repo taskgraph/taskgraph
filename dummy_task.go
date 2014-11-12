@@ -34,27 +34,31 @@ func (t DummyMaster) ParentDie(parentID uint64) {}
 func (t DummyMaster) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t DummyMaster) ParentReady(taskID uint64, meta TGMeta) {
+func (t DummyMaster) ParentMetaReady(taskID uint64, meta Metadata) {
 	t.logger.Fatal("There should be no parent for master")
 	t.framework.Exit()
 }
 
-func (t DummyMaster) ChildReady(taskID uint64, meta TGMeta) {
+func (t DummyMaster) ChildMetaReady(taskID uint64, meta Metadata) {
 	// Get data from child. When all the data is back, starts the next epoch.
 }
 
 // This give the task an opportunity to cleanup and regroup.
 func (t DummyMaster) SetEpoch(epochID uint64) {
 	t.epochID = epochID
-	t.framework.FlagReadyForChildren(nil)
+	t.framework.FlagChildMetaReady(nil)
 }
 
-func (t DummyMaster) GetFromParent(req TGMeta) TGMeta {
+// These are payload rpc for application purpose.
+func (t DummyMaster) ServeAsParent(req Metadata) Metadata {
 	return nil
 }
-func (t DummyMaster) GetFromChild(reg TGMeta) TGMeta {
+func (t DummyMaster) ServeAsChild(reg Metadata) Metadata {
 	return nil
 }
+
+func (t DummyMaster) ParentDataReady(req, response Metadata) {}
+func (t DummyMaster) ChildDataReady(req, response Metadata)  {}
 
 type DummySlave struct {
 	framework       Framework
@@ -81,18 +85,18 @@ func (t DummySlave) ParentDie(parentID uint64) {}
 func (t DummySlave) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t DummySlave) ParentReady(taskID uint64, meta TGMeta) {
+func (t DummySlave) ParentMetaReady(taskID uint64, meta Metadata) {
 	// Get data from parent, and then make it available for children.
 	if t.framework.HasChildren() {
-		t.framework.FlagReadyForChildren(nil)
+		t.framework.FlagChildMetaReady(nil)
 	} else {
-		t.framework.FlagReadyForParent(nil)
+		t.framework.FlagParentMetaReady(nil)
 	}
 }
 
-func (t DummySlave) ChildReady(taskID uint64, meta TGMeta) {
+func (t DummySlave) ChildMetaReady(taskID uint64, meta Metadata) {
 	// Get data from child. When all the data is back, we flag the parent.
-	t.framework.FlagReadyForParent(nil)
+	t.framework.FlagParentMetaReady(nil)
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -104,12 +108,15 @@ func (t DummySlave) SetEpoch(epochID uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t DummySlave) GetFromParent(req TGMeta) TGMeta {
+func (t DummySlave) ServeAsParent(req Metadata) Metadata {
 	return nil
 }
-func (t DummySlave) GetFromChild(reg TGMeta) TGMeta {
+func (t DummySlave) ServeAsChild(reg Metadata) Metadata {
 	return nil
 }
+
+func (t DummySlave) ParentDataReady(req, response Metadata) {}
+func (t DummySlave) ChildDataReady(req, response Metadata)  {}
 
 type simpleTaskBuilder struct{}
 
@@ -117,7 +124,6 @@ type simpleTaskBuilder struct{}
 // right task implementation for the node/task. It requires the taskID
 // for current node, and also a global array of tasks.
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
-
 	if taskID == 0 {
 		return DummyMaster{}
 	} else {
