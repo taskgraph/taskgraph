@@ -2,10 +2,10 @@ package meritop
 
 // These interface is useful for safety check.
 type TGMeta interface {
-	GetEpochID() uint64
-	GetTaskID() uint64
-	GetFromTaskID() uint64
-	GetUUID() uint64
+	EpochID() uint64
+	TaskID() uint64
+	FromTaskID() uint64
+	UUID() uint64
 }
 
 // Task is a logic repersentation of a computing unit.
