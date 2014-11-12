@@ -30,8 +30,7 @@ type Framework interface {
 	GetLogger() log.Logger
 
 	// Request data from parent or children.
-	RequestParentData(meta TGMeata)
-	RequestChildData(meta TGMeta)
+	DataRequest(toID uint64, meta TGMeta)
 
 	// This allow task implementation to node corresponding to taskID so that
 	// it can carry out application dependent communication.
