@@ -34,12 +34,12 @@ func (t DummyMaster) ParentDie(parentID uint64) {}
 func (t DummyMaster) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t DummyMaster) ParentReady(taskID uint64, data []byte) {
+func (t DummyMaster) ParentReady(taskID uint64, meta TGMeta) {
 	t.logger.Fatal("There should be no parent for master")
 	t.framework.Exit()
 }
 
-func (t DummyMaster) ChildReady(taskID uint64, data []byte) {
+func (t DummyMaster) ChildReady(taskID uint64, meta TGMeta) {
 	// Get data from child. When all the data is back, starts the next epoch.
 }
 
@@ -47,6 +47,13 @@ func (t DummyMaster) ChildReady(taskID uint64, data []byte) {
 func (t DummyMaster) SetEpoch(epochID uint64) {
 	t.epochID = epochID
 	t.framework.FlagReadyForChildren(nil)
+}
+
+func (t DummyMaster) GetFromParent(req TGMeta) TGMeta {
+	return nil
+}
+func (t DummyMaster) GetFromChild(reg TGMeta) TGMeta {
+	return nil
 }
 
 type DummySlave struct {
@@ -74,7 +81,7 @@ func (t DummySlave) ParentDie(parentID uint64) {}
 func (t DummySlave) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t DummySlave) ParentReady(taskID uint64, data []byte) {
+func (t DummySlave) ParentReady(taskID uint64, meta TGMeta) {
 	// Get data from parent, and then make it available for children.
 	if t.framework.HasChildren() {
 		t.framework.FlagReadyForChildren(nil)
@@ -83,7 +90,7 @@ func (t DummySlave) ParentReady(taskID uint64, data []byte) {
 	}
 }
 
-func (t DummySlave) ChildReady(taskID uint64, data []byte) {
+func (t DummySlave) ChildReady(taskID uint64, meta TGMeta) {
 	// Get data from child. When all the data is back, we flag the parent.
 	t.framework.FlagReadyForParent(nil)
 }
@@ -94,6 +101,14 @@ func (t DummySlave) SetEpoch(epochID uint64) {
 
 	// this is client node, it should wait for parent ready then inform
 	// its children
+}
+
+// These are payload rpc for application purpose.
+func (t DummySlave) GetFromParent(req TGMeta) TGMeta {
+	return nil
+}
+func (t DummySlave) GetFromChild(reg TGMeta) TGMeta {
+	return nil
 }
 
 type simpleTaskBuilder struct{}
