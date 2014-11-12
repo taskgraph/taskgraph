@@ -27,8 +27,8 @@ type Task interface {
 	ChildDie(childID uint64)
 
 	// Ideally, we should also have the following:
-	ParentReady(parentID uint64, meta TGMeta)
-	ChildReady(childID uint64, meta TGMeta)
+	ParentMetaReady(parentID uint64, meta TGMeta)
+	ChildMetaReady(childID uint64, meta TGMeta)
 
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epochID uint64)
