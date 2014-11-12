@@ -1,5 +1,13 @@
 package meritop
 
+// These interface is useful for safety check, TG stands for TaskGraph.
+type Metadata interface {
+	EpochID() uint64
+	ToTaskID() uint64
+	FromTaskID() uint64
+	UUID() uint64
+}
+
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
@@ -19,11 +27,18 @@ type Task interface {
 	ChildDie(childID uint64)
 
 	// Ideally, we should also have the following:
-	ParentReady(parentID uint64, data []byte)
-	ChildReady(childID uint64, data []byte)
+	ParentMetaReady(parentID uint64, meta Metadata)
+	ChildMetaReady(childID uint64, meta Metadata)
 
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epochID uint64)
+
+	// These are payload for application purpose.
+	ServeAsParent(req Metadata) Metadata
+	ServeAsChild(reg Metadata) Metadata
+
+	ParentDataReady(req, response Metadata)
+	ChildDataReady(req, response Metadata)
 }
 
 // Backupable is an interface that task need to implement if they want to have
