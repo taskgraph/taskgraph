@@ -1,10 +1,12 @@
 package meritop
 
-// These interface is useful for safety check.
+// These interface is useful for safety check, TG stands for TaskGraph.
 type TGMeta interface {
 	EpochID() uint64
-	TaskID() uint64
+	ToTaskID() uint64
 	FromTaskID() uint64
+	SetToTaskID(toID uint64)
+	SetFromTaskID(fromID uint64)
 	UUID() uint64
 }
 
