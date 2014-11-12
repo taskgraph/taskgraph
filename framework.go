@@ -6,8 +6,8 @@ import "log"
 // metaData has to be really small, since it might be stored in etcd.
 type Framework interface {
 	// Flags and Sends the metaData to partent of the current task.
-	FlagParentMetaReady(meta TGMeta)
-	FlagChildMetaReady(meta TGMeta)
+	FlagParentMetaReady(meta Metadata)
+	FlagChildMetaReady(meta Metadata)
 
 	// These allow application developer to set the task configuration so framework
 	// implementation knows which task to invoke at each node.
@@ -29,7 +29,7 @@ type Framework interface {
 	GetLogger() log.Logger
 
 	// Request data from parent or children.
-	DataRequest(toID uint64, meta TGMeta)
+	DataRequest(toID uint64, meta Metadata)
 
 	// This allow task implementation to node corresponding to taskID so that
 	// it can carry out application dependent communication.
