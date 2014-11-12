@@ -4,6 +4,8 @@ package meritop
 type TGMeta interface {
 	GetEpochID() uint64
 	GetTaskID() uint64
+	GetFromTaskID() uint64
+	GetUUID() uint64
 }
 
 // Task is a logic repersentation of a computing unit.
@@ -31,9 +33,12 @@ type Task interface {
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epochID uint64)
 
-	// These are payload rpc for application purpose.
-	GetFromParent(req TGMeta) TGMeta
-	GetFromChild(reg TGMeta) TGMeta
+	// These are payload for application purpose.
+	ServeAsParent(req TGMeta) TGMeta
+	ServeAsChild(reg TGMeta) TGMeta
+
+	ParentDataReady(req, response TGMeta)
+	ChildDataReady(req, response TGMeta)
 }
 
 // Backupable is an interface that task need to implement if they want to have
