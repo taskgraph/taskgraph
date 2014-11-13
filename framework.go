@@ -2,6 +2,20 @@ package meritop
 
 import "log"
 
+// This interface is used by application during taskgraph configuration phase.
+type Bootstrap interface {
+	// These allow application developer to set the task configuration so framework
+	// implementation knows which task to invoke at each node.
+	SetTaskBuilder(taskBuilder TaskBuilder)
+
+	// This allow the application to specify how tasks are connection at each epoch
+	SetTopology(topology Topology)
+
+	// After all the configure is done, driver need to call start so that all
+	// nodes will get into the event loop to run the application.
+	Start()
+}
+
 // These two are useful for task to inform the framework their status change.
 // metaData has to be really small, since it might be stored in etcd.
 type Framework interface {
@@ -9,16 +23,8 @@ type Framework interface {
 	FlagParentMetaReady(meta Metadata)
 	FlagChildMetaReady(meta Metadata)
 
-	// These allow application developer to set the task configuration so framework
-	// implementation knows which task to invoke at each node.
-	SetTaskBuilder(taskBuilder TaskBuilder)
-
-	// This allow the application
-	SetTopology(topology Topology)
-
-	// After all the configure is done, driver need to call start so that all
-	// nodes will get into the event loop to run the application.
-	Start()
+	// This allow the task implementation query its neighers.
+	GetTopology() Topology
 
 	// Some task can inform all participating tasks to exit.
 	Exit()
@@ -38,4 +44,7 @@ type Framework interface {
 	// Return true if this node has children
 	HasChildren() bool
 	HasParents() bool
+
+	// This is used to figure out taskid for current node
+	GetTaskID() uint64
 }
