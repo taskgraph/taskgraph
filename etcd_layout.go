@@ -23,9 +23,9 @@ const (
 	NodeInfoTTL  = "ttl"
 )
 
-func MakeTaskMasterPath(jobName string, taskID uint64) string {
+func MakeTaskMasterPath(appName string, taskID uint64) string {
 	return path.Join("/",
-		jobName,
+		appName,
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
 		TaskMaster)

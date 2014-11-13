@@ -16,19 +16,19 @@ type dummyData struct {
 	data                                [10]float32
 }
 
-func (d dummyData) EpochID() uint64 {
+func (d *dummyData) EpochID() uint64 {
 	return d.epochID
 }
 
-func (d dummyData) ToTaskID() uint64 {
+func (d *dummyData) ToTaskID() uint64 {
 	return d.toTaskID
 }
 
-func (d dummyData) FromTaskID() uint64 {
+func (d *dummyData) FromTaskID() uint64 {
 	return d.fromTaskID
 }
 
-func (d dummyData) UUID() uint64 {
+func (d *dummyData) UUID() uint64 {
 	return d.uuID
 }
 
@@ -42,12 +42,12 @@ type dummyMaster struct {
 	epochID, taskID uint64
 	logger          *log.Logger
 
-	param, gradient dummyData
-	fromChildren    map[uint64]dummyData
+	param, gradient *dummyData
+	fromChildren    map[uint64]*dummyData
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t dummyMaster) Init(taskID uint64, framework Framework, config Config) {
+func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "dummyMaster:", log.Ldate|log.Ltime|log.Lshortfile)
@@ -57,46 +57,46 @@ func (t dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 }
 
 // Task need to finish up for exit, last chance to save work?
-func (t dummyMaster) Exit() {}
+func (t *dummyMaster) Exit() {}
 
 // These are called by framework implementation so that task implementation can
 // reacts to parent or children restart.
-func (t dummyMaster) ParentRestart(parentID uint64) {}
-func (t dummyMaster) ChildRestart(childID uint64)   {}
+func (t *dummyMaster) ParentRestart(parentID uint64) {}
+func (t *dummyMaster) ChildRestart(childID uint64)   {}
 
-func (t dummyMaster) ParentDie(parentID uint64) {}
-func (t dummyMaster) ChildDie(childID uint64)   {}
+func (t *dummyMaster) ParentDie(parentID uint64) {}
+func (t *dummyMaster) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t dummyMaster) ParentMetaReady(taskID uint64, meta Metadata) {}
-func (t dummyMaster) ChildMetaReady(taskID uint64, meta Metadata) {
+func (t *dummyMaster) ParentMetaReady(taskID uint64, meta Metadata) {}
+func (t *dummyMaster) ChildMetaReady(taskID uint64, meta Metadata) {
 	// Get data from child. When all the data is back, starts the next epoch.
 	t.framework.DataRequest(taskID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t dummyMaster) SetEpoch(epochID uint64) {
+func (t *dummyMaster) SetEpoch(epochID uint64) {
 	t.epochID = epochID
 	for i := 0; i < 10; i++ {
 		t.param.data[i] = float32(t.epochID)
 	}
 
 	// Make sure we have a clean slate.
-	t.fromChildren = make(map[uint64]dummyData)
+	t.fromChildren = make(map[uint64]*dummyData)
 	t.framework.FlagChildMetaReady(t.param)
 }
 
 // These are payload rpc for application purpose.
-func (t dummyMaster) ServeAsParent(req Metadata) Metadata { return t.param }
-func (t dummyMaster) ServeAsChild(reg Metadata) Metadata  { return nil }
+func (t *dummyMaster) ServeAsParent(req Metadata) Metadata { return t.param }
+func (t *dummyMaster) ServeAsChild(reg Metadata) Metadata  { return nil }
 
-func (t dummyMaster) ParentDataReady(req, response Metadata) {}
-func (t dummyMaster) ChildDataReady(req, response Metadata) {
+func (t *dummyMaster) ParentDataReady(req, response Metadata) {}
+func (t *dummyMaster) ChildDataReady(req, response Metadata) {
 	if req.EpochID() != t.epochID {
 		return
 	}
 
-	data, ok := req.(dummyData)
+	data, ok := req.(*dummyData)
 	if !ok {
 		t.logger.Fatal("Can't interpret request")
 	}
@@ -119,59 +119,59 @@ type dummySlave struct {
 	epochID, taskID uint64
 	logger          *log.Logger
 
-	param, gradient dummyData
-	fromChildren    map[uint64]dummyData
+	param, gradient *dummyData
+	fromChildren    map[uint64]*dummyData
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t dummySlave) Init(taskID uint64, framework Framework, config Config) {
+func (t *dummySlave) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "dummySlave:", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Task need to finish up for exit, last chance to save work?
-func (t dummySlave) Exit() {}
+func (t *dummySlave) Exit() {}
 
 // These are called by framework implementation so that task implementation can
 // reacts to parent or children restart.
-func (t dummySlave) ParentRestart(parentID uint64) {}
-func (t dummySlave) ChildRestart(childID uint64)   {}
+func (t *dummySlave) ParentRestart(parentID uint64) {}
+func (t *dummySlave) ChildRestart(childID uint64)   {}
 
-func (t dummySlave) ParentDie(parentID uint64) {}
-func (t dummySlave) ChildDie(childID uint64)   {}
+func (t *dummySlave) ParentDie(parentID uint64) {}
+func (t *dummySlave) ChildDie(childID uint64)   {}
 
 // Ideally, we should also have the following:
-func (t dummySlave) ParentMetaReady(taskID uint64, meta Metadata) {
+func (t *dummySlave) ParentMetaReady(taskID uint64, meta Metadata) {
 	t.framework.DataRequest(taskID, meta)
 }
 
-func (t dummySlave) ChildMetaReady(taskID uint64, meta Metadata) {
+func (t *dummySlave) ChildMetaReady(taskID uint64, meta Metadata) {
 	t.framework.DataRequest(taskID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t dummySlave) SetEpoch(epochID uint64) {
+func (t *dummySlave) SetEpoch(epochID uint64) {
 	t.epochID = epochID
 
 	// Make sure we have a clean slate.
-	t.fromChildren = make(map[uint64]dummyData)
+	t.fromChildren = make(map[uint64]*dummyData)
 }
 
 // These are payload rpc for application purpose.
-func (t dummySlave) ServeAsParent(req Metadata) Metadata {
+func (t *dummySlave) ServeAsParent(req Metadata) Metadata {
 	return t.param
 }
-func (t dummySlave) ServeAsChild(reg Metadata) Metadata {
+func (t *dummySlave) ServeAsChild(reg Metadata) Metadata {
 	return t.gradient
 }
 
-func (t dummySlave) ParentDataReady(req, response Metadata) {
+func (t *dummySlave) ParentDataReady(req, response Metadata) {
 	if req.EpochID() != t.epochID {
 		return
 	}
 
-	data, ok := req.(dummyData)
+	data, ok := req.(*dummyData)
 	if !ok {
 		t.logger.Fatal("Can't interpret request")
 	}
@@ -193,11 +193,11 @@ func (t dummySlave) ParentDataReady(req, response Metadata) {
 	}
 }
 
-func (t dummySlave) ChildDataReady(req, response Metadata) {
+func (t *dummySlave) ChildDataReady(req, response Metadata) {
 	if req.EpochID() != t.epochID {
 		return
 	}
-	data, ok := req.(dummyData)
+	data, ok := req.(*dummyData)
 	if !ok {
 		t.logger.Fatal("Can't interpret request")
 	}
@@ -225,9 +225,9 @@ type simpleTaskBuilder struct{}
 // for current node, and also a global array of tasks.
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 	if taskID == 0 {
-		return dummyMaster{}
+		return &dummyMaster{}
 	} else {
-		return dummySlave{}
+		return &dummySlave{}
 	}
 }
 
