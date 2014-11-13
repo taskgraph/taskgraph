@@ -1,43 +1,26 @@
 package meritop
 
-import (
-	"path"
-	"strconv"
+import "github.com/coreos/go-etcd/etcd"
 
-	"github.com/coreos/go-etcd/etcd"
-)
-
-const (
-	keyPrefix = "/meritop"
-)
-
+// This is the controller of a job.
+// A job needs controller to setup etcd data layout, request
+// cluster containers, etc. to setup framework to run.
 type controller struct {
+	name       string
 	etcdclient *etcd.Client
+	topology   Topology
 }
 
-func (c *controller) initTopo(size, replica int) error {
-	_, err := c.etcdclient.Create(path.Join(keyPrefix, "size"), strconv.Itoa(size), 0)
-	if err != nil {
-		return err
+func (c *controller) initEtcdLayout() (err error) {
+	// initiate etcd data layout
+	for i := uint64(0); i < c.topology.NumberOfTasks(); i++ {
+		key := MakeTaskMasterPath(c.name, i)
+		c.etcdclient.Create(key, "", 0)
 	}
-	for i := 0; i < size; i++ {
-		n := strconv.Itoa(i)
-		_, err := c.etcdclient.Create(path.Join(keyPrefix, "dataserver", n), "empty", 0)
-		if err != nil {
-			return err
-		}
-	}
-	_, err = c.etcdclient.Create(path.Join(keyPrefix, "nextslot"), strconv.Itoa(size-1), 0)
+	return
+}
 
-	rsize := replica * size
-	for i := 0; i < rsize; i++ {
-		n := strconv.Itoa(i)
-		_, err := c.etcdclient.Create(path.Join(keyPrefix, "replica", n), "empty", 0)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = c.etcdclient.Create(path.Join(keyPrefix, "rnextslot"), strconv.Itoa(rsize-1), 0)
-	return err
+func (c *controller) destroyEtcdLayout() (err error) {
+	c.etcdclient.Delete("/", true)
+	return
 }

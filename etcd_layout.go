@@ -1,5 +1,10 @@
 package meritop
 
+import (
+	"path"
+	"strconv"
+)
+
 // The directory layout we going to define in etcd:
 //   /{app}/config -> application configuration
 //   /{app}/tasks/: register tasks under this directory
@@ -17,3 +22,11 @@ const (
 	NodeInfoConn = "connect"
 	NodeInfoTTL  = "ttl"
 )
+
+func MakeTaskMasterPath(jobName string, taskID uint64) string {
+	return path.Join("/",
+		jobName,
+		TasksDir,
+		strconv.FormatUint(taskID, 10),
+		TaskMaster)
+}

@@ -9,6 +9,10 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+const (
+	keyPrefix = "/meritop"
+)
+
 var (
 	errFullDataServer = errors.New("meritop: data server is full")
 )
