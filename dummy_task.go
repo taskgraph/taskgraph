@@ -233,9 +233,9 @@ func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 
 // This is used to show how to drive the network.
 func drive() {
-	var framework Bootstrapper
+	var bootstrap Bootstrap
 	var taskBuilder simpleTaskBuilder
-	framework.SetTaskBuilder(taskBuilder)
-	framework.SetTopology(NewTreeTopology(2, 127))
-	framework.Start()
+	bootstrap.SetTaskBuilder(taskBuilder)
+	bootstrap.SetTopology(NewTreeTopology(2, 127))
+	bootstrap.Start()
 }
