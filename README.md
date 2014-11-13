@@ -18,5 +18,3 @@ An TaskGraph application usually has three layers. And application implementatio
 For an example of driver and task implementation, check dummy_task.go.
 
 Note, for now, the completion of TaskGraph is not defined explicitly. Instead, each application will have their way of exit based on application dependent logic. As an example, the above application can stop if task 0 stops. We have the hooks in Framework so any node can potentially exit the entire TaskGraph. We also have hook in Task so that task implementation get a change to save the work.
-
- 
