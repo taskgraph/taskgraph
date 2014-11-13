@@ -30,15 +30,15 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t TreeTopology) GetParents(epochID uint64) []uint64 {
+func (t *TreeTopology) GetParents(epochID uint64) []uint64 {
 	return t.parents
 }
 
-func (t TreeTopology) GetChildren(epochID uint64) []uint64 {
+func (t *TreeTopology) GetChildren(epochID uint64) []uint64 {
 	return t.children
 }
 
-func (t TreeTopology) NumberOfTasks() uint64 {
+func (t *TreeTopology) NumberOfTasks() uint64 {
 	return t.numberOfTasks
 }
 
