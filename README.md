@@ -4,7 +4,7 @@ TaskGraph
 [![Build Status](https://travis-ci.org/go-distributed/meritop.svg)](https://travis-ci.org/go-distributed/meritop)
 
 
-TaskGraph is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology (hence graph). Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on a standard set of events (parent fail/restart, children fail/restart) to task implementation so that it can do application dependent recovery.
+TaskGraph is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology (hence graph). TaskGraph assume for each task (logical unit of work), there are one primary node, and zero or more backup node. TaskGraph then help with two types of failure: failure happens to nodes from different task, failure happens to the nodes from the same task. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on a standard set of events (parent/children fail/restart, primary/backup switch) to task implementation so that it can do application dependent recovery.
 
 
 An TaskGraph application usually has three layers. And application implementation need to configure TaskGraph in driver layer and also implement Task/TaskBuilder/Topology based on application logic. 
@@ -18,3 +18,5 @@ An TaskGraph application usually has three layers. And application implementatio
 For an example of driver and task implementation, check dummy_task.go.
 
 Note, for now, the completion of TaskGraph is not defined explicitly. Instead, each application will have their way of exit based on application dependent logic. As an example, the above application can stop if task 0 stops. We have the hooks in Framework so any node can potentially exit the entire TaskGraph. We also have hook in Task so that task implementation get a change to save the work.
+
+ 
