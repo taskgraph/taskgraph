@@ -17,7 +17,7 @@ func (f *dummyFramework) FlagParentMetaReady(meta Metadata) {
 func (f *dummyFramework) FlagChildMetaReady(meta Metadata) {
 }
 
-func (f *dummyFramework) SetEpoch(epochID uint64) {
+func (f *dummyFramework) SetEpoch(epoch uint64) {
 }
 
 func (f *dummyFramework) DataRequest(toID uint64, meta Metadata) {

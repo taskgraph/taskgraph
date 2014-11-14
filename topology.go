@@ -21,11 +21,11 @@ type Topology interface {
 
 	// GetParents returns the parents' IDs of this task at the
 	// given epoch.
-	GetParents(epochID uint64) []uint64
+	GetParents(epoch uint64) []uint64
 
 	// GetChlidren returns the children's IDs of this task at the
 	// given epoch.
-	GetChildren(epochID uint64) []uint64
+	GetChildren(epoch uint64) []uint64
 
 	// NumberOfTasks returns the number of tasks this topology requires.
 	NumberOfTasks() uint64

@@ -2,7 +2,7 @@ package meritop
 
 // These interface is useful for safety check, TG stands for TaskGraph.
 type Metadata interface {
-	EpochID() uint64
+	Epoch() uint64
 	ToTaskID() uint64
 	FromTaskID() uint64
 	UUID() uint64
@@ -31,7 +31,7 @@ type Task interface {
 	ChildMetaReady(childID uint64, meta Metadata)
 
 	// This give the task an opportunity to cleanup and regroup.
-	SetEpoch(epochID uint64)
+	SetEpoch(epoch uint64)
 
 	// These are payload for application purpose.
 	ServeAsParent(req Metadata) Metadata
