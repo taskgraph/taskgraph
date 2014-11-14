@@ -1,6 +1,6 @@
 package meritop
 
-// These interface is useful for safety check, TG stands for TaskGraph.
+// TODO: separate framework and user meta-data
 type Metadata interface {
 	Epoch() uint64
 	ToTaskID() uint64
