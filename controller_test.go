@@ -26,7 +26,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		c := controller{
+		c := &controller{
 			name:       tt.name,
 			etcdclient: etcdClient,
 			topology:   NewTreeTopology(2, tt.numberOfTasks),

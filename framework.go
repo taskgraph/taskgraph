@@ -16,9 +16,9 @@ type Bootstrap interface {
 	Start()
 }
 
-// These two are useful for task to inform the framework their status change.
-// metaData has to be really small, since it might be stored in etcd.
 type Framework interface {
+	// These two are useful for task to inform the framework their status change.
+	// metaData has to be really small, since it might be stored in etcd.
 	// Flags and Sends the metaData to partent of the current task.
 	FlagParentMetaReady(meta Metadata)
 	FlagChildMetaReady(meta Metadata)
