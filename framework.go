@@ -48,3 +48,10 @@ type Framework interface {
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
 }
+
+// Note that framework can decide how update can be done, and how to serve the updatelog.
+type BackedUpFramework interface {
+	// Ask framework to do update on this update on this task, which consists
+	// of one primary and some backup copies.
+	Update(taskID uint64, log UpdateLog)
+}
