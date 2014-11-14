@@ -11,13 +11,13 @@ import (
 
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
-	fromTaskID, toTaskID, epochID, uuID uint64
+	fromTaskID, toTaskID, epoch, uuID uint64
 	value                               float32
 	data                                [10]float32
 }
 
-func (d *dummyData) EpochID() uint64 {
-	return d.epochID
+func (d *dummyData) Epoch() uint64 {
+	return d.epoch
 }
 
 func (d *dummyData) ToTaskID() uint64 {
@@ -39,7 +39,7 @@ func (d *dummyData) UUID() uint64 {
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
 	framework       Framework
-	epochID, taskID uint64
+	epoch, taskID uint64
 	logger          *log.Logger
 
 	param, gradient *dummyData
@@ -75,10 +75,10 @@ func (t *dummyMaster) ChildMetaReady(taskID uint64, meta Metadata) {
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummyMaster) SetEpoch(epochID uint64) {
-	t.epochID = epochID
+func (t *dummyMaster) SetEpoch(epoch uint64) {
+	t.epoch = epoch
 	for i := 0; i < 10; i++ {
-		t.param.data[i] = float32(t.epochID)
+		t.param.data[i] = float32(t.epoch)
 	}
 
 	// Make sure we have a clean slate.
@@ -92,7 +92,7 @@ func (t *dummyMaster) ServeAsChild(reg Metadata) Metadata  { return nil }
 
 func (t *dummyMaster) ParentDataReady(req, response Metadata) {}
 func (t *dummyMaster) ChildDataReady(req, response Metadata) {
-	if req.EpochID() != t.epochID {
+	if req.Epoch() != t.epoch {
 		return
 	}
 
@@ -105,9 +105,9 @@ func (t *dummyMaster) ChildDataReady(req, response Metadata) {
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epochID)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		// In real ML, we modify the gradient first. But here it is noop.
-		t.framework.SetEpoch(t.epochID + 1)
+		t.framework.SetEpoch(t.epoch + 1)
 	}
 }
 
@@ -116,7 +116,7 @@ func (t *dummyMaster) ChildDataReady(req, response Metadata) {
 // gradient back then add them together before make it available to its parent.
 type dummySlave struct {
 	framework       Framework
-	epochID, taskID uint64
+	epoch, taskID uint64
 	logger          *log.Logger
 
 	param, gradient *dummyData
@@ -151,8 +151,8 @@ func (t *dummySlave) ChildMetaReady(taskID uint64, meta Metadata) {
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(epochID uint64) {
-	t.epochID = epochID
+func (t *dummySlave) SetEpoch(epoch uint64) {
+	t.epoch = epoch
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
@@ -167,7 +167,7 @@ func (t *dummySlave) ServeAsChild(reg Metadata) Metadata {
 }
 
 func (t *dummySlave) ParentDataReady(req, response Metadata) {
-	if req.EpochID() != t.epochID {
+	if req.Epoch() != t.epoch {
 		return
 	}
 
@@ -194,7 +194,7 @@ func (t *dummySlave) ParentDataReady(req, response Metadata) {
 }
 
 func (t *dummySlave) ChildDataReady(req, response Metadata) {
-	if req.EpochID() != t.epochID {
+	if req.Epoch() != t.epoch {
 		return
 	}
 	data, ok := req.(*dummyData)
@@ -206,7 +206,7 @@ func (t *dummySlave) ChildDataReady(req, response Metadata) {
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epochID)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			for i := 0; i < 10; i++ {

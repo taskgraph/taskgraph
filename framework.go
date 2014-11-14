@@ -30,7 +30,7 @@ type Framework interface {
 	Exit()
 
 	// Some task can inform all participating tasks to new epoch
-	SetEpoch(epochID uint64)
+	SetEpoch(epoch uint64)
 
 	GetLogger() log.Logger
 
