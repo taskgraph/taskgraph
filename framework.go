@@ -30,7 +30,7 @@ type BackedUpFramework interface {
 type Framework interface {
 	// These two are useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
-	// Flags and Sends the metaData to parent of the current task.
+	// Flags that parent/child's metadata of the current task is ready.
 	FlagParentMetaReady(meta Metadata)
 	FlagChildMetaReady(meta Metadata)
 
