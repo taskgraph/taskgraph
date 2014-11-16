@@ -81,16 +81,10 @@ func (f *framework) start() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.etcdClient.Create(
-		MakeTaskParentMetaPath(f.name, f.GetTaskID()),
-		"", 0)
-	f.etcdClient.Create(
-		MakeTaskChildMetaPath(f.name, f.GetTaskID()),
-		"", 0)
-	parentStops := f.watchAll("parent",
-		f.topology.GetParents(f.epoch))
-	childStops := f.watchAll("child",
-		f.topology.GetChildren(f.epoch))
+	f.etcdClient.Create(MakeTaskParentMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(MakeTaskChildMetaPath(f.name, f.GetTaskID()), "", 0)
+	parentStops := f.watchAll("parent", f.topology.GetParents(f.epoch))
+	childStops := f.watchAll("child", f.topology.GetChildren(f.epoch))
 
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
