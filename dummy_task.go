@@ -12,8 +12,8 @@ import (
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
 	fromTaskID, toTaskID, epoch, uuID uint64
-	value                               float32
-	data                                [10]float32
+	value                             float32
+	data                              [10]float32
 }
 
 func (d *dummyData) Epoch() uint64 {
@@ -38,9 +38,9 @@ func (d *dummyData) UUID() uint64 {
 // Note: in theory, since there should be no parent of this, so we should
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
-	framework       Framework
+	framework     Framework
 	epoch, taskID uint64
-	logger          *log.Logger
+	logger        *log.Logger
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
@@ -115,9 +115,9 @@ func (t *dummyMaster) ChildDataReady(req, response Metadata) {
 // It mainly does to things, pass on parameters to its children, and collect
 // gradient back then add them together before make it available to its parent.
 type dummySlave struct {
-	framework       Framework
+	framework     Framework
 	epoch, taskID uint64
-	logger          *log.Logger
+	logger        *log.Logger
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
@@ -184,7 +184,8 @@ func (t *dummySlave) ParentDataReady(req, response Metadata) {
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
-	if t.framework.HasChildren() {
+	children := t.framework.GetTopology().GetChildren(t.epoch)
+	if len(children) != 0 {
 		t.framework.FlagChildMetaReady(t.param)
 	} else {
 		// On leaf node, we can immediately return by and flag parent
