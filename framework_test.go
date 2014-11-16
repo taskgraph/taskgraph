@@ -11,8 +11,8 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	defer m.Terminate(t)
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
-	parentMetaChan := make(chan struct{})
-	childMetaChan := make(chan struct{})
+	pMetaReadyChan := make(chan struct{})
+	cMetaReadyChan := make(chan struct{})
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
@@ -21,8 +21,8 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		taskID:   0,
 		task: &testableTask{
 			id:             0,
-			parentMetaChan: nil,
-			childMetaChan:  childMetaChan,
+			pMetaReadyChan: nil,
+			cMetaReadyChan: cMetaReadyChan,
 		},
 		topology: NewTreeTopology(2, 1),
 	}
@@ -32,8 +32,8 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		taskID:   1,
 		task: &testableTask{
 			id:             1,
-			parentMetaChan: parentMetaChan,
-			childMetaChan:  nil,
+			pMetaReadyChan: pMetaReadyChan,
+			cMetaReadyChan: nil,
 		},
 		topology: NewTreeTopology(2, 1),
 	}
@@ -45,9 +45,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
 	f0.FlagChildMetaReady(nil)
-	<-parentMetaChan
+	<-pMetaReadyChan
 
 	// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
 	f1.FlagParentMetaReady(nil)
-	<-childMetaChan
+	<-cMetaReadyChan
 }

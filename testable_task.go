@@ -4,8 +4,8 @@ import "log"
 
 type testableTask struct {
 	id             uint64
-	parentMetaChan chan struct{}
-	childMetaChan  chan struct{}
+	pMetaReadyChan chan struct{}
+	cMetaReadyChan chan struct{}
 }
 
 func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {}
@@ -17,11 +17,11 @@ func (t *testableTask) ChildDie(childID uint64)                                {
 
 func (t *testableTask) ParentMetaReady(parentID uint64, meta Metadata) {
 	log.Printf("Task(%d): parent(%d) meta ready:", t.id, parentID)
-	close(t.parentMetaChan)
+	close(t.pMetaReadyChan)
 }
 func (t *testableTask) ChildMetaReady(childID uint64, meta Metadata) {
 	log.Printf("Task(%d): child(%d) meta ready:", t.id, childID)
-	close(t.childMetaChan)
+	close(t.cMetaReadyChan)
 }
 
 func (t *testableTask) SetEpoch(epoch uint64) {}
