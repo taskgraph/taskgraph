@@ -87,14 +87,10 @@ func (f *framework) start() {
 	f.etcdClient.Create(
 		MakeTaskChildMetaPath(f.name, f.GetTaskID()),
 		"", 0)
-	parentStops := f.watchAll(
-		f.topology.GetParents(f.epoch),
-		MakeTaskChildMetaPath,
-		f.task.ParentMetaReady)
-	childStops := f.watchAll(
-		f.topology.GetChildren(f.epoch),
-		MakeTaskParentMetaPath,
-		f.task.ChildMetaReady)
+	parentStops := f.watchAll("parent",
+		f.topology.GetParents(f.epoch))
+	childStops := f.watchAll("child",
+		f.topology.GetChildren(f.epoch))
 
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
@@ -128,9 +124,7 @@ func (f *framework) SetEpoch(epoch uint64) {
 	f.epoch = epoch
 }
 
-func (f *framework) watchAll(taskIDs []uint64,
-	makeTaskMetaPath func(string, uint64) string,
-	taskCallback func(uint64, Metadata)) []chan bool {
+func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
@@ -138,13 +132,22 @@ func (f *framework) watchAll(taskIDs []uint64,
 		stop := make(chan bool, 1)
 		stops[i] = stop
 
-		go f.etcdClient.Watch(
-			makeTaskMetaPath(f.name, taskID),
-			0,
-			false,
-			receiver,
-			stop)
+		var watchPath string
+		var taskCallback func(uint64, Metadata)
+		switch who {
+		case "parent":
+			// Watch parent's child.
+			watchPath = MakeTaskChildMetaPath(f.name, taskID)
+			taskCallback = f.task.ParentMetaReady
+		case "child":
+			// Watch child's parent.
+			watchPath = MakeTaskParentMetaPath(f.name, taskID)
+			taskCallback = f.task.ChildMetaReady
+		default:
+			panic("unimplemented")
+		}
 
+		go f.etcdClient.Watch(watchPath, 0, false, receiver, stop)
 		go func(receiver <-chan *etcd.Response, taskID uint64) {
 			for {
 				resp, ok := <-receiver
