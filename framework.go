@@ -103,14 +103,14 @@ func (f *framework) stop() {
 func (f *framework) FlagParentMetaReady(meta string) {
 	f.etcdClient.Set(
 		MakeTaskParentMetaPath(f.name, f.GetTaskID()),
-		"",
+		meta,
 		0)
 }
 
 func (f *framework) FlagChildMetaReady(meta string) {
 	f.etcdClient.Set(
 		MakeTaskChildMetaPath(f.name, f.GetTaskID()),
-		"",
+		meta,
 		0)
 }
 
@@ -151,7 +151,7 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 				if resp.Action != "set" {
 					continue
 				}
-				taskCallback(taskID, "")
+				taskCallback(taskID, resp.Node.Value)
 			}
 		}(receiver, taskID)
 	}

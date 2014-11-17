@@ -10,6 +10,7 @@ type Task interface {
 	// Task need to finish up for exit, last chance to save work?
 	Exit()
 
+	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epoch uint64)
 
