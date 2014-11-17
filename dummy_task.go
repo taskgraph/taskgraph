@@ -39,7 +39,7 @@ func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 	t.logger = log.New(os.Stdout, "dummyMaster:", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// Jump start the taskgraph
-	t.framework.SetEpoch(0)
+	t.framework.SetEpoch(1)
 }
 
 // Task need to finish up for exit, last chance to save work?
