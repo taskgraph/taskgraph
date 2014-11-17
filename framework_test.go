@@ -2,6 +2,7 @@ package meritop
 
 import (
 	"fmt"
+	"log"
 	"testing"
 )
 
@@ -44,10 +45,38 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	defer f1.stop()
 
 	// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
-	f0.FlagChildMetaReady(nil)
+	f0.FlagChildMetaReady("")
 	<-pMetaReadyChan
 
 	// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
-	f1.FlagParentMetaReady(nil)
+	f1.FlagParentMetaReady("")
 	<-cMetaReadyChan
 }
+
+type testableTask struct {
+	id             uint64
+	pMetaReadyChan chan struct{}
+	cMetaReadyChan chan struct{}
+}
+
+func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {}
+func (t *testableTask) Exit()                                                  {}
+func (t *testableTask) SetEpoch(epoch uint64)                                  {}
+
+func (t *testableTask) ParentMetaReady(parentID uint64, meta string) {
+	log.Printf("Task(%d): parent(%d) meta ready:", t.id, parentID)
+	close(t.pMetaReadyChan)
+}
+func (t *testableTask) ChildMetaReady(childID uint64, meta string) {
+	log.Printf("Task(%d): child(%d) meta ready:", t.id, childID)
+	close(t.cMetaReadyChan)
+}
+
+func (t *testableTask) ServeAsParent(req string) ([]byte, error) {
+	panic("unimplemented")
+}
+func (t *testableTask) ServeAsChild(req string) ([]byte, error) {
+	panic("unimplemented")
+}
+func (t *testableTask) ParentDataReady(parentID uint64, req string, resp []byte) {}
+func (t *testableTask) ChildDataReady(childID uint64, req string, resp []byte)   {}

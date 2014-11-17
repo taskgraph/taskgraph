@@ -1,35 +1,21 @@
+package meritop
+
 /*
 The dummy task is designed for regresion test of meritop framework.
 This works with
 */
-package meritop
 
 import (
+	"encoding/json"
+	"errors"
 	"log"
 	"os"
 )
 
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
-	fromTaskID, toTaskID, epoch, uuID uint64
-	value                             float32
-	data                              [10]float32
-}
-
-func (d *dummyData) Epoch() uint64 {
-	return d.epoch
-}
-
-func (d *dummyData) ToTaskID() uint64 {
-	return d.toTaskID
-}
-
-func (d *dummyData) FromTaskID() uint64 {
-	return d.fromTaskID
-}
-
-func (d *dummyData) UUID() uint64 {
-	return d.uuID
+	value float32
+	data  [10]float32
 }
 
 // dummyMaster is prototype of parameter server, for now it does not
@@ -59,19 +45,11 @@ func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 // Task need to finish up for exit, last chance to save work?
 func (t *dummyMaster) Exit() {}
 
-// These are called by framework implementation so that task implementation can
-// reacts to parent or children restart.
-func (t *dummyMaster) ParentRestart(parentID uint64) {}
-func (t *dummyMaster) ChildRestart(childID uint64)   {}
-
-func (t *dummyMaster) ParentDie(parentID uint64) {}
-func (t *dummyMaster) ChildDie(childID uint64)   {}
-
 // Ideally, we should also have the following:
-func (t *dummyMaster) ParentMetaReady(taskID uint64, meta Metadata) {}
-func (t *dummyMaster) ChildMetaReady(taskID uint64, meta Metadata) {
+func (t *dummyMaster) ParentMetaReady(parentID uint64, meta string) {}
+func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 	// Get data from child. When all the data is back, starts the next epoch.
-	t.framework.DataRequest(taskID, meta)
+	t.framework.DataRequest(childID, "")
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -83,24 +61,23 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	t.framework.FlagChildMetaReady(t.param)
+	t.framework.FlagChildMetaReady("ParamReady")
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(req Metadata) Metadata { return t.param }
-func (t *dummyMaster) ServeAsChild(reg Metadata) Metadata  { return nil }
+func (t *dummyMaster) ServeAsParent(req string) ([]byte, error) {
+	return json.Marshal(t.param)
+}
+func (t *dummyMaster) ServeAsChild(req string) ([]byte, error) {
+	return nil, errors.New("Master shouldn't serve as child")
+}
 
-func (t *dummyMaster) ParentDataReady(req, response Metadata) {}
-func (t *dummyMaster) ChildDataReady(req, response Metadata) {
-	if req.Epoch() != t.epoch {
-		return
-	}
+func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
+func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 
-	data, ok := req.(*dummyData)
-	if !ok {
-		t.logger.Fatal("Can't interpret request")
-	}
-	t.fromChildren[data.FromTaskID()] = data
+	d := new(dummyData)
+	json.Unmarshal(resp, d)
+	t.fromChildren[childID] = d
 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
@@ -133,21 +110,13 @@ func (t *dummySlave) Init(taskID uint64, framework Framework, config Config) {
 // Task need to finish up for exit, last chance to save work?
 func (t *dummySlave) Exit() {}
 
-// These are called by framework implementation so that task implementation can
-// reacts to parent or children restart.
-func (t *dummySlave) ParentRestart(parentID uint64) {}
-func (t *dummySlave) ChildRestart(childID uint64)   {}
-
-func (t *dummySlave) ParentDie(parentID uint64) {}
-func (t *dummySlave) ChildDie(childID uint64)   {}
-
 // Ideally, we should also have the following:
-func (t *dummySlave) ParentMetaReady(taskID uint64, meta Metadata) {
-	t.framework.DataRequest(taskID, meta)
+func (t *dummySlave) ParentMetaReady(parentID uint64, meta string) {
+	t.framework.DataRequest(parentID, "")
 }
 
-func (t *dummySlave) ChildMetaReady(taskID uint64, meta Metadata) {
-	t.framework.DataRequest(taskID, meta)
+func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
+	t.framework.DataRequest(childID, "")
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -159,23 +128,16 @@ func (t *dummySlave) SetEpoch(epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(req Metadata) Metadata {
-	return t.param
+func (t *dummySlave) ServeAsParent(req string) ([]byte, error) {
+	return json.Marshal(t.param)
 }
-func (t *dummySlave) ServeAsChild(reg Metadata) Metadata {
-	return t.gradient
+func (t *dummySlave) ServeAsChild(req string) ([]byte, error) {
+	return json.Marshal(t.gradient)
 }
 
-func (t *dummySlave) ParentDataReady(req, response Metadata) {
-	if req.Epoch() != t.epoch {
-		return
-	}
-
-	data, ok := req.(*dummyData)
-	if !ok {
-		t.logger.Fatal("Can't interpret request")
-	}
-	t.param = data
+func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
+	t.param = new(dummyData)
+	json.Unmarshal(resp, t.param)
 
 	// We need to carry out local compuation.
 	for i := 0; i < 10; i++ {
@@ -186,23 +148,17 @@ func (t *dummySlave) ParentDataReady(req, response Metadata) {
 	// parameter.
 	children := t.framework.GetTopology().GetChildren(t.epoch)
 	if len(children) != 0 {
-		t.framework.FlagChildMetaReady(t.param)
+		t.framework.FlagChildMetaReady("ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		t.framework.FlagParentMetaReady(t.gradient)
+		t.framework.FlagParentMetaReady("GradientReady")
 	}
 }
 
-func (t *dummySlave) ChildDataReady(req, response Metadata) {
-	if req.Epoch() != t.epoch {
-		return
-	}
-	data, ok := req.(*dummyData)
-	if !ok {
-		t.logger.Fatal("Can't interpret request")
-	}
-	t.fromChildren[data.FromTaskID()] = data
+func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
+	t.fromChildren[childID] = new(dummyData)
+	json.Unmarshal(resp, t.fromChildren[childID])
 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
@@ -215,7 +171,7 @@ func (t *dummySlave) ChildDataReady(req, response Metadata) {
 			}
 		}
 
-		t.framework.FlagParentMetaReady(t.gradient)
+		t.framework.FlagParentMetaReady("GradientReady")
 	}
 }
 
