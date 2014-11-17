@@ -81,8 +81,8 @@ func (f *framework) start() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.etcdClient.Create(MakeTaskParentMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.etcdClient.Create(MakeTaskChildMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
 	parentStops := f.watchAll("parent", f.topology.GetParents(f.epoch))
 	childStops := f.watchAll("child", f.topology.GetChildren(f.epoch))
 
@@ -102,14 +102,14 @@ func (f *framework) stop() {
 
 func (f *framework) FlagParentMetaReady(meta string) {
 	f.etcdClient.Set(
-		MakeTaskParentMetaPath(f.name, f.GetTaskID()),
+		MakeParentMetaPath(f.name, f.GetTaskID()),
 		meta,
 		0)
 }
 
 func (f *framework) FlagChildMetaReady(meta string) {
 	f.etcdClient.Set(
-		MakeTaskChildMetaPath(f.name, f.GetTaskID()),
+		MakeChildMetaPath(f.name, f.GetTaskID()),
 		meta,
 		0)
 }
@@ -131,11 +131,11 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 		switch who {
 		case "parent":
 			// Watch parent's child.
-			watchPath = MakeTaskChildMetaPath(f.name, taskID)
+			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
 		case "child":
 			// Watch child's parent.
-			watchPath = MakeTaskParentMetaPath(f.name, taskID)
+			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
 		default:
 			panic("unimplemented")
