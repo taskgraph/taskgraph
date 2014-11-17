@@ -48,10 +48,6 @@ type Framework interface {
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
 
-	// This allow task implementation to node corresponding to taskID so that
-	// it can carry out application dependent communication.
-	GetNode(taskID uint64) Node
-
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
 }
@@ -169,10 +165,6 @@ func (f *framework) Exit() {
 }
 
 func (f *framework) GetLogger() log.Logger {
-	panic("unimplemented")
-}
-
-func (f *framework) GetNode(taskID uint64) Node {
 	panic("unimplemented")
 }
 
