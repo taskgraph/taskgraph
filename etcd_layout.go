@@ -35,7 +35,7 @@ func MakeTaskMasterPath(appName string, taskID uint64) string {
 		TaskMaster)
 }
 
-func MakeTaskParentMetaPath(appName string, taskID uint64) string {
+func MakeParentMetaPath(appName string, taskID uint64) string {
 	return path.Join("/",
 		appName,
 		TasksDir,
@@ -43,7 +43,7 @@ func MakeTaskParentMetaPath(appName string, taskID uint64) string {
 		TaskParentMeta)
 }
 
-func MakeTaskChildMetaPath(appName string, taskID uint64) string {
+func MakeChildMetaPath(appName string, taskID uint64) string {
 	return path.Join("/",
 		appName,
 		TasksDir,

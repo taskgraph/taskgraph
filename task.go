@@ -1,13 +1,5 @@
 package meritop
 
-// TODO: separate framework and user meta-data
-type Metadata interface {
-	Epoch() uint64
-	ToTaskID() uint64
-	FromTaskID() uint64
-	UUID() uint64
-}
-
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
@@ -18,27 +10,20 @@ type Task interface {
 	// Task need to finish up for exit, last chance to save work?
 	Exit()
 
-	// These are called by framework implementation so that task implementation can
-	// reacts to parent or children restart.
-	ParentRestart(parentID uint64)
-	ChildRestart(childID uint64)
-
-	ParentDie(parentID uint64)
-	ChildDie(childID uint64)
-
-	// Ideally, we should also have the following:
-	ParentMetaReady(parentID uint64, meta Metadata)
-	ChildMetaReady(childID uint64, meta Metadata)
-
+	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epoch uint64)
 
-	// These are payload for application purpose.
-	ServeAsParent(req Metadata) Metadata
-	ServeAsChild(reg Metadata) Metadata
+	// Ideally, we should also have the following:
+	ParentMetaReady(parentID uint64, meta string)
+	ChildMetaReady(childID uint64, meta string)
 
-	ParentDataReady(req, response Metadata)
-	ChildDataReady(req, response Metadata)
+	// These are payload for application purpose.
+	ServeAsParent(req string) ([]byte, error)
+	ServeAsChild(req string) ([]byte, error)
+
+	ParentDataReady(parentID uint64, req string, resp []byte)
+	ChildDataReady(childID uint64, req string, resp []byte)
 }
 
 type UpdateLog interface {

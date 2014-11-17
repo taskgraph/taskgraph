@@ -31,8 +31,8 @@ type Framework interface {
 	// These two are useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Flags that parent/child's metadata of the current task is ready.
-	FlagParentMetaReady(meta Metadata)
-	FlagChildMetaReady(meta Metadata)
+	FlagParentMetaReady(meta string)
+	FlagChildMetaReady(meta string)
 
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
@@ -46,11 +46,7 @@ type Framework interface {
 	GetLogger() log.Logger
 
 	// Request data from parent or children.
-	DataRequest(toID uint64, meta Metadata)
-
-	// This allow task implementation to node corresponding to taskID so that
-	// it can carry out application dependent communication.
-	GetNode(taskID uint64) Node
+	DataRequest(toID uint64, meta string)
 
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
@@ -81,8 +77,8 @@ func (f *framework) start() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.etcdClient.Create(MakeTaskParentMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.etcdClient.Create(MakeTaskChildMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
 	parentStops := f.watchAll("parent", f.topology.GetParents(f.epoch))
 	childStops := f.watchAll("child", f.topology.GetChildren(f.epoch))
 
@@ -100,17 +96,17 @@ func (f *framework) stop() {
 	}
 }
 
-func (f *framework) FlagParentMetaReady(meta Metadata) {
+func (f *framework) FlagParentMetaReady(meta string) {
 	f.etcdClient.Set(
-		MakeTaskParentMetaPath(f.name, f.GetTaskID()),
-		"",
+		MakeParentMetaPath(f.name, f.GetTaskID()),
+		meta,
 		0)
 }
 
-func (f *framework) FlagChildMetaReady(meta Metadata) {
+func (f *framework) FlagChildMetaReady(meta string) {
 	f.etcdClient.Set(
-		MakeTaskChildMetaPath(f.name, f.GetTaskID()),
-		"",
+		MakeChildMetaPath(f.name, f.GetTaskID()),
+		meta,
 		0)
 }
 
@@ -127,15 +123,15 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 		stops[i] = stop
 
 		var watchPath string
-		var taskCallback func(uint64, Metadata)
+		var taskCallback func(uint64, string)
 		switch who {
 		case "parent":
 			// Watch parent's child.
-			watchPath = MakeTaskChildMetaPath(f.name, taskID)
+			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
 		case "child":
 			// Watch child's parent.
-			watchPath = MakeTaskParentMetaPath(f.name, taskID)
+			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
 		default:
 			panic("unimplemented")
@@ -151,14 +147,14 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 				if resp.Action != "set" {
 					continue
 				}
-				taskCallback(taskID, nil)
+				taskCallback(taskID, resp.Node.Value)
 			}
 		}(receiver, taskID)
 	}
 	return stops
 }
 
-func (f *framework) DataRequest(toID uint64, meta Metadata) {
+func (f *framework) DataRequest(toID uint64, req string) {
 }
 
 func (f *framework) GetTopology() Topology {
@@ -169,10 +165,6 @@ func (f *framework) Exit() {
 }
 
 func (f *framework) GetLogger() log.Logger {
-	panic("unimplemented")
-}
-
-func (f *framework) GetNode(taskID uint64) Node {
 	panic("unimplemented")
 }
 
