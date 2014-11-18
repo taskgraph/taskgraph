@@ -64,7 +64,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(req string) []byte {
+func (t *dummyMaster) ServeAsParent(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.param)
 	if err != nil {
 		t.logger.Printf("Master can't encode parameter: %v, error: %v\n", t.param, err)
@@ -74,7 +74,7 @@ func (t *dummyMaster) ServeAsParent(req string) []byte {
 	return b
 }
 
-func (t *dummyMaster) ServeAsChild(req string) []byte {
+func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (t *dummySlave) SetEpoch(epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(req string) []byte {
+func (t *dummySlave) ServeAsParent(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.param)
 	if err != nil {
 		t.logger.Printf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
@@ -144,7 +144,7 @@ func (t *dummySlave) ServeAsParent(req string) []byte {
 	return b
 }
 
-func (t *dummySlave) ServeAsChild(req string) []byte {
+func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.gradient)
 	if err != nil {
 		t.logger.Printf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)

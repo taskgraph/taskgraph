@@ -21,7 +21,6 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		etcdURLs: []string{url},
 		taskID:   0,
 		task: &testableTask{
-			pMetaChan: nil,
 			cMetaChan: cMetaChan,
 		},
 		topology: NewTreeTopology(2, 1),
@@ -32,7 +31,6 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		taskID:   1,
 		task: &testableTask{
 			pMetaChan: pMetaChan,
-			cMetaChan: nil,
 		},
 		topology: NewTreeTopology(2, 1),
 	}
@@ -88,10 +86,10 @@ func (t *testableTask) ChildMetaReady(childID uint64, meta string) {
 	t.cMetaChan <- meta
 }
 
-func (t *testableTask) ServeAsParent(req string) []byte {
+func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
 	panic("unimplemented")
 }
-func (t *testableTask) ServeAsChild(req string) []byte {
+func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
 	panic("unimplemented")
 }
 func (t *testableTask) ParentDataReady(parentID uint64, req string, resp []byte) {}
