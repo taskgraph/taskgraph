@@ -88,10 +88,10 @@ func (t *testableTask) ChildMetaReady(childID uint64, meta string) {
 	t.cMetaChan <- meta
 }
 
-func (t *testableTask) ServeAsParent(req string) ([]byte, error) {
+func (t *testableTask) ServeAsParent(req string) []byte {
 	panic("unimplemented")
 }
-func (t *testableTask) ServeAsChild(req string) ([]byte, error) {
+func (t *testableTask) ServeAsChild(req string) []byte {
 	panic("unimplemented")
 }
 func (t *testableTask) ParentDataReady(parentID uint64, req string, resp []byte) {}
