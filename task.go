@@ -19,8 +19,8 @@ type Task interface {
 	ChildMetaReady(childID uint64, meta string)
 
 	// These are payload for application purpose.
-	ServeAsParent(req string) ([]byte, error)
-	ServeAsChild(req string) ([]byte, error)
+	ServeAsParent(req string) []byte
+	ServeAsChild(req string) []byte
 
 	ParentDataReady(parentID uint64, req string, resp []byte)
 	ChildDataReady(childID uint64, req string, resp []byte)
