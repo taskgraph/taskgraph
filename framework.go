@@ -1,7 +1,10 @@
 package meritop
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -61,10 +64,34 @@ type framework struct {
 	task     Task
 	topology Topology
 
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	stops      []chan bool
+	taskID       uint64
+	epoch        uint64
+	etcdClient   *etcd.Client
+	stops        []chan bool
+	dataPort     string            // ":xxxx"
+	addressMap   map[uint64]string // taskId -> node address. Maybe in etcd later.
+	dataRespChan chan *dataResponse
+}
+
+type dataResponse struct {
+	taskID uint64
+	req    string
+	data   []byte
+}
+
+func (f *framework) parentOrChild(taskID uint64) string {
+	for _, id := range f.topology.GetParents(f.epoch) {
+		if taskID == id {
+			return "parent"
+		}
+	}
+
+	for _, id := range f.topology.GetChildren(f.epoch) {
+		if taskID == id {
+			return "child"
+		}
+	}
+	return "none"
 }
 
 func (f *framework) start() {
@@ -72,6 +99,7 @@ func (f *framework) start() {
 	f.topology.SetTaskID(f.taskID)
 	f.epoch = 0
 	f.stops = make([]chan bool, 0)
+	f.dataRespChan = make(chan *dataResponse, 100)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -84,6 +112,30 @@ func (f *framework) start() {
 
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
+
+	// setup listening port for data requests
+	go func() {
+		// setup handlers
+		http.ListenAndServe(f.dataPort, nil)
+	}()
+	// setup event loop for data responses
+	go func() {
+		for {
+			dataResp := <-f.dataRespChan
+
+			var dataReadyCallback func(uint64, string, []byte)
+			switch f.parentOrChild(dataResp.taskID) {
+			case "parent":
+				dataReadyCallback = f.task.ParentDataReady
+			case "child":
+				dataReadyCallback = f.task.ChildDataReady
+			default:
+				panic("unimplemented")
+			}
+
+			dataReadyCallback(dataResp.taskID, dataResp.req, dataResp.data)
+		}
+	}()
 
 	// After framework init finished, it should init task.
 	f.task.SetEpoch(f.epoch)
@@ -155,6 +207,36 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
+	// getAddressFromTaskID
+	addr, ok := f.addressMap[toID]
+	if !ok {
+		log.Printf("ID = %d not found", toID)
+		return
+	}
+	// send request
+	// throw the future into the event loop waiting for responses
+	url := fmt.Sprintf("http://%s%s", addr,
+		// it passes self taskID in url to tell the other side
+		MakeDataRequestPath(f.taskID, req))
+	go func(url string) {
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Fatalf("http.Get(%s) returns error: %v", url, err)
+		}
+		if resp.StatusCode != 200 {
+			log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
+		}
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatalf("ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
+		}
+		dataResp := &dataResponse{
+			taskID: toID,
+			req:    req,
+			data:   data,
+		}
+		f.dataRespChan <- dataResp
+	}(url)
 }
 
 func (f *framework) GetTopology() Topology {

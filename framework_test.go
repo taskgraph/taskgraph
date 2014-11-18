@@ -67,23 +67,32 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 type testableTask struct {
 	id        uint64
+	framework Framework
 	pMetaChan chan string
 	cMetaChan chan string
+	dataMap   map[string][]byte
 }
 
 func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {
 	t.id = taskID
+	t.framework = framework
 }
 func (t *testableTask) Exit()                 {}
 func (t *testableTask) SetEpoch(epoch uint64) {}
 
 func (t *testableTask) ParentMetaReady(parentID uint64, meta string) {
 	log.Printf("Task(%d): parent(%d) meta ready:", t.id, parentID)
-	t.pMetaChan <- meta
+	if t.pMetaChan != nil {
+		t.pMetaChan <- meta
+	}
+	t.framework.DataRequest(parentID, meta)
 }
 func (t *testableTask) ChildMetaReady(childID uint64, meta string) {
 	log.Printf("Task(%d): child(%d) meta ready:", t.id, childID)
-	t.cMetaChan <- meta
+	if t.cMetaChan != nil {
+		t.cMetaChan <- meta
+	}
+	t.framework.DataRequest(childID, meta)
 }
 
 func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
@@ -92,5 +101,7 @@ func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
 func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
 	panic("unimplemented")
 }
-func (t *testableTask) ParentDataReady(parentID uint64, req string, resp []byte) {}
-func (t *testableTask) ChildDataReady(childID uint64, req string, resp []byte)   {}
+func (t *testableTask) ParentDataReady(parentID uint64, req string, resp []byte) {
+}
+func (t *testableTask) ChildDataReady(childID uint64, req string, resp []byte) {
+}

@@ -15,6 +15,7 @@ import (
 //   /{app}/nodes/: register nodes under this directory
 //   /{app}/nodes/{nodeID}/address -> scheme://host:port/{path(if http)}
 //   /{app}/nodes/{nodeID}/ttl -> keep alive timeout
+
 const (
 	TasksDir       = "tasks"
 	NodesDir       = "nodes"
@@ -25,6 +26,7 @@ const (
 	TaskChildMeta  = "ChildMeta"
 	NodeAddr       = "address"
 	NodeTTL        = "ttl"
+	DataRequest    = "datareq"
 )
 
 func MakeTaskMasterPath(appName string, taskID uint64) string {
@@ -49,4 +51,12 @@ func MakeChildMetaPath(appName string, taskID uint64) string {
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
 		TaskChildMeta)
+}
+
+// HTTP request: /datareq/{taskID}/{req}
+func MakeDataRequestPath(taskID uint64, req string) string {
+	return path.Join("/",
+		DataRequest,
+		strconv.FormatUint(taskID, 10),
+		req)
 }
