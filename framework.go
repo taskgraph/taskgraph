@@ -1,17 +1,17 @@
 package meritop
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/coreos/go-etcd/etcd"
 )
 
 const (
-	parentIndicator string = "parent"
-	childIndicator  string = "child"
+	taskParent string = "parent"
+	taskChild  string = "child"
 )
 
 // This interface is used by application during taskgraph configuration phase.
@@ -87,13 +87,13 @@ type dataResponse struct {
 func (f *framework) parentOrChild(taskID uint64) string {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
-			return parentIndicator
+			return taskParent
 		}
 	}
 
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		if taskID == id {
-			return childIndicator
+			return taskChild
 		}
 	}
 	return ""
@@ -112,39 +112,45 @@ func (f *framework) start() {
 	// - watch children's parent meta flag
 	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
-	parentStops := f.watchAll(parentIndicator, f.topology.GetParents(f.epoch))
-	childStops := f.watchAll(childIndicator, f.topology.GetChildren(f.epoch))
-
+	parentStops := f.watchAll(taskParent, f.topology.GetParents(f.epoch))
+	childStops := f.watchAll(taskChild, f.topology.GetChildren(f.epoch))
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
 
-	// setup listening port for data requests
-	go func() {
-		// TODO: setup handlers
-		http.ListenAndServe(f.dataPort, nil)
-	}()
-	// setup event loop for data responses
-	go func() {
-		for {
-			dataResp := <-f.dataRespChan
-
-			var dataReady func(uint64, string, []byte)
-			switch f.parentOrChild(dataResp.taskID) {
-			case parentIndicator:
-				dataReady = f.task.ParentDataReady
-			case childIndicator:
-				dataReady = f.task.ChildDataReady
-			default:
-				panic("unimplemented")
-			}
-
-			go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
-		}
-	}()
+	go f.startHttpServerForDataRequest()
+	go f.dataResponseEventLoop()
 
 	// After framework init finished, it should init task.
 	f.task.SetEpoch(f.epoch)
 	f.task.Init(f.taskID, f, nil)
+}
+
+// Framework http server for data request.
+// Each request will be in the format: "/datareq/{taskID}/{req}".
+// "taskID" indicates the requesting task. "req" is the meta data for this request.
+// On success, it should respond with requested data in http body.
+func (f *framework) startHttpServerForDataRequest() {
+	// setup handlers
+	http.ListenAndServe(f.dataPort, nil)
+}
+
+// Framework event loop handles data response for requests sent in DataRequest().
+func (f *framework) dataResponseEventLoop() {
+	for {
+		dataResp := <-f.dataRespChan
+
+		var dataReady func(uint64, string, []byte)
+		switch f.parentOrChild(dataResp.taskID) {
+		case taskParent:
+			dataReady = f.task.ParentDataReady
+		case taskChild:
+			dataReady = f.task.ChildDataReady
+		default:
+			panic("unimplemented")
+		}
+
+		go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
+	}
 }
 
 func (f *framework) stop() {
@@ -182,11 +188,11 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 		var watchPath string
 		var taskCallback func(uint64, string)
 		switch who {
-		case parentIndicator:
+		case taskParent:
 			// Watch parent's child.
 			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
-		case childIndicator:
+		case taskChild:
 			// Watch child's parent.
 			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
@@ -218,15 +224,18 @@ func (f *framework) DataRequest(toID uint64, req string) {
 		log.Fatalf("ID = %d not found", toID)
 		return
 	}
-	url := fmt.Sprintf("http://%s%s", addr,
-		// it passes self taskID in url to tell the other side
-		MakeDataRequestPath(f.taskID, req))
+	u := url.URL{
+		Scheme: "http",
+		Host:   addr,
+		Path:   MakeDataRequestPath(f.taskID, req),
+	}
+	urlStr := u.String()
 	// send request
 	// pass the response to the awaiting event loop for data response
-	go func(url string) {
-		resp, err := http.Get(url)
+	go func(urlStr string) {
+		resp, err := http.Get(urlStr)
 		if err != nil {
-			log.Fatalf("http.Get(%s) returns error: %v", url, err)
+			log.Fatalf("http.Get(%s) returns error: %v", urlStr, err)
 		}
 		if resp.StatusCode != 200 {
 			log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
@@ -241,7 +250,7 @@ func (f *framework) DataRequest(toID uint64, req string) {
 			data:   data,
 		}
 		f.dataRespChan <- dataResp
-	}(url)
+	}(urlStr)
 }
 
 func (f *framework) GetTopology() Topology {
