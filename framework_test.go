@@ -65,6 +65,11 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	}
 }
 
+func TestFrameworkDataRequest(t *testing.T) {
+	// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
+	// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
+}
+
 type testableTask struct {
 	id        uint64
 	framework Framework
@@ -85,14 +90,12 @@ func (t *testableTask) ParentMetaReady(parentID uint64, meta string) {
 	if t.pMetaChan != nil {
 		t.pMetaChan <- meta
 	}
-	t.framework.DataRequest(parentID, meta)
 }
 func (t *testableTask) ChildMetaReady(childID uint64, meta string) {
 	log.Printf("Task(%d): child(%d) meta ready:", t.id, childID)
 	if t.cMetaChan != nil {
 		t.cMetaChan <- meta
 	}
-	t.framework.DataRequest(childID, meta)
 }
 
 func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {

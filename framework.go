@@ -9,6 +9,11 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+const (
+	parentIndicator string = "parent"
+	childIndicator  string = "child"
+)
+
 // This interface is used by application during taskgraph configuration phase.
 type Bootstrap interface {
 	// These allow application developer to set the task configuration so framework
@@ -82,16 +87,16 @@ type dataResponse struct {
 func (f *framework) parentOrChild(taskID uint64) string {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
-			return "parent"
+			return parentIndicator
 		}
 	}
 
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		if taskID == id {
-			return "child"
+			return childIndicator
 		}
 	}
-	return "none"
+	return ""
 }
 
 func (f *framework) start() {
@@ -107,15 +112,15 @@ func (f *framework) start() {
 	// - watch children's parent meta flag
 	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
-	parentStops := f.watchAll("parent", f.topology.GetParents(f.epoch))
-	childStops := f.watchAll("child", f.topology.GetChildren(f.epoch))
+	parentStops := f.watchAll(parentIndicator, f.topology.GetParents(f.epoch))
+	childStops := f.watchAll(childIndicator, f.topology.GetChildren(f.epoch))
 
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
 
 	// setup listening port for data requests
 	go func() {
-		// setup handlers
+		// TODO: setup handlers
 		http.ListenAndServe(f.dataPort, nil)
 	}()
 	// setup event loop for data responses
@@ -123,17 +128,17 @@ func (f *framework) start() {
 		for {
 			dataResp := <-f.dataRespChan
 
-			var dataReadyCallback func(uint64, string, []byte)
+			var dataReady func(uint64, string, []byte)
 			switch f.parentOrChild(dataResp.taskID) {
-			case "parent":
-				dataReadyCallback = f.task.ParentDataReady
-			case "child":
-				dataReadyCallback = f.task.ChildDataReady
+			case parentIndicator:
+				dataReady = f.task.ParentDataReady
+			case childIndicator:
+				dataReady = f.task.ChildDataReady
 			default:
 				panic("unimplemented")
 			}
 
-			dataReadyCallback(dataResp.taskID, dataResp.req, dataResp.data)
+			go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
 		}
 	}()
 
@@ -177,11 +182,11 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 		var watchPath string
 		var taskCallback func(uint64, string)
 		switch who {
-		case "parent":
+		case parentIndicator:
 			// Watch parent's child.
 			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
-		case "child":
+		case childIndicator:
 			// Watch child's parent.
 			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
@@ -210,14 +215,14 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	// getAddressFromTaskID
 	addr, ok := f.addressMap[toID]
 	if !ok {
-		log.Printf("ID = %d not found", toID)
+		log.Fatalf("ID = %d not found", toID)
 		return
 	}
-	// send request
-	// throw the future into the event loop waiting for responses
 	url := fmt.Sprintf("http://%s%s", addr,
 		// it passes self taskID in url to tell the other side
 		MakeDataRequestPath(f.taskID, req))
+	// send request
+	// pass the response to the awaiting event loop for data response
 	go func(url string) {
 		resp, err := http.Get(url)
 		if err != nil {
