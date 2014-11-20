@@ -80,13 +80,14 @@ type framework struct {
 	task     Task
 	topology Topology
 
-	taskID       uint64
-	epoch        uint64
-	etcdClient   *etcd.Client
-	stops        []chan bool
-	ln           net.Listener
-	addressMap   map[uint64]string // taskId -> node address. Maybe in etcd later.
-	dataRespChan chan *dataResponse
+	taskID        uint64
+	epoch         uint64
+	etcdClient    *etcd.Client
+	stops         []chan bool
+	ln            net.Listener
+	addressMap    map[uint64]string // taskId -> node address. Maybe in etcd later.
+	dataRespChan  chan *dataResponse
+	dataCloseChan chan struct{}
 }
 
 type dataResponse struct {
@@ -116,6 +117,7 @@ func (f *framework) start() {
 	f.epoch = 0
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
+	f.dataCloseChan = make(chan struct{})
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -178,23 +180,27 @@ func (f *framework) startHttpServerForDataRequest() {
 // Framework event loop handles data response for requests sent in DataRequest().
 func (f *framework) dataResponseEventLoop() {
 	for {
-		dataResp := <-f.dataRespChan
+		select {
+		case dataResp := <-f.dataRespChan:
+			var dataReady func(uint64, string, []byte)
+			switch f.parentOrChild(dataResp.taskID) {
+			case parentRole:
+				dataReady = f.task.ParentDataReady
+			case childRole:
+				dataReady = f.task.ChildDataReady
+			default:
+				panic("unimplemented")
+			}
 
-		var dataReady func(uint64, string, []byte)
-		switch f.parentOrChild(dataResp.taskID) {
-		case parentRole:
-			dataReady = f.task.ParentDataReady
-		case childRole:
-			dataReady = f.task.ChildDataReady
-		default:
-			panic("unimplemented")
+			go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
+		case <-f.dataCloseChan:
+			return
 		}
-
-		go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
 	}
 }
 
 func (f *framework) stop() {
+	close(f.dataCloseChan)
 	for _, c := range f.stops {
 		close(c)
 	}
