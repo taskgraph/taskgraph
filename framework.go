@@ -143,7 +143,7 @@ func newDataReqHandler(f *framework) http.Handler {
 		fromIDStr := q.Get(DataRequestTaskID)
 		fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
 		if err != nil {
-			log.Fatalf("taskID in query isn't set right: %s", fromIDStr)
+			log.Fatalf("taskID in query couldn't be parsed: %s", fromIDStr)
 		}
 		req := q.Get(DataRequestReq)
 		var serveData func(uint64, string) []byte
@@ -169,9 +169,8 @@ func newDataReqHandler(f *framework) http.Handler {
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHttpServerForDataRequest() {
-	log.Printf("framework: serving http data request on: %s", f.ln.Addr())
-	err := http.Serve(f.ln, newDataReqHandler(f))
-	if err != nil {
+	log.Printf("framework: serving http data request on %s", f.ln.Addr())
+	if err := http.Serve(f.ln, newDataReqHandler(f)); err != nil {
 		log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
 }
