@@ -26,7 +26,6 @@ const (
 	TaskChildMeta  = "ChildMeta"
 	NodeAddr       = "address"
 	NodeTTL        = "ttl"
-	DataRequest    = "datareq"
 )
 
 func MakeTaskMasterPath(appName string, taskID uint64) string {
@@ -51,12 +50,4 @@ func MakeChildMetaPath(appName string, taskID uint64) string {
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
 		TaskChildMeta)
-}
-
-// HTTP request: /datareq/{taskID}/{req}
-func MakeDataRequestPath(taskID uint64, req string) string {
-	return path.Join("/",
-		DataRequest,
-		strconv.FormatUint(taskID, 10),
-		req)
 }

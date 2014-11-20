@@ -3,15 +3,26 @@ package meritop
 import (
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
 )
 
+type taskRole int
+
 const (
-	taskParent string = "parent"
-	taskChild  string = "child"
+	noneRole taskRole = iota
+	parentRole
+	childRole
+)
+
+const (
+	DataRequestPrefix string = "/datareq"
+	DataRequestTaskID string = "taskID"
+	DataRequestReq    string = "req"
 )
 
 // This interface is used by application during taskgraph configuration phase.
@@ -73,7 +84,7 @@ type framework struct {
 	epoch        uint64
 	etcdClient   *etcd.Client
 	stops        []chan bool
-	dataPort     string            // ":xxxx"
+	ln           net.Listener
 	addressMap   map[uint64]string // taskId -> node address. Maybe in etcd later.
 	dataRespChan chan *dataResponse
 }
@@ -84,19 +95,19 @@ type dataResponse struct {
 	data   []byte
 }
 
-func (f *framework) parentOrChild(taskID uint64) string {
+func (f *framework) parentOrChild(taskID uint64) taskRole {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
-			return taskParent
+			return parentRole
 		}
 	}
 
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		if taskID == id {
-			return taskChild
+			return childRole
 		}
 	}
-	return ""
+	return noneRole
 }
 
 func (f *framework) start() {
@@ -112,8 +123,8 @@ func (f *framework) start() {
 	// - watch children's parent meta flag
 	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
-	parentStops := f.watchAll(taskParent, f.topology.GetParents(f.epoch))
-	childStops := f.watchAll(taskChild, f.topology.GetChildren(f.epoch))
+	parentStops := f.watchAll(parentRole, f.topology.GetParents(f.epoch))
+	childStops := f.watchAll(childRole, f.topology.GetChildren(f.epoch))
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
 
@@ -125,13 +136,44 @@ func (f *framework) start() {
 	f.task.Init(f.taskID, f, nil)
 }
 
+func newDataReqHandler(f *framework) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(DataRequestPrefix, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		fromIDStr := q.Get(DataRequestTaskID)
+		fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
+		if err != nil {
+			log.Fatalf("taskID in query isn't set right: %s", fromIDStr)
+		}
+		req := q.Get(DataRequestReq)
+		var serveData func(uint64, string) []byte
+		switch f.parentOrChild(fromID) {
+		case parentRole:
+			serveData = f.task.ServeAsChild
+		case childRole:
+			serveData = f.task.ServeAsParent
+		default:
+			panic("unimplemented")
+		}
+		d := serveData(fromID, req)
+
+		if _, err := w.Write(d); err != nil {
+			log.Printf("response write errored: %v", err)
+		}
+	})
+	return mux
+}
+
 // Framework http server for data request.
 // Each request will be in the format: "/datareq/{taskID}/{req}".
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHttpServerForDataRequest() {
-	// setup handlers
-	http.ListenAndServe(f.dataPort, nil)
+	log.Printf("framework: serving http data request on: %s", f.ln.Addr())
+	err := http.Serve(f.ln, newDataReqHandler(f))
+	if err != nil {
+		log.Fatalf("http.Serve() returns error: %v\n", err)
+	}
 }
 
 // Framework event loop handles data response for requests sent in DataRequest().
@@ -141,9 +183,9 @@ func (f *framework) dataResponseEventLoop() {
 
 		var dataReady func(uint64, string, []byte)
 		switch f.parentOrChild(dataResp.taskID) {
-		case taskParent:
+		case parentRole:
 			dataReady = f.task.ParentDataReady
-		case taskChild:
+		case childRole:
 			dataReady = f.task.ChildDataReady
 		default:
 			panic("unimplemented")
@@ -177,7 +219,7 @@ func (f *framework) SetEpoch(epoch uint64) {
 	f.epoch = epoch
 }
 
-func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
+func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
@@ -188,11 +230,11 @@ func (f *framework) watchAll(who string, taskIDs []uint64) []chan bool {
 		var watchPath string
 		var taskCallback func(uint64, string)
 		switch who {
-		case taskParent:
+		case parentRole:
 			// Watch parent's child.
 			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
-		case taskChild:
+		case childRole:
 			// Watch child's parent.
 			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
@@ -227,8 +269,12 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
-		Path:   MakeDataRequestPath(f.taskID, req),
+		Path:   DataRequestPrefix,
 	}
+	q := u.Query()
+	q.Add(DataRequestTaskID, strconv.FormatUint(f.taskID, 10))
+	q.Add(DataRequestReq, req)
+	u.RawQuery = q.Encode()
 	urlStr := u.String()
 	// send request
 	// pass the response to the awaiting event loop for data response
