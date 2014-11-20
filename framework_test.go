@@ -1,5 +1,12 @@
 package meritop
 
+// framework_test tests basic workflows of framework impl.
+// It uses a scenario with two nodes: 0 as parent, 1 as child.
+// The basic idea is that when parent tries to talk to child and vice versa,
+// there will be some data transferring and captured by application task.
+// Here we have implemented a helper user task to capture those data, see if
+// it's passed from framework correctly.
+
 import (
 	"bytes"
 	"fmt"
@@ -190,11 +197,25 @@ func TestFrameworkDataRequest(t *testing.T) {
 type testableTask struct {
 	id        uint64
 	framework Framework
-	idChan    chan uint64
-	metaChan  chan string
-	reqChan   chan string
-	dataChan  chan []byte
-	dataMap   map[string][]byte
+	// dataMap will be used to serve data according to request
+	dataMap map[string][]byte
+	// These channels are used to convey data passed from framework to the main
+	// thread for checking. These channels will be initialized in main thread for
+	// this reason.
+	//
+	// idChan: used to check taskID in almost all callbacks.
+	// metaChan: used to check meta data in XMetaReady.
+	// reqChan: used to check request string in ServeAsX, XDataReady.
+	// dataChan: used to check responses in XDataReady.
+	//
+	// The basic idea is that there are only two nodes -- one parent and one child.
+	// So when channels is initialized for parent, those channels means information from
+	// child. E.g. metaChan means meta data from child, req means request string from child
+	// or the request string sent to child and called along in ChildDataReady.
+	idChan   chan uint64
+	metaChan chan string
+	reqChan  chan string
+	dataChan chan []byte
 }
 
 func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {
