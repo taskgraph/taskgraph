@@ -131,7 +131,7 @@ func (f *framework) start() {
 	f.stops = append(f.stops, childStops...)
 
 	go f.startHttpServerForDataRequest()
-	go f.dataResponseEventLoop()
+	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
 	f.task.SetEpoch(f.epoch)
@@ -178,7 +178,7 @@ func (f *framework) startHttpServerForDataRequest() {
 }
 
 // Framework event loop handles data response for requests sent in DataRequest().
-func (f *framework) dataResponseEventLoop() {
+func (f *framework) dataResponseReceiver() {
 	for {
 		select {
 		case dataResp := <-f.dataRespChan:
