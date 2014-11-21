@@ -157,19 +157,18 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	req := q.Get(DataRequestReq)
 	// ask task to serve data
-	var serveData func(uint64, string) []byte
+	var b []byte
 	switch h.f.parentOrChild(fromID) {
 	case roleParent:
-		serveData = h.f.task.ServeAsChild
+		b = h.f.task.ServeAsChild(fromID, req)
 	case roleChild:
-		serveData = h.f.task.ServeAsParent
+		b = h.f.task.ServeAsParent(fromID, req)
 	default:
 		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
 		return
 	}
-	d := serveData(fromID, req)
 
-	if _, err := w.Write(d); err != nil {
+	if _, err := w.Write(b); err != nil {
 		log.Printf("response write errored: %v", err)
 	}
 }
