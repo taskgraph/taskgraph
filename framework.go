@@ -14,9 +14,9 @@ import (
 type taskRole int
 
 const (
-	noneRole taskRole = iota
-	parentRole
-	childRole
+	roleNone taskRole = iota
+	roleParent
+	roleChild
 )
 
 const (
@@ -99,16 +99,16 @@ type dataResponse struct {
 func (f *framework) parentOrChild(taskID uint64) taskRole {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
-			return parentRole
+			return roleParent
 		}
 	}
 
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		if taskID == id {
-			return childRole
+			return roleChild
 		}
 	}
-	return noneRole
+	return roleNone
 }
 
 func (f *framework) start() {
@@ -125,12 +125,12 @@ func (f *framework) start() {
 	// - watch children's parent meta flag
 	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
-	parentStops := f.watchAll(parentRole, f.topology.GetParents(f.epoch))
-	childStops := f.watchAll(childRole, f.topology.GetChildren(f.epoch))
+	parentStops := f.watchAll(roleParent, f.topology.GetParents(f.epoch))
+	childStops := f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
 
-	go f.startHttpServerForDataRequest()
+	go f.startHttp()
 	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
@@ -150,9 +150,9 @@ func newDataReqHandler(f *framework) http.Handler {
 		req := q.Get(DataRequestReq)
 		var serveData func(uint64, string) []byte
 		switch f.parentOrChild(fromID) {
-		case parentRole:
+		case roleParent:
 			serveData = f.task.ServeAsChild
-		case childRole:
+		case roleChild:
 			serveData = f.task.ServeAsParent
 		default:
 			panic("unimplemented")
@@ -167,11 +167,11 @@ func newDataReqHandler(f *framework) http.Handler {
 }
 
 // Framework http server for data request.
-// Each request will be in the format: "/datareq/{taskID}/{req}".
+// Each request will be in the format: "/datareq?taskID=XXX&req=XXX".
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
-func (f *framework) startHttpServerForDataRequest() {
-	log.Printf("framework: serving http data request on %s", f.ln.Addr())
+func (f *framework) startHttp() {
+	log.Printf("framework: serving http on %s", f.ln.Addr())
 	if err := http.Serve(f.ln, newDataReqHandler(f)); err != nil {
 		log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
@@ -182,17 +182,14 @@ func (f *framework) dataResponseReceiver() {
 	for {
 		select {
 		case dataResp := <-f.dataRespChan:
-			var dataReady func(uint64, string, []byte)
 			switch f.parentOrChild(dataResp.taskID) {
-			case parentRole:
-				dataReady = f.task.ParentDataReady
-			case childRole:
-				dataReady = f.task.ChildDataReady
+			case roleParent:
+				go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
+			case roleChild:
+				go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
 			default:
 				panic("unimplemented")
 			}
-
-			go dataReady(dataResp.taskID, dataResp.req, dataResp.data)
 		case <-f.dataCloseChan:
 			return
 		}
@@ -235,11 +232,11 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
 		var watchPath string
 		var taskCallback func(uint64, string)
 		switch who {
-		case parentRole:
+		case roleParent:
 			// Watch parent's child.
 			watchPath = MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
-		case childRole:
+		case roleChild:
 			// Watch child's parent.
 			watchPath = MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
@@ -288,6 +285,7 @@ func (f *framework) DataRequest(toID uint64, req string) {
 		if err != nil {
 			log.Fatalf("http.Get(%s) returns error: %v", urlStr, err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
 			log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
 		}
