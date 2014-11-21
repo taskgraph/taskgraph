@@ -145,7 +145,7 @@ func newDataReqHandler(f *framework) http.Handler {
 		fromIDStr := q.Get(DataRequestTaskID)
 		fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
 		if err != nil {
-			log.Fatalf("taskID in query couldn't be parsed: %s", fromIDStr)
+			http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
 		}
 		req := q.Get(DataRequestReq)
 		var serveData func(uint64, string) []byte
@@ -155,7 +155,7 @@ func newDataReqHandler(f *framework) http.Handler {
 		case roleChild:
 			serveData = f.task.ServeAsParent
 		default:
-			panic("unimplemented")
+			http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
 		}
 		d := serveData(fromID, req)
 
