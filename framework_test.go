@@ -4,8 +4,8 @@ package meritop
 // It uses a scenario with two nodes: 0 as parent, 1 as child.
 // The basic idea is that when parent tries to talk to child and vice versa,
 // there will be some data transferring and captured by application task.
-// Here we have implemented a helper user task to capture those data, see if
-// it's passed from framework correctly.
+// Here we have implemented a helper user task to capture those data, test if
+// it's passed from framework correctly and unmodified.
 
 import (
 	"bytes"
@@ -20,10 +20,8 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	defer m.Terminate(t)
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
-	pFromIDChan := make(chan uint64, 1)
-	cFromIDChan := make(chan uint64, 1)
-	pMetaChan := make(chan string, 1)
-	cMetaChan := make(chan string, 1)
+	pDataChan := make(chan *tDataBundle, 1)
+	cDataChan := make(chan *tDataBundle, 1)
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
@@ -31,8 +29,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		etcdURLs: []string{url},
 		taskID:   0,
 		task: &testableTask{
-			idChan:   cFromIDChan,
-			metaChan: cMetaChan,
+			dataChan: cDataChan,
 		},
 		topology: NewTreeTopology(2, 1),
 		ln:       createListener(t),
@@ -42,8 +39,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		etcdURLs: []string{url},
 		taskID:   1,
 		task: &testableTask{
-			idChan:   pFromIDChan,
-			metaChan: pMetaChan,
+			dataChan: pDataChan,
 		},
 		topology: NewTreeTopology(2, 1),
 		ln:       createListener(t),
@@ -65,21 +61,23 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
 		f0.FlagChildMetaReady(tt.cMeta)
 		// from child(1)'s view
-		if parentID := <-pFromIDChan; parentID != 0 {
-			t.Errorf("#%d: parentID want = 0, get = %d", parentID)
+		data := <-pDataChan
+		if data.id != 0 {
+			t.Errorf("#%d: parentID want = 0, get = %d", data.id)
 		}
-		if fromParent := <-pMetaChan; fromParent != tt.cMeta {
-			t.Errorf("#%d: meta want = %s, get = %s", i, tt.cMeta, fromParent)
+		if data.meta != tt.cMeta {
+			t.Errorf("#%d: meta want = %s, get = %s", i, tt.cMeta, data.meta)
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
 		f1.FlagParentMetaReady(tt.pMeta)
 		// from parent(0)'s view
-		if childID := <-cFromIDChan; childID != 1 {
-			t.Errorf("#%d: childID want = 1, get = %d", childID)
+		data = <-cDataChan
+		if data.id != 1 {
+			t.Errorf("#%d: parentID want = 1, get = %d", data.id)
 		}
-		if fromChild := <-cMetaChan; fromChild != tt.pMeta {
-			t.Errorf("#%d: meta want = %s, get = %s", i, tt.pMeta, fromChild)
+		if data.meta != tt.pMeta {
+			t.Errorf("#%d: meta want = %s, get = %s", i, tt.pMeta, data.meta)
 		}
 	}
 }
@@ -110,12 +108,8 @@ func TestFrameworkDataRequest(t *testing.T) {
 		1: l1.Addr().String(),
 	}
 
-	pIDChan := make(chan uint64, 1)
-	cIDChan := make(chan uint64, 1)
-	pReqChan := make(chan string, 1)
-	cReqChan := make(chan string, 1)
-	pDataChan := make(chan []byte, 1)
-	cDataChan := make(chan []byte, 1)
+	pDataChan := make(chan *tDataBundle, 1)
+	cDataChan := make(chan *tDataBundle, 1)
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
@@ -123,10 +117,8 @@ func TestFrameworkDataRequest(t *testing.T) {
 		etcdURLs: []string{url},
 		taskID:   0,
 		task: &testableTask{
-			idChan:   cIDChan,
-			reqChan:  cReqChan,
-			dataChan: cDataChan,
 			dataMap:  dataMap,
+			dataChan: cDataChan,
 		},
 		topology:   NewTreeTopology(2, 1),
 		ln:         l0,
@@ -137,10 +129,8 @@ func TestFrameworkDataRequest(t *testing.T) {
 		etcdURLs: []string{url},
 		taskID:   1,
 		task: &testableTask{
-			idChan:   pIDChan,
-			reqChan:  pReqChan,
-			dataChan: pDataChan,
 			dataMap:  dataMap,
+			dataChan: pDataChan,
 		},
 		topology:   NewTreeTopology(2, 1),
 		ln:         l1,
@@ -154,44 +144,55 @@ func TestFrameworkDataRequest(t *testing.T) {
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
 		f0.DataRequest(1, tt.req)
-		// from child(1)'s view
-		if id := <-pIDChan; id != 0 {
-			t.Errorf("#%d: fromID want = 0, get = %d", i, id)
+		// from child(1)'s view at 1: T#ServeAsChild
+		data := <-pDataChan
+		if data.id != 0 {
+			t.Errorf("#%d: fromID want = 0, get = %d", i, data.id)
 		}
-		if req := <-pReqChan; req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, req)
+		if data.req != tt.req {
+			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
 		}
-		// from parent(0)'s view
-		if id := <-cIDChan; id != 1 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, id)
+		// from parent(0)'s view at 0: T#ChildDataReady
+		data = <-cDataChan
+		if data.id != 1 {
+			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
 		}
-		if req := <-cReqChan; req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, req)
+		if data.req != tt.req {
+			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
 		}
-		if data := <-cDataChan; bytes.Compare(data, tt.resp) != 0 {
-			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data)
+		if bytes.Compare(data.resp, tt.resp) != 0 {
+			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data.resp)
 		}
 
 		// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
 		f1.DataRequest(0, tt.req)
-		// from parent(0)'s view
-		if id := <-cIDChan; id != 1 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, id)
+		// from parent(0)'s view at 0: T#ServeAsParent
+		data = <-cDataChan
+		if data.id != 1 {
+			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
 		}
-		if req := <-cReqChan; req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, req)
+		if data.req != tt.req {
+			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
 		}
-		// from child(1)'s view
-		if id := <-pIDChan; id != 0 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, id)
+		// from child(1)'s view at 1: T#ParentDataReady
+		data = <-pDataChan
+		if data.id != 0 {
+			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
 		}
-		if req := <-pReqChan; req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, req)
+		if data.req != tt.req {
+			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
 		}
-		if data := <-pDataChan; bytes.Compare(data, tt.resp) != 0 {
-			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data)
+		if bytes.Compare(data.resp, tt.resp) != 0 {
+			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data.resp)
 		}
 	}
+}
+
+type tDataBundle struct {
+	id   uint64
+	meta string
+	req  string
+	resp []byte
 }
 
 type testableTask struct {
@@ -199,23 +200,13 @@ type testableTask struct {
 	framework Framework
 	// dataMap will be used to serve data according to request
 	dataMap map[string][]byte
-	// These channels are used to convey data passed from framework to the main
-	// thread for checking. These channels will be initialized in main thread for
-	// this reason.
-	//
-	// idChan: used to check taskID in almost all callbacks.
-	// metaChan: used to check meta data in XMetaReady.
-	// reqChan: used to check request string in ServeAsX, XDataReady.
-	// dataChan: used to check responses in XDataReady.
+
+	// This channel is used to convey data passed from framework back to the main
+	// thread, for checking. Thus it's initialized and passed in from outside.
 	//
 	// The basic idea is that there are only two nodes -- one parent and one child.
-	// So when channels is initialized for parent, those channels means information from
-	// child. E.g. metaChan means meta data from child, req means request string from child
-	// or the request string sent to child and called along in ChildDataReady.
-	idChan   chan uint64
-	metaChan chan string
-	reqChan  chan string
-	dataChan chan []byte
+	// When this channel is for parent, it passes information from child.
+	dataChan chan *tDataBundle
 }
 
 func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {
@@ -226,62 +217,32 @@ func (t *testableTask) Exit()                 {}
 func (t *testableTask) SetEpoch(epoch uint64) {}
 
 func (t *testableTask) ParentMetaReady(fromID uint64, meta string) {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.metaChan != nil {
-		t.metaChan <- meta
-	}
-}
-func (t *testableTask) ChildMetaReady(fromID uint64, meta string) {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.metaChan != nil {
-		t.metaChan <- meta
+	if t.dataChan != nil {
+		t.dataChan <- &tDataBundle{fromID, meta, "", nil}
 	}
 }
 
+func (t *testableTask) ChildMetaReady(fromID uint64, meta string) {
+	t.ParentMetaReady(fromID, meta)
+}
+
 func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.reqChan != nil {
-		t.reqChan <- req
+	if t.dataChan != nil {
+		t.dataChan <- &tDataBundle{fromID, "", req, nil}
 	}
 	return t.dataMap[req]
 }
 func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.reqChan != nil {
-		t.reqChan <- req
-	}
-	return t.dataMap[req]
+	return t.ServeAsParent(fromID, req)
 }
 func (t *testableTask) ParentDataReady(fromID uint64, req string, resp []byte) {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.reqChan != nil {
-		t.reqChan <- req
-	}
 	if t.dataChan != nil {
-		t.dataChan <- resp
+		t.dataChan <- &tDataBundle{fromID, "", req, resp}
 	}
 }
 
 func (t *testableTask) ChildDataReady(fromID uint64, req string, resp []byte) {
-	if t.idChan != nil {
-		t.idChan <- fromID
-	}
-	if t.reqChan != nil {
-		t.reqChan <- req
-	}
-	if t.dataChan != nil {
-		t.dataChan <- resp
-	}
+	t.ParentDataReady(fromID, req, resp)
 }
 
 func createListener(t *testing.T) net.Listener {
