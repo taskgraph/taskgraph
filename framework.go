@@ -138,32 +138,40 @@ func (f *framework) start() {
 	f.task.Init(f.taskID, f, nil)
 }
 
-func newDataReqHandler(f *framework) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc(DataRequestPrefix, func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		fromIDStr := q.Get(DataRequestTaskID)
-		fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
-		if err != nil {
-			http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
-		}
-		req := q.Get(DataRequestReq)
-		var serveData func(uint64, string) []byte
-		switch f.parentOrChild(fromID) {
-		case roleParent:
-			serveData = f.task.ServeAsChild
-		case roleChild:
-			serveData = f.task.ServeAsParent
-		default:
-			http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
-		}
-		d := serveData(fromID, req)
+type dataReqHandler struct {
+	f *framework
+}
 
-		if _, err := w.Write(d); err != nil {
-			log.Printf("response write errored: %v", err)
-		}
-	})
-	return mux
+func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != DataRequestPrefix {
+		http.Error(w, "bad path", http.StatusBadRequest)
+		return
+	}
+	// parse url query
+	q := r.URL.Query()
+	fromIDStr := q.Get(DataRequestTaskID)
+	fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
+	if err != nil {
+		http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
+		return
+	}
+	req := q.Get(DataRequestReq)
+	// ask task to serve data
+	var serveData func(uint64, string) []byte
+	switch h.f.parentOrChild(fromID) {
+	case roleParent:
+		serveData = h.f.task.ServeAsChild
+	case roleChild:
+		serveData = h.f.task.ServeAsParent
+	default:
+		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
+		return
+	}
+	d := serveData(fromID, req)
+
+	if _, err := w.Write(d); err != nil {
+		log.Printf("response write errored: %v", err)
+	}
 }
 
 // Framework http server for data request.
@@ -172,7 +180,7 @@ func newDataReqHandler(f *framework) http.Handler {
 // On success, it should respond with requested data in http body.
 func (f *framework) startHttp() {
 	log.Printf("framework: serving http on %s", f.ln.Addr())
-	if err := http.Serve(f.ln, newDataReqHandler(f)); err != nil {
+	if err := http.Serve(f.ln, &dataReqHandler{f}); err != nil {
 		log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
 }
