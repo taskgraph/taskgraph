@@ -8,9 +8,9 @@ package meritop
 // it's passed from framework correctly and unmodified.
 
 import (
-	"bytes"
 	"fmt"
 	"net"
+	"reflect"
 	"testing"
 )
 
@@ -62,22 +62,18 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		f0.FlagChildMetaReady(tt.cMeta)
 		// from child(1)'s view
 		data := <-pDataChan
-		if data.id != 0 {
-			t.Errorf("#%d: parentID want = 0, get = %d", data.id)
-		}
-		if data.meta != tt.cMeta {
-			t.Errorf("#%d: meta want = %s, get = %s", i, tt.cMeta, data.meta)
+		expected := &tDataBundle{0, tt.cMeta, "", nil}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
 		f1.FlagParentMetaReady(tt.pMeta)
 		// from parent(0)'s view
 		data = <-cDataChan
-		if data.id != 1 {
-			t.Errorf("#%d: parentID want = 1, get = %d", data.id)
-		}
-		if data.meta != tt.pMeta {
-			t.Errorf("#%d: meta want = %s, get = %s", i, tt.pMeta, data.meta)
+		expected = &tDataBundle{1, tt.pMeta, "", nil}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 	}
 }
@@ -146,44 +142,30 @@ func TestFrameworkDataRequest(t *testing.T) {
 		f0.DataRequest(1, tt.req)
 		// from child(1)'s view at 1: T#ServeAsChild
 		data := <-pDataChan
-		if data.id != 0 {
-			t.Errorf("#%d: fromID want = 0, get = %d", i, data.id)
-		}
-		if data.req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
+		expected := &tDataBundle{0, "", data.req, nil}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 		// from parent(0)'s view at 0: T#ChildDataReady
 		data = <-cDataChan
-		if data.id != 1 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
-		}
-		if data.req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
-		}
-		if bytes.Compare(data.resp, tt.resp) != 0 {
-			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data.resp)
+		expected = &tDataBundle{1, "", data.req, data.resp}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 
 		// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
 		f1.DataRequest(0, tt.req)
 		// from parent(0)'s view at 0: T#ServeAsParent
 		data = <-cDataChan
-		if data.id != 1 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
-		}
-		if data.req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
+		expected = &tDataBundle{1, "", data.req, nil}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 		// from child(1)'s view at 1: T#ParentDataReady
 		data = <-pDataChan
-		if data.id != 0 {
-			t.Errorf("#%d: fromID want = 1, get = %d", i, data.id)
-		}
-		if data.req != tt.req {
-			t.Errorf("#%d: req want = %s, get = %s", i, tt.req, data.req)
-		}
-		if bytes.Compare(data.resp, tt.resp) != 0 {
-			t.Errorf("#%d: resp want = %v, get = %v", i, tt.resp, data.resp)
+		expected = &tDataBundle{0, "", data.req, data.resp}
+		if !reflect.DeepEqual(data, expected) {
+			t.Errorf("#%d: data bundle want = %v, get = %v", i, expected, data)
 		}
 	}
 }
