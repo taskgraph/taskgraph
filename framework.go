@@ -77,6 +77,7 @@ type framework struct {
 	etcdURLs []string
 
 	// user defined interfaces
+	builder  TaskBuilder
 	task     Task
 	topology Topology
 
@@ -96,6 +97,14 @@ type dataResponse struct {
 	data   []byte
 }
 
+func (f *framework) SetTaskBuilder(taskBuilder TaskBuilder) {
+	f.builder = taskBuilder
+}
+
+func (f *framework) SetTopology(topology Topology) {
+	f.topology = topology
+}
+
 func (f *framework) parentOrChild(taskID uint64) taskRole {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
@@ -111,13 +120,16 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 	return roleNone
 }
 
-func (f *framework) start() {
+func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 	f.topology.SetTaskID(f.taskID)
 	f.epoch = 0
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataCloseChan = make(chan struct{})
+
+	// Get the task implementation for this node (indentified by taskID)
+	f.task = f.builer.GetTask(f.taskID)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -134,8 +146,11 @@ func (f *framework) start() {
 	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
-	f.task.SetEpoch(f.epoch)
 	f.task.Init(f.taskID, f, nil)
+
+	if f.epoch != 0 {
+		f.SetEpoch(f.epoch)
+	}
 }
 
 type dataReqHandler struct {
