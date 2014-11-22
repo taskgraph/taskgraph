@@ -64,7 +64,7 @@ type Framework interface {
 	AbortTask()
 
 	// Some task can inform all participating tasks to new epoch
-	SetEpoch(epoch uint64)
+	IncEpoch()
 
 	GetLogger() log.Logger
 
@@ -155,7 +155,7 @@ func (f *framework) Start() {
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, nil)
-	f.SetEpoch(f.epoch)
+	f.task.SetEpoch(f.epoch)
 }
 
 type dataReqHandler struct {
@@ -244,8 +244,8 @@ func (f *framework) FlagChildMetaReady(meta string) {
 		0)
 }
 
-func (f *framework) SetEpoch(epoch uint64) {
-	f.epoch = epoch
+func (f *framework) IncEpoch() {
+	f.epoch += 1
 }
 
 func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
