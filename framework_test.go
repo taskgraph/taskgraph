@@ -22,6 +22,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	pDataChan := make(chan *tDataBundle, 1)
 	cDataChan := make(chan *tDataBundle, 1)
+
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
@@ -44,9 +45,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		topology: NewTreeTopology(2, 1),
 		ln:       createListener(t),
 	}
-	f0.start()
+	f0.Start()
 	defer f0.stop()
-	f1.start()
+	f1.Start()
 	defer f1.stop()
 
 	tests := []struct {
@@ -132,9 +133,9 @@ func TestFrameworkDataRequest(t *testing.T) {
 		ln:         l1,
 		addressMap: addressMap,
 	}
-	f0.start()
+	f0.Start()
 	defer f0.stop()
-	f1.start()
+	f1.Start()
 	defer f1.stop()
 
 	for i, tt := range tests {
