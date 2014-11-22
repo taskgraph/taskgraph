@@ -9,11 +9,12 @@ type controller struct {
 	name       string
 	etcdclient *etcd.Client
 	topology   Topology
+	numOfTasks uint64
 }
 
 func (c *controller) initEtcdLayout() (err error) {
 	// initiate etcd data layout
-	for i := uint64(0); i < c.topology.NumberOfTasks(); i++ {
+	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := MakeTaskMasterPath(c.name, i)
 		c.etcdclient.Create(key, "", 0)
 	}

@@ -30,6 +30,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 			name:       tt.name,
 			etcdclient: etcdClient,
 			topology:   NewTreeTopology(2, tt.numberOfTasks),
+			numOfTasks: tt.numberOfTasks,
 		}
 		c.initEtcdLayout()
 
