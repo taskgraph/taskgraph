@@ -22,11 +22,11 @@ type Task interface {
 	ChildMetaReady(childID uint64, meta string)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, meta string) []byte
-	ServeAsChild(fromID uint64, meta string) []byte
+	ServeAsParent(fromID uint64, req string) []byte
+	ServeAsChild(fromID uint64, req string) []byte
 
-	ParentDataReady(parentID uint64, meta string, resp []byte)
-	ChildDataReady(childID uint64, meta string, resp []byte)
+	ParentDataReady(parentID uint64, req string, resp []byte)
+	ChildDataReady(childID uint64, req string, resp []byte)
 }
 
 type UpdateLog interface {

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	maxNumOfIters uint64 = uint64(10)
+	numOfIterations uint64 = uint64(10)
 )
 
 // dummyData is used to carry parameter and gradient;
@@ -111,7 +111,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
-		if t.epoch == maxNumOfIters {
+		if t.epoch == numOfIterations {
 			t.framework.Exit()
 		} else {
 			t.framework.IncEpoch()
