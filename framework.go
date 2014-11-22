@@ -129,7 +129,7 @@ func (f *framework) Start() {
 	f.dataCloseChan = make(chan struct{})
 
 	// Get the task implementation for this node (indentified by taskID)
-	f.task = f.builer.GetTask(f.taskID)
+	// f.task = f.builder.GetTask(f.taskID)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
