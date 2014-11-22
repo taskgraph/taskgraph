@@ -237,6 +237,11 @@ func drive() {
 	var bootstrap Bootstrap = NewBootStrap()
 	var taskBuilder simpleTaskBuilder
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewTreeTopology(2, 127))
+	bootstrap.SetTopology(NewTreeTopology(2, 15))
 	bootstrap.Start()
+}
+
+func main() {
+	// We need to set etcd so that nodes know what to do.
+
 }
