@@ -59,8 +59,12 @@ type Framework interface {
 	// Some task can inform all participating tasks to exit.
 	Exit()
 
+	// This method will result in local node abort, the same task can be
+	// retried by some other node. Only useful for panic inside user code.
+	AbortTask()
+
 	// Some task can inform all participating tasks to new epoch
-	SetEpoch(epoch uint64)
+	IncEpoch()
 
 	GetLogger() log.Logger
 
@@ -71,6 +75,10 @@ type Framework interface {
 	GetTaskID() uint64
 }
 
+func NewBootStrap() Bootstrap {
+	return &framework{}
+}
+
 type framework struct {
 	// These should be passed by outside world
 	name     string
@@ -78,9 +86,9 @@ type framework struct {
 
 	// user defined interfaces
 	builder  TaskBuilder
-	task     Task
 	topology Topology
 
+	task          Task
 	taskID        uint64
 	epoch         uint64
 	etcdClient    *etcd.Client
@@ -147,7 +155,7 @@ func (f *framework) Start() {
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, nil)
-	f.SetEpoch(f.epoch)
+	f.task.SetEpoch(f.epoch)
 }
 
 type dataReqHandler struct {
@@ -236,8 +244,8 @@ func (f *framework) FlagChildMetaReady(meta string) {
 		0)
 }
 
-func (f *framework) SetEpoch(epoch uint64) {
-	f.epoch = epoch
+func (f *framework) IncEpoch() {
+	f.epoch += 1
 }
 
 func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
@@ -326,6 +334,10 @@ func (f *framework) GetTopology() Topology {
 }
 
 func (f *framework) Exit() {
+}
+
+func (f *framework) AbortTask() {
+	panic("unimplemented")
 }
 
 func (f *framework) GetLogger() log.Logger {

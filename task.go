@@ -3,6 +3,9 @@ package meritop
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
+
+type Config map[string]string
+
 type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(taskID uint64, framework Framework, config Config)

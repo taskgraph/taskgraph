@@ -2,13 +2,25 @@ package meritop
 
 /*
 The dummy task is designed for regresion test of meritop framework.
-This works with
+This works with tree topology.
+The main idea behind the regression test is following:
+There will be two kinds of dummyTasks: master and slaves. We will have one master
+sits at the top with taskID = 0, and then rest 6 (2^n - 2) tasks forms a tree under
+the master. There will be 10 epochs, from 1 to 10, at each epoch, we send out a
+vector with all values equal to epochID, and each slave is supposedly return a vector
+with all values equals epochID*taskID, the values are reduced back to master, and
+master will print out the epochID and aggregated vector. After all 10 epoch, it kills
+job.
 */
 
 import (
 	"encoding/json"
 	"log"
 	"os"
+)
+
+const (
+	numOfIterations uint64 = uint64(10)
 )
 
 // dummyData is used to carry parameter and gradient;
@@ -38,7 +50,7 @@ func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 	t.logger = log.New(os.Stdout, "dummyMaster:", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// Jump start the taskgraph
-	t.framework.SetEpoch(1)
+	t.framework.IncEpoch()
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -89,8 +101,21 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+		for _, g := range t.fromChildren {
+			for i := 0; i < 10; i++ {
+				t.gradient.data[i] += g.data[i]
+			}
+		}
+
+		// TODO(xiaoyunwu) We need to do some test here.
+
 		// In real ML, we modify the gradient first. But here it is noop.
-		t.framework.SetEpoch(t.epoch + 1)
+		// Notice that we only
+		if t.epoch == numOfIterations {
+			t.framework.Exit()
+		} else {
+			t.framework.IncEpoch()
+		}
 	}
 }
 
@@ -209,9 +234,14 @@ func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 
 // This is used to show how to drive the network.
 func drive() {
-	var bootstrap Bootstrap
+	var bootstrap Bootstrap = NewBootStrap()
 	var taskBuilder simpleTaskBuilder
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewTreeTopology(2, 127))
+	bootstrap.SetTopology(NewTreeTopology(2, 15))
 	bootstrap.Start()
+}
+
+func main() {
+	// We need to set etcd so that nodes know what to do.
+
 }
