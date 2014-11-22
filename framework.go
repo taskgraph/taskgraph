@@ -147,10 +147,7 @@ func (f *framework) Start() {
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, nil)
-
-	if f.epoch != 0 {
-		f.SetEpoch(f.epoch)
-	}
+	f.SetEpoch(f.epoch)
 }
 
 type dataReqHandler struct {
