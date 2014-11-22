@@ -59,6 +59,10 @@ type Framework interface {
 	// Some task can inform all participating tasks to exit.
 	Exit()
 
+	// This method will result in local node abort, the same task can be
+	// retried by some other node. Only useful for panic inside user code.
+	AbortTask()
+
 	// Some task can inform all participating tasks to new epoch
 	SetEpoch(epoch uint64)
 
@@ -330,6 +334,10 @@ func (f *framework) GetTopology() Topology {
 }
 
 func (f *framework) Exit() {
+}
+
+func (f *framework) AbortTask() {
+	panic("unimplemented")
 }
 
 func (f *framework) GetLogger() log.Logger {
