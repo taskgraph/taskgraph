@@ -8,7 +8,6 @@ import "github.com/coreos/go-etcd/etcd"
 type controller struct {
 	name       string
 	etcdclient *etcd.Client
-	topology   Topology
 	numOfTasks uint64
 }
 

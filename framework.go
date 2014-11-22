@@ -75,14 +75,21 @@ type Framework interface {
 	GetTaskID() uint64
 }
 
-func NewBootStrap() Bootstrap {
-	return &framework{}
+// One need to pass in at least these two for framework to start. The config
+// is used to pass on to task implementation for its configuration.
+func NewBootStrap(jobName string, etcds []string, config Config) Bootstrap {
+	return &framework{
+		name:       jobName,
+		etcdURLs:   etcds,
+		taskConfig: config,
+	}
 }
 
 type framework struct {
 	// These should be passed by outside world
-	name     string
-	etcdURLs []string
+	name       string
+	etcdURLs   []string
+	taskConfig Config
 
 	// user defined interfaces
 	builder  TaskBuilder

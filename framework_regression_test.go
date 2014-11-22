@@ -15,8 +15,12 @@ job.
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"testing"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 const (
@@ -25,8 +29,8 @@ const (
 
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
-	value float32
-	data  [10]float32
+	value int32
+	data  [10]int32
 }
 
 // dummyMaster is prototype of parameter server, for now it does not
@@ -35,6 +39,7 @@ type dummyData struct {
 // Note: in theory, since there should be no parent of this, so we should
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
+	dataChan      chan int32
 	framework     Framework
 	epoch, taskID uint64
 	logger        *log.Logger
@@ -67,7 +72,7 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 func (t *dummyMaster) SetEpoch(epoch uint64) {
 	t.epoch = epoch
 	for i := 0; i < 10; i++ {
-		t.param.data[i] = float32(t.epoch)
+		t.param.data[i] = int32(t.epoch)
 	}
 
 	// Make sure we have a clean slate.
@@ -185,7 +190,7 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 
 	// We need to carry out local compuation.
 	for i := 0; i < 10; i++ {
-		t.gradient.data[i] = float32(t.framework.GetTaskID())
+		t.gradient.data[i] = int32(t.framework.GetTaskID())
 	}
 
 	// If this task has children, flag meta so that children can start pull
@@ -221,27 +226,58 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 
 type simpleTaskBuilder struct{}
 
+var gDataChan = make(chan int32, 1)
+
+// Leave it at global level so that we use this to terminate and test.
+// cDataChan := make(chan *tDataBundle, 1)
+
 // This method is called once by framework implementation to get the
 // right task implementation for the node/task. It requires the taskID
 // for current node, and also a global array of tasks.
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 	if taskID == 0 {
-		return &dummyMaster{}
+		return &dummyMaster{dataChan: gDataChan}
 	} else {
 		return &dummySlave{}
 	}
 }
 
 // This is used to show how to drive the network.
-func drive() {
-	var bootstrap Bootstrap = NewBootStrap()
+func drive(jobName string, etcds []string, config Config, ntask uint64) {
+	var bootstrap Bootstrap = NewBootStrap(jobName, etcds, config)
 	var taskBuilder simpleTaskBuilder
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewTreeTopology(2, 15))
+	bootstrap.SetTopology(NewTreeTopology(2, ntask))
 	bootstrap.Start()
 }
 
-func main() {
-	// We need to set etcd so that nodes know what to do.
+func tTestFramework(t *testing.T) {
 
+	m := mustNewMember(t, "framework_regression_test")
+	m.Launch()
+	defer m.Terminate(t)
+	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+
+	job := "framework_regression_test"
+	etcds := []string{url}
+	config := map[string]string{}
+	numOfTasks := uint64(15)
+
+	controller := &controller{
+		name:       job,
+		etcdclient: etcd.NewClient([]string{url}),
+		numOfTasks: numOfTasks,
+	}
+
+	controller.initEtcdLayout()
+	go controller.destroyEtcdLayout()
+
+	// We need to set etcd so that nodes know what to do.
+	for i := uint64(0); i < numOfTasks; i++ {
+		go drive(job, etcds, config, numOfTasks)
+	}
+
+	// wait for last number to comeback.
+	data := <-gDataChan
+	fmt.Println("Exiting with data = %d", data)
 }
