@@ -71,6 +71,10 @@ type Framework interface {
 	GetTaskID() uint64
 }
 
+func NewBootStrap() Bootstrap {
+	return &framework{}
+}
+
 type framework struct {
 	// These should be passed by outside world
 	name     string
@@ -78,9 +82,9 @@ type framework struct {
 
 	// user defined interfaces
 	builder  TaskBuilder
-	task     Task
 	topology Topology
 
+	task          Task
 	taskID        uint64
 	epoch         uint64
 	etcdClient    *etcd.Client
