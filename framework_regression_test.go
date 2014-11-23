@@ -224,9 +224,9 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	}
 }
 
-type simpleTaskBuilder struct{}
-
-var gDataChan = make(chan int32, 1)
+type simpleTaskBuilder struct {
+	gDataChan chan int32
+}
 
 // Leave it at global level so that we use this to terminate and test.
 // cDataChan := make(chan *tDataBundle, 1)
@@ -236,16 +236,16 @@ var gDataChan = make(chan int32, 1)
 // for current node, and also a global array of tasks.
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 	if taskID == 0 {
-		return &dummyMaster{dataChan: gDataChan}
+		return &dummyMaster{dataChan: tc.gDataChan}
 	} else {
 		return &dummySlave{}
 	}
 }
 
 // This is used to show how to drive the network.
-func drive(jobName string, etcds []string, config Config, ntask uint64) {
+func drive(jobName string, etcds []string, config Config, ntask uint64, dc chan int32) {
 	var bootstrap Bootstrap = NewBootStrap(jobName, etcds, config)
-	var taskBuilder simpleTaskBuilder
+	taskBuilder := &simpleTaskBuilder{gDataChan: dc}
 	bootstrap.SetTaskBuilder(taskBuilder)
 	bootstrap.SetTopology(NewTreeTopology(2, ntask))
 	bootstrap.Start()
@@ -262,7 +262,7 @@ func tTestFramework(t *testing.T) {
 	etcds := []string{url}
 	config := map[string]string{}
 	numOfTasks := uint64(15)
-
+	gDataChan := make(chan int32, 1)
 	controller := &controller{
 		name:       job,
 		etcdclient: etcd.NewClient([]string{url}),
@@ -274,7 +274,7 @@ func tTestFramework(t *testing.T) {
 
 	// We need to set etcd so that nodes know what to do.
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(job, etcds, config, numOfTasks)
+		go drive(job, etcds, config, numOfTasks, gDataChan)
 	}
 
 	// wait for last number to comeback.
