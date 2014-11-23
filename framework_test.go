@@ -29,24 +29,26 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		name:     "framework_test_flagmetaready",
 		etcdURLs: []string{url},
 		taskID:   0,
-		task: &testableTask{
-			dataChan: cDataChan,
-		},
-		topology: NewTreeTopology(2, 1),
 		ln:       createListener(t),
 	}
 	f1 := &framework{
 		name:     "framework_test_flagmetaready",
 		etcdURLs: []string{url},
 		taskID:   1,
-		task: &testableTask{
-			dataChan: pDataChan,
-		},
-		topology: NewTreeTopology(2, 1),
 		ln:       createListener(t),
 	}
+
+	taskBuilder := &testableTaskBuilder{
+		dataMap:   nil,
+		cDataChan: cDataChan,
+		pDataChan: pDataChan,
+	}
+	f0.SetTaskBuilder(taskBuilder)
+	f0.SetTopology(NewTreeTopology(2, 1))
 	f0.Start()
 	defer f0.stop()
+	f1.SetTaskBuilder(taskBuilder)
+	f1.SetTopology(NewTreeTopology(2, 1))
 	f1.Start()
 	defer f1.stop()
 
@@ -110,31 +112,31 @@ func TestFrameworkDataRequest(t *testing.T) {
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
-		name:     "framework_test_datarequest",
-		etcdURLs: []string{url},
-		taskID:   0,
-		task: &testableTask{
-			dataMap:  dataMap,
-			dataChan: cDataChan,
-		},
-		topology:   NewTreeTopology(2, 1),
+		name:       "framework_test_datarequest",
+		etcdURLs:   []string{url},
+		taskID:     0,
 		ln:         l0,
 		addressMap: addressMap,
 	}
 	f1 := &framework{
-		name:     "framework_test_datarequest",
-		etcdURLs: []string{url},
-		taskID:   1,
-		task: &testableTask{
-			dataMap:  dataMap,
-			dataChan: pDataChan,
-		},
-		topology:   NewTreeTopology(2, 1),
+		name:       "framework_test_datarequest",
+		etcdURLs:   []string{url},
+		taskID:     1,
 		ln:         l1,
 		addressMap: addressMap,
 	}
+
+	taskBuilder := &testableTaskBuilder{
+		dataMap:   dataMap,
+		cDataChan: cDataChan,
+		pDataChan: pDataChan,
+	}
+	f0.SetTaskBuilder(taskBuilder)
+	f0.SetTopology(NewTreeTopology(2, 1))
 	f0.Start()
 	defer f0.stop()
+	f1.SetTaskBuilder(taskBuilder)
+	f1.SetTopology(NewTreeTopology(2, 1))
 	f1.Start()
 	defer f1.stop()
 
@@ -176,6 +178,23 @@ type tDataBundle struct {
 	meta string
 	req  string
 	resp []byte
+}
+
+type testableTaskBuilder struct {
+	dataMap   map[string][]byte
+	cDataChan chan *tDataBundle
+	pDataChan chan *tDataBundle
+}
+
+func (b *testableTaskBuilder) GetTask(taskID uint64) Task {
+	switch taskID {
+	case 0:
+		return &testableTask{dataMap: b.dataMap, dataChan: b.cDataChan}
+	case 1:
+		return &testableTask{dataMap: b.dataMap, dataChan: b.pDataChan}
+	default:
+		panic("unimplemented")
+	}
 }
 
 type testableTask struct {
