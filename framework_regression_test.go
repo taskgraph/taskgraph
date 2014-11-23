@@ -270,7 +270,7 @@ func tTestFramework(t *testing.T) {
 	}
 
 	controller.initEtcdLayout()
-	go controller.destroyEtcdLayout()
+	defer controller.destroyEtcdLayout()
 
 	// We need to set etcd so that nodes know what to do.
 	for i := uint64(0); i < numOfTasks; i++ {
