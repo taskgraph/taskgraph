@@ -81,23 +81,23 @@ type Framework interface {
 
 // One need to pass in at least these two for framework to start. The config
 // is used to pass on to task implementation for its configuration.
-func NewBootStrap(jobName string, etcds []string, config Config) Bootstrap {
+func NewBootStrap(jobName string, etcdURLs []string, config Config) Bootstrap {
 	return &framework{
-		name:       jobName,
-		etcdURLs:   etcds,
-		taskConfig: config,
+		name:     jobName,
+		etcdURLs: etcdURLs,
+		config:   config,
 	}
 }
 
 type framework struct {
 	// These should be passed by outside world
-	name       string
-	etcdURLs   []string
-	taskConfig Config
+	name     string
+	etcdURLs []string
+	config   Config
 
 	// user defined interfaces
-	builder  TaskBuilder
-	topology Topology
+	taskBuilder TaskBuilder
+	topology    Topology
 
 	task          Task
 	taskID        uint64
@@ -117,7 +117,7 @@ type dataResponse struct {
 }
 
 func (f *framework) SetTaskBuilder(taskBuilder TaskBuilder) {
-	f.builder = taskBuilder
+	f.taskBuilder = taskBuilder
 }
 
 func (f *framework) SetTopology(topology Topology) {
@@ -141,14 +141,16 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 
 func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
-	f.topology.SetTaskID(f.taskID)
 	f.epoch = 0
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataCloseChan = make(chan struct{})
 
-	// Get the task implementation for this node (indentified by taskID)
-	// f.task = f.builder.GetTask(f.taskID)
+	// task builder and topology are defined by applications.
+	// Both should be initialized at this point.
+	// Get the task implementation and topology for this node (indentified by taskID)
+	f.task = f.taskBuilder.GetTask(f.taskID)
+	f.topology.SetTaskID(f.taskID)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -164,7 +166,7 @@ func (f *framework) Start() {
 	go f.startHttp()
 
 	// After framework init finished, it should init task.
-	f.task.Init(f.taskID, f, f.taskConfig)
+	f.task.Init(f.taskID, f, f.config)
 	f.task.SetEpoch(f.epoch)
 
 	// TODO(hongchao)
