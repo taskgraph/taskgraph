@@ -8,8 +8,7 @@ import (
 // The directory layout we going to define in etcd:
 //   /{app}/config -> application configuration
 //   /{app}/tasks/: register tasks under this directory
-//   /{app}/tasks/{taskID}/master -> pointer to nodes
-//   /{app}/tasks/{taskID}/slave -> pointer to nodes
+//   /{app}/tasks/{taskID}/index -> pointer to nodes, index = 0 means master
 //   /{app}/tasks/{taskID}/parentMeta
 //   /{app}/tasks/{taskID}/childMeta
 //   /{app}/nodes/: register nodes under this directory
@@ -20,8 +19,6 @@ const (
 	TasksDir       = "tasks"
 	NodesDir       = "nodes"
 	ConfigDir      = "config"
-	TaskMaster     = "master"
-	TaskSlave      = "slave"
 	TaskParentMeta = "ParentMeta"
 	TaskChildMeta  = "ChildMeta"
 	NodeAddr       = "address"
@@ -33,7 +30,7 @@ func MakeTaskMasterPath(appName string, taskID uint64) string {
 		appName,
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
-		TaskMaster)
+		"0")
 }
 
 func MakeParentMetaPath(appName string, taskID uint64) string {
