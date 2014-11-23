@@ -16,7 +16,7 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	t.parents = make([]uint64, 0, 1)
 	t.children = make([]uint64, 0, t.fanout)
 
-	for index := uint64(1); index < t.numberOfTasks; index++ {
+	for index := uint64(1); index < t.numOfTasks; index++ {
 		parentID := (index - 1) / t.fanout
 		if index == taskID {
 			t.parents = append(t.parents, parentID)
@@ -46,8 +46,8 @@ func (t *TreeTopology) SetNumberOfTasks(nt uint64) {
 // This will be called each
 func NewTreeTopology(fanout, maxID uint64) *TreeTopology {
 	m := &TreeTopology{
-		fanout:        fanout,
-		numberOfTasks: maxID + 1,
+		fanout:     fanout,
+		numOfTasks: maxID + 1,
 	}
 	return m
 }
