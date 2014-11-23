@@ -11,6 +11,24 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+type taskRole int
+
+const (
+	roleNone taskRole = iota
+	roleParent
+	roleChild
+)
+
+const (
+	dataRequestPrefix string = "/datareq"
+	dataRequestTaskID string = "taskID"
+	dataRequestReq    string = "req"
+)
+
+// This is used as special value to indicate that it is the last epoch, time
+// to exit.
+const maxUint64 uint64 = ^uint64(0)
+
 // This interface is used by application during taskgraph configuration phase.
 type Bootstrap interface {
 	// These allow application developer to set the task configuration so framework
@@ -70,24 +88,6 @@ func NewBootStrap(jobName string, etcds []string, config Config) Bootstrap {
 		taskConfig: config,
 	}
 }
-
-type taskRole int
-
-const (
-	roleNone taskRole = iota
-	roleParent
-	roleChild
-)
-
-const (
-	dataRequestPrefix string = "/datareq"
-	dataRequestTaskID string = "taskID"
-	dataRequestReq    string = "req"
-)
-
-// This is used as special value to indicate that it is the last epoch, time
-// to exit.
-const maxUint64 uint64 = ^uint64(0)
 
 type framework struct {
 	// These should be passed by outside world
@@ -164,7 +164,7 @@ func (f *framework) Start() {
 	go f.startHttp()
 
 	// After framework init finished, it should init task.
-	f.task.Init(f.taskID, f, nil)
+	f.task.Init(f.taskID, f, f.taskConfig)
 	f.task.SetEpoch(f.epoch)
 
 	// TODO(hongchao)
