@@ -27,6 +27,6 @@ type Topology interface {
 	// given epoch.
 	GetChildren(epoch uint64) []uint64
 
-	// NumberOfTasks returns the number of tasks this topology requires.
-	NumberOfTasks() uint64
+	// Inform the new NumberOfTasks, this allow the number of tasks to change.
+	SetNumberOfTasks(numOfTasks uint64)
 }

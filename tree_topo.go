@@ -4,9 +4,9 @@
 package meritop
 
 type TreeTopology struct {
-	fanout, numberOfTasks uint64
-	taskID                uint64
-	parents, children     []uint64
+	fanout, numOfTasks uint64
+	taskID             uint64
+	parents, children  []uint64
 }
 
 func (t *TreeTopology) SetTaskID(taskID uint64) {
@@ -16,7 +16,7 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	t.parents = make([]uint64, 0, 1)
 	t.children = make([]uint64, 0, t.fanout)
 
-	for index := uint64(1); index < t.numberOfTasks; index++ {
+	for index := uint64(1); index < t.numOfTasks; index++ {
 		parentID := (index - 1) / t.fanout
 		if index == taskID {
 			t.parents = append(t.parents, parentID)
@@ -38,16 +38,16 @@ func (t *TreeTopology) GetChildren(epoch uint64) []uint64 {
 	return t.children
 }
 
-func (t *TreeTopology) NumberOfTasks() uint64 {
-	return t.numberOfTasks
+func (t *TreeTopology) SetNumberOfTasks(nt uint64) {
+	t.numOfTasks = nt
 }
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called each
 func NewTreeTopology(fanout, maxID uint64) *TreeTopology {
 	m := &TreeTopology{
-		fanout:        fanout,
-		numberOfTasks: maxID + 1,
+		fanout:     fanout,
+		numOfTasks: maxID + 1,
 	}
 	return m
 }
