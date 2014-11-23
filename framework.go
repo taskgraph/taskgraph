@@ -85,6 +85,10 @@ const (
 	dataRequestReq    string = "req"
 )
 
+// This is used as special value to indicate that it is the last epoch, time
+// to exit.
+const maxUint64 uint64 = ^uint64(0)
+
 type framework struct {
 	// These should be passed by outside world
 	name       string
@@ -158,11 +162,19 @@ func (f *framework) Start() {
 	f.stops = append(f.stops, childStops...)
 
 	go f.startHttp()
-	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, nil)
 	f.task.SetEpoch(f.epoch)
+
+	// TODO(hongchao)
+	// We need to have two levels loop here so that we can effectively
+	// stop the work that task is working on for last epoch.
+	// for f.epoch != maxUint64 {
+	// 	for exmple, this can be run here f.dataResponseReceiver()
+	// }
+	// you might want to just run the following function directly.
+	go f.dataResponseReceiver()
 }
 
 type dataReqHandler struct {
