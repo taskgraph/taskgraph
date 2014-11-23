@@ -11,20 +11,6 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-type taskRole int
-
-const (
-	roleNone taskRole = iota
-	roleParent
-	roleChild
-)
-
-const (
-	DataRequestPrefix string = "/datareq"
-	DataRequestTaskID string = "taskID"
-	DataRequestReq    string = "req"
-)
-
 // This interface is used by application during taskgraph configuration phase.
 type Bootstrap interface {
 	// These allow application developer to set the task configuration so framework
@@ -84,6 +70,20 @@ func NewBootStrap(jobName string, etcds []string, config Config) Bootstrap {
 		taskConfig: config,
 	}
 }
+
+type taskRole int
+
+const (
+	roleNone taskRole = iota
+	roleParent
+	roleChild
+)
+
+const (
+	dataRequestPrefix string = "/datareq"
+	dataRequestTaskID string = "taskID"
+	dataRequestReq    string = "req"
+)
 
 type framework struct {
 	// These should be passed by outside world
@@ -170,19 +170,19 @@ type dataReqHandler struct {
 }
 
 func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != DataRequestPrefix {
+	if r.URL.Path != dataRequestPrefix {
 		http.Error(w, "bad path", http.StatusBadRequest)
 		return
 	}
 	// parse url query
 	q := r.URL.Query()
-	fromIDStr := q.Get(DataRequestTaskID)
+	fromIDStr := q.Get(dataRequestTaskID)
 	fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
 	if err != nil {
 		http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
 		return
 	}
-	req := q.Get(DataRequestReq)
+	req := q.Get(dataRequestReq)
 	// ask task to serve data
 	var b []byte
 	switch h.f.parentOrChild(fromID) {
@@ -305,11 +305,11 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
-		Path:   DataRequestPrefix,
+		Path:   dataRequestPrefix,
 	}
 	q := u.Query()
-	q.Add(DataRequestTaskID, strconv.FormatUint(f.taskID, 10))
-	q.Add(DataRequestReq, req)
+	q.Add(dataRequestTaskID, strconv.FormatUint(f.taskID, 10))
+	q.Add(dataRequestReq, req)
 	u.RawQuery = q.Encode()
 	urlStr := u.String()
 	// send request
