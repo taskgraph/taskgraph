@@ -176,7 +176,7 @@ func (f *framework) Start() {
 	// 	for exmple, this can be run here f.dataResponseReceiver()
 	// }
 	// you might want to just run the following function directly.
-	go f.dataResponseReceiver()
+	f.dataResponseReceiver()
 }
 
 type dataReqHandler struct {
