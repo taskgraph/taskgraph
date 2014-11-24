@@ -1,6 +1,7 @@
 package meritop
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -141,11 +142,17 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 }
 
 func (f *framework) Start() {
+	var err error
+
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 	f.epoch = 0
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataCloseChan = make(chan struct{})
+
+	if f.taskID, err = f.occupyTask(); err != nil {
+		log.Panicf("occupyTask failed: %v", err)
+	}
 
 	// task builder and topology are defined by applications.
 	// Both should be initialized at this point.
@@ -213,6 +220,35 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(b); err != nil {
 		log.Printf("response write errored: %v", err)
 	}
+}
+
+// occupyTask will grab the first unassigned task and assign itself to registration.
+func (f *framework) occupyTask() (uint64, error) {
+	// get all nodes under task dir
+	slots, err := f.etcdClient.Get(
+		MakeTaskDirPath(f.name), true, true)
+	if err != nil {
+		return 0, err
+	}
+	for _, s := range slots.Node.Nodes {
+		idstr := path.Base(s.Key)
+		id, err := strconv.ParseUint(idstr, 0, 64)
+		if err != nil {
+			log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
+			continue
+		}
+		// Below operations are one atomic behavior:
+		// - See if current task is unassigned.
+		// - If it's unassgined, currently task will set its ip address to the key.
+		_, err = f.etcdClient.CompareAndSwap(
+			MakeTaskMasterPath(f.name, id),
+			f.ln.Addr().String(),
+			0, "empty", 0)
+		if err == nil {
+			return id, nil
+		}
+	}
+	return 0, fmt.Errorf("no unassigned task found")
 }
 
 // Framework http server for data request.
@@ -368,27 +404,4 @@ func (f *framework) GetLogger() log.Logger {
 
 func (f *framework) GetTaskID() uint64 {
 	return f.taskID
-}
-
-func (f *framework) occupyTask(taskPath string) uint64 {
-	slots, err := f.etcdClient.Get(taskPath, true, true)
-	if err != nil {
-		// TODO: handle err
-		log.Panic(err)
-	}
-	for _, s := range slots.Node.Nodes {
-		_, err := f.etcdClient.CompareAndSwap(s.Key+"/master", f.ln.Addr().String(), 0, "empty", 0)
-		if err == nil {
-			idstr := path.Base(s.Key)
-			// TODO: use uint64
-			id, err := strconv.Atoi(idstr)
-			if err != nil {
-				log.Panic(err)
-			}
-			return uint64(id)
-		}
-	}
-	// TODO: handle err
-	log.Panic("no empty slot")
-	return 0
 }
