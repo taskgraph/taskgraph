@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -367,4 +368,27 @@ func (f *framework) GetLogger() log.Logger {
 
 func (f *framework) GetTaskID() uint64 {
 	return f.taskID
+}
+
+func (f *framework) occupyTask(taskPath string) uint64 {
+	slots, err := f.etcdClient.Get(taskPath, true, true)
+	if err != nil {
+		// TODO: handle err
+		log.Panic(err)
+	}
+	for _, s := range slots.Node.Nodes {
+		_, err := f.etcdClient.CompareAndSwap(s.Key+"/master", f.ln.Addr().String(), 0, "empty", 0)
+		if err == nil {
+			idstr := path.Base(s.Key)
+			// TODO: use uint64
+			id, err := strconv.Atoi(idstr)
+			if err != nil {
+				log.Panic(err)
+			}
+			return uint64(id)
+		}
+	}
+	// TODO: handle err
+	log.Panic("no empty slot")
+	return 0
 }

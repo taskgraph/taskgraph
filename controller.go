@@ -15,7 +15,7 @@ func (c *controller) initEtcdLayout() (err error) {
 	// initiate etcd data layout
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := MakeTaskMasterPath(c.name, i)
-		c.etcdclient.Create(key, "", 0)
+		c.etcdclient.Create(key, "empty", 0)
 	}
 	return
 }

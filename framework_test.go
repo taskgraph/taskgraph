@@ -13,7 +13,75 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/coreos/go-etcd/etcd"
 )
+
+func TestFrameworkOccupyTaskID(t *testing.T) {
+	m := mustNewMember(t, "framework_test")
+	m.Launch()
+	defer m.Terminate(t)
+	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+
+	ctl := &controller{
+		name:       "test",
+		etcdclient: etcd.NewClient([]string{url}),
+		numOfTasks: 2,
+	}
+	ctl.initEtcdLayout()
+	defer ctl.destroyEtcdLayout()
+
+	// simulate two tasks on two nodes -- 0 and 1
+	// 0 is parent, 1 is child
+	f0 := &framework{
+		name:     "framework_test_occupy0",
+		etcdURLs: []string{url},
+		taskID:   0,
+		ln:       createListener(t),
+	}
+	f0.etcdClient = etcd.NewClient(f0.etcdURLs)
+	f1 := &framework{
+		name:     "framework_test_occupy1",
+		etcdURLs: []string{url},
+		taskID:   1,
+		ln:       createListener(t),
+	}
+	f1.etcdClient = etcd.NewClient(f1.etcdURLs)
+
+	tmap := make(map[uint64]bool)
+	var tmu sync.Mutex
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n := f0.occupyTask("test/tasks/")
+		tmu.Lock()
+		defer tmu.Unlock()
+		if tmap[n] {
+			t.Fatal("confilct")
+		}
+		tmap[n] = true
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n := f1.occupyTask("test/tasks/")
+		tmu.Lock()
+		defer tmu.Unlock()
+		if tmap[n] {
+			t.Fatal("confilct")
+		}
+		tmap[n] = true
+	}()
+
+	wg.Wait()
+	wmap := map[uint64]bool{0: true, 1: true}
+	if !reflect.DeepEqual(tmap, wmap) {
+		t.Errorf("map = %v, want %v", tmap, wmap)
+	}
+}
 
 func TestFrameworkFlagMetaReady(t *testing.T) {
 	m := mustNewMember(t, "framework_test")
