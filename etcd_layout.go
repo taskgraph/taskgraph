@@ -7,9 +7,9 @@ import (
 
 // The directory layout we going to define in etcd:
 //   /{app}/config -> application configuration
+//   /{app}/epoch -> global value for epoch
 //   /{app}/tasks/: register tasks under this directory
-//   /{app}/tasks/{taskID}/master -> pointer to nodes
-//   /{app}/tasks/{taskID}/slave -> pointer to nodes
+//   /{app}/tasks/{taskID}/{replicaID} -> pointer to nodes, 0 replicaID means master
 //   /{app}/tasks/{taskID}/parentMeta
 //   /{app}/tasks/{taskID}/childMeta
 //   /{app}/nodes/: register nodes under this directory
@@ -20,13 +20,19 @@ const (
 	TasksDir       = "tasks"
 	NodesDir       = "nodes"
 	ConfigDir      = "config"
-	TaskMaster     = "master"
-	TaskSlave      = "slave"
+	Epoch          = "epoch"
+	TaskMaster     = "0"
 	TaskParentMeta = "ParentMeta"
 	TaskChildMeta  = "ChildMeta"
 	NodeAddr       = "address"
 	NodeTTL        = "ttl"
 )
+
+func MakeJobEpochPath(appName string) string {
+	return path.Join("/",
+		appName,
+		Epoch)
+}
 
 func MakeTaskMasterPath(appName string, taskID uint64) string {
 	return path.Join("/",
