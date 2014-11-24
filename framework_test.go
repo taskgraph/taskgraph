@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -38,19 +39,23 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		ln:       createListener(t),
 	}
 
+	var wg sync.WaitGroup
 	taskBuilder := &testableTaskBuilder{
-		dataMap:   nil,
-		cDataChan: cDataChan,
-		pDataChan: pDataChan,
+		dataMap:    nil,
+		cDataChan:  cDataChan,
+		pDataChan:  pDataChan,
+		setupLatch: &wg,
 	}
+	taskBuilder.setupLatch.Add(2)
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(NewTreeTopology(2, 1))
-	f0.Start()
+	go f0.Start()
 	defer f0.stop()
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(NewTreeTopology(2, 1))
-	f1.Start()
+	go f1.Start()
 	defer f1.stop()
+	taskBuilder.setupLatch.Wait()
 
 	tests := []struct {
 		cMeta string
@@ -126,19 +131,23 @@ func TestFrameworkDataRequest(t *testing.T) {
 		addressMap: addressMap,
 	}
 
+	var wg sync.WaitGroup
 	taskBuilder := &testableTaskBuilder{
-		dataMap:   dataMap,
-		cDataChan: cDataChan,
-		pDataChan: pDataChan,
+		dataMap:    dataMap,
+		cDataChan:  cDataChan,
+		pDataChan:  pDataChan,
+		setupLatch: &wg,
 	}
+	taskBuilder.setupLatch.Add(2)
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(NewTreeTopology(2, 1))
-	f0.Start()
+	go f0.Start()
 	defer f0.stop()
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(NewTreeTopology(2, 1))
-	f1.Start()
+	go f1.Start()
 	defer f1.stop()
+	taskBuilder.setupLatch.Wait()
 
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
@@ -181,25 +190,29 @@ type tDataBundle struct {
 }
 
 type testableTaskBuilder struct {
-	dataMap   map[string][]byte
-	cDataChan chan *tDataBundle
-	pDataChan chan *tDataBundle
+	dataMap    map[string][]byte
+	cDataChan  chan *tDataBundle
+	pDataChan  chan *tDataBundle
+	setupLatch *sync.WaitGroup
 }
 
 func (b *testableTaskBuilder) GetTask(taskID uint64) Task {
 	switch taskID {
 	case 0:
-		return &testableTask{dataMap: b.dataMap, dataChan: b.cDataChan}
+		return &testableTask{dataMap: b.dataMap, dataChan: b.cDataChan,
+			setupLatch: b.setupLatch}
 	case 1:
-		return &testableTask{dataMap: b.dataMap, dataChan: b.pDataChan}
+		return &testableTask{dataMap: b.dataMap, dataChan: b.pDataChan,
+			setupLatch: b.setupLatch}
 	default:
 		panic("unimplemented")
 	}
 }
 
 type testableTask struct {
-	id        uint64
-	framework Framework
+	id         uint64
+	framework  Framework
+	setupLatch *sync.WaitGroup
 	// dataMap will be used to serve data according to request
 	dataMap map[string][]byte
 
@@ -214,6 +227,7 @@ type testableTask struct {
 func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {
 	t.id = taskID
 	t.framework = framework
+	t.setupLatch.Done()
 }
 func (t *testableTask) Exit()                 {}
 func (t *testableTask) SetEpoch(epoch uint64) {}
