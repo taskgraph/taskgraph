@@ -157,6 +157,7 @@ func (f *framework) fetchEpoch() (uint64, error) {
 func (f *framework) Start() {
 	var err error
 
+	// First, we fetch the current global epoch from etcd.
 	f.epoch, err = f.fetchEpoch()
 	if err != nil {
 		panic("Can not parse epoch from etcd")
@@ -457,11 +458,11 @@ func (f *framework) GetTopology() Topology {
 	panic("unimplemented")
 }
 
-// When node call this on framework, it simply send epoch to a maxUint64,
-// all nodes that listen to this will simply exit.
+// When node call this on framework, it simply set epoch to a maxUint64,
+// All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) Exit() {
 	maxUint64Str := strconv.FormatUint(maxUint64, 10)
-	f.etcdClient.Create(MakeJobEpochPath(f.name), maxUint64Str, 0)
+	f.etcdClient.Set(MakeJobEpochPath(f.name), maxUint64Str, 0)
 }
 
 func (f *framework) AbortTask() {
