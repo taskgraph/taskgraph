@@ -109,7 +109,6 @@ type framework struct {
 	etcdClient    *etcd.Client
 	stops         []chan bool
 	ln            net.Listener
-	addressMap    map[uint64]string // taskId -> node address. Maybe in etcd later.
 	dataRespChan  chan *dataResponse
 	dataCloseChan chan struct{}
 }
@@ -411,11 +410,24 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
 	return stops
 }
 
+// getAddress will return the host:port address of the service taking care of
+// the task that we want to talk to.
+// Currently we grab the information from etcd every time. Local cache could be used.
+// If it failed, e.g. network failure, it should return error.
+func (f *framework) getAddress(toID uint64) (string, error) {
+	resp, err := f.etcdClient.Get(MakeTaskMasterPath(f.name, toID), false, false)
+	if err != nil {
+		return "", err
+	}
+	return resp.Node.Value, nil
+}
+
 func (f *framework) DataRequest(toID uint64, req string) {
 	// getAddressFromTaskID
-	addr, ok := f.addressMap[toID]
-	if !ok {
-		log.Fatalf("ID = %d not found", toID)
+	addr, err := f.getAddress(toID)
+	if err != nil {
+		// TODO: We should handle network faults later by retrying
+		log.Fatalf("getAddress(%d) failed: %v", toID, err)
 		return
 	}
 	u := url.URL{

@@ -140,28 +140,22 @@ func TestFrameworkDataRequest(t *testing.T) {
 
 	l0 := createListener(t)
 	l1 := createListener(t)
-	addressMap := map[uint64]string{
-		0: l0.Addr().String(),
-		1: l1.Addr().String(),
-	}
 
 	pDataChan := make(chan *tDataBundle, 1)
 	cDataChan := make(chan *tDataBundle, 1)
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
-		name:       appName,
-		etcdURLs:   []string{url},
-		taskID:     0,
-		ln:         l0,
-		addressMap: addressMap,
+		name:     appName,
+		etcdURLs: []string{url},
+		taskID:   0,
+		ln:       l0,
 	}
 	f1 := &framework{
-		name:       appName,
-		etcdURLs:   []string{url},
-		taskID:     1,
-		ln:         l1,
-		addressMap: addressMap,
+		name:     appName,
+		etcdURLs: []string{url},
+		taskID:   1,
+		ln:       l1,
 	}
 
 	var wg sync.WaitGroup
