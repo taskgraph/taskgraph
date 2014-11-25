@@ -44,13 +44,11 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	f0 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		taskID:   0,
 		ln:       createListener(t),
 	}
 	f1 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		taskID:   1,
 		ln:       createListener(t),
 	}
 
@@ -148,13 +146,11 @@ func TestFrameworkDataRequest(t *testing.T) {
 	f0 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		taskID:   0,
 		ln:       l0,
 	}
 	f1 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		taskID:   1,
 		ln:       l1,
 	}
 
