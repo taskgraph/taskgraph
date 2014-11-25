@@ -104,6 +104,8 @@ type framework struct {
 	task          Task
 	taskID        uint64
 	epoch         uint64
+	epochChan     chan uint64
+	epochStop     chan bool
 	etcdClient    *etcd.Client
 	stops         []chan bool
 	ln            net.Listener
@@ -141,11 +143,25 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 	return roleNone
 }
 
+func (f *framework) fetchEpoch() (uint64, error) {
+	f.etcdClient = etcd.NewClient(f.etcdURLs)
+
+	epochPath := MakeJobEpochPath(f.name)
+	resp, err := f.etcdClient.Get(epochPath, false, false)
+	if err != nil {
+		panic("Can not get epoch from etcd")
+	}
+	return strconv.ParseUint(resp.Node.Value, 10, 64)
+}
+
 func (f *framework) Start() {
 	var err error
 
-	f.etcdClient = etcd.NewClient(f.etcdURLs)
-	f.epoch = 0
+	f.epoch, err = f.fetchEpoch()
+	if err != nil {
+		panic("Can not parse epoch from etcd")
+	}
+
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataCloseChan = make(chan struct{})
@@ -184,7 +200,18 @@ func (f *framework) Start() {
 	// 	for exmple, this can be run here f.dataResponseReceiver()
 	// }
 	// you might want to just run the following function directly.
-	f.dataResponseReceiver()
+	go f.dataResponseReceiver()
+
+	// We need to first watch epoch.
+	for f.epoch != maxUint64 {
+		select {
+		case newEpoch := <-f.epochChan:
+			f.epoch = newEpoch
+			f.task.SetEpoch(f.epoch)
+		case <-f.epochStop:
+			return
+		}
+	}
 }
 
 type dataReqHandler struct {
@@ -302,8 +329,46 @@ func (f *framework) FlagChildMetaReady(meta string) {
 		0)
 }
 
+// When app code invoke this method on framework, we simply
+// update the etcd epoch to next uint64. All nodes should watch
+// for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
-	f.epoch += 1
+	epoch, err := f.fetchEpoch()
+	if err != nil {
+		panic("Can not get epoch from etcd")
+	}
+	if epoch != f.epoch {
+		panic("local epoch does not agree with global epoch on etcd")
+	}
+	f.etcdClient.Set(
+		MakeJobEpochPath(f.name),
+		strconv.FormatUint(f.epoch+1, 10),
+		0)
+}
+
+func (f *framework) watchEpoch() {
+	receiver := make(chan *etcd.Response, 1)
+	f.epochChan = make(chan uint64, 1)
+	f.epochStop = make(chan bool, 1)
+
+	watchPath := MakeJobEpochPath(f.name)
+	go f.etcdClient.Watch(watchPath, 0, false, receiver, f.epochStop)
+	go func(receiver <-chan *etcd.Response) {
+		for {
+			resp, ok := <-receiver
+			if !ok {
+				return
+			}
+			if resp.Action != "set" {
+				continue
+			}
+			epoch, err := strconv.ParseUint(resp.Node.Value, 10, 64)
+			if err != nil {
+				return
+			}
+			f.epochChan <- epoch
+		}
+	}(receiver)
 }
 
 func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {

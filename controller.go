@@ -12,6 +12,9 @@ type controller struct {
 }
 
 func (c *controller) initEtcdLayout() (err error) {
+	// Initilize the job epoch to 0
+	c.etcdclient.Create(MakeJobEpochPath(c.name), "0", 0)
+
 	// initiate etcd data layout
 	// currently it creates as many unassigned tasks as task masters.
 	for i := uint64(0); i < c.numOfTasks; i++ {
