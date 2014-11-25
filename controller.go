@@ -16,9 +16,12 @@ func (c *controller) initEtcdLayout() (err error) {
 	c.etcdclient.Create(MakeJobEpochPath(c.name), "0", 0)
 
 	// initiate etcd data layout
+	// currently it creates as many unassigned tasks as task masters.
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := MakeTaskMasterPath(c.name, i)
-		c.etcdclient.Create(key, "", 0)
+		if _, err := c.etcdclient.Create(key, "empty", 0); err != nil {
+			return err
+		}
 	}
 	return
 }
