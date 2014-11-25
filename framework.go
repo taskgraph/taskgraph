@@ -414,8 +414,8 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
 // the task that we want to talk to.
 // Currently we grab the information from etcd every time. Local cache could be used.
 // If it failed, e.g. network failure, it should return error.
-func (f *framework) getAddress(toID uint64) (string, error) {
-	resp, err := f.etcdClient.Get(MakeTaskMasterPath(f.name, toID), false, false)
+func (f *framework) getAddress(id uint64) (string, error) {
+	resp, err := f.etcdClient.Get(MakeTaskMasterPath(f.name, id), false, false)
 	if err != nil {
 		return "", err
 	}
