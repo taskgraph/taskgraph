@@ -102,6 +102,8 @@ type framework struct {
 	task          Task
 	taskID        uint64
 	epoch         uint64
+	epochChan     chan uint64
+	epochStop     chan bool
 	etcdClient    *etcd.Client
 	stops         []chan bool
 	ln            net.Listener
@@ -141,7 +143,18 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 
 func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
-	f.epoch = 0
+
+	epochPath := MakeJobEpochPath(f.name)
+	resp, err := f.etcdClient.Get(epochPath, false, false)
+	if err != nil {
+		panic("Can not get epoch from etcd")
+	}
+
+	f.epoch, err = strconv.ParseUint(resp.Node.Value, 10, 64)
+	if err != nil {
+		panic("Can not parse epoch from etcd")
+	}
+
 	f.stops = make([]chan bool, 0)
 	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataCloseChan = make(chan struct{})
@@ -176,7 +189,18 @@ func (f *framework) Start() {
 	// 	for exmple, this can be run here f.dataResponseReceiver()
 	// }
 	// you might want to just run the following function directly.
-	f.dataResponseReceiver()
+	go f.dataResponseReceiver()
+
+	// We need to first watch epoch.
+	for f.epoch != maxUint64 {
+		select {
+		case newEpoch := <-f.epochChan:
+			f.epoch = newEpoch
+			f.task.SetEpoch(f.epoch)
+		case <-f.epochStop:
+			return
+		}
+	}
 }
 
 type dataReqHandler struct {
@@ -266,7 +290,36 @@ func (f *framework) FlagChildMetaReady(meta string) {
 }
 
 func (f *framework) IncEpoch() {
-	f.epoch += 1
+	newEpoch := f.epoch + 1
+	f.etcdClient.Set(
+		MakeJobEpochPath(f.name),
+		strconv.FormatUint(newEpoch, 10),
+		0)
+}
+
+func (f *framework) watchEpoch() {
+	receiver := make(chan *etcd.Response, 1)
+	f.epochChan = make(chan uint64, 1)
+	f.epochStop = make(chan bool, 1)
+
+	watchPath := MakeJobEpochPath(f.name)
+	go f.etcdClient.Watch(watchPath, 0, false, receiver, f.epochStop)
+	go func(receiver <-chan *etcd.Response) {
+		for {
+			resp, ok := <-receiver
+			if !ok {
+				return
+			}
+			if resp.Action != "set" {
+				continue
+			}
+			epoch, err := strconv.ParseUint(resp.Node.Value, 10, 64)
+			if err != nil {
+				return
+			}
+			f.epochChan <- epoch
+		}
+	}(receiver)
 }
 
 func (f *framework) watchAll(who taskRole, taskIDs []uint64) []chan bool {
