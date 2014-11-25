@@ -222,7 +222,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// occupyTask will grab the first unassigned task and assign itself to registration.
+// occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() (uint64, error) {
 	// get all nodes under task dir
 	slots, err := f.etcdClient.Get(
