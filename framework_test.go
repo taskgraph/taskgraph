@@ -1,25 +1,40 @@
 package meritop
 
-// framework_test tests basic workflows of framework impl.
-// It uses a scenario with two nodes: 0 as parent, 1 as child.
-// The basic idea is that when parent tries to talk to child and vice versa,
-// there will be some data transferring and captured by application task.
-// Here we have implemented a helper user task to capture those data, test if
-// it's passed from framework correctly and unmodified.
-
 import (
 	"fmt"
 	"net"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
+// TestFrameworkFlagMetaReady and TestFrameworkDataRequest test basic workflows of
+// framework impl. It uses a scenario with two nodes: 0 as parent, 1 as child.
+// The basic idea is that when parent tries to talk to child and vice versa,
+// there will be some data transferring and captured by application task.
+// Here we have implemented a helper user task to capture those data, test if
+// it's passed from framework correctly and unmodified.
+
 func TestFrameworkFlagMetaReady(t *testing.T) {
-	m := mustNewMember(t, "framework_test")
+	appName := "framework_test_flagmetaready"
+	// launch testing etcd server
+	m := mustNewMember(t, appName)
 	m.Launch()
 	defer m.Terminate(t)
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+
+	// launch controller to setup etcd layout
+	ctl := &controller{
+		name:       appName,
+		etcdclient: etcd.NewClient([]string{url}),
+		numOfTasks: 2,
+	}
+	if err := ctl.initEtcdLayout(); err != nil {
+		t.Fatalf("initEtcdLayout failed: %v", err)
+	}
+	defer ctl.destroyEtcdLayout()
 
 	pDataChan := make(chan *tDataBundle, 1)
 	cDataChan := make(chan *tDataBundle, 1)
@@ -27,13 +42,13 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
-		name:     "framework_test_flagmetaready",
+		name:     appName,
 		etcdURLs: []string{url},
 		taskID:   0,
 		ln:       createListener(t),
 	}
 	f1 := &framework{
-		name:     "framework_test_flagmetaready",
+		name:     appName,
 		etcdURLs: []string{url},
 		taskID:   1,
 		ln:       createListener(t),
@@ -46,13 +61,17 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		pDataChan:  pDataChan,
 		setupLatch: &wg,
 	}
-	taskBuilder.setupLatch.Add(2)
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(NewTreeTopology(2, 1))
-	go f0.Start()
-	defer f0.stop()
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(NewTreeTopology(2, 1))
+
+	taskBuilder.setupLatch.Add(1)
+	go f0.Start()
+	defer f0.stop()
+	// we need to let first framework to take first task (parent)
+	taskBuilder.setupLatch.Wait()
+	taskBuilder.setupLatch.Add(1)
 	go f1.Start()
 	defer f1.stop()
 	taskBuilder.setupLatch.Wait()
@@ -87,6 +106,24 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 }
 
 func TestFrameworkDataRequest(t *testing.T) {
+	appName := "framework_test_flagmetaready"
+	// launch testing etcd server
+	m := mustNewMember(t, appName)
+	m.Launch()
+	defer m.Terminate(t)
+	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+
+	// launch controller to setup etcd layout
+	ctl := &controller{
+		name:       appName,
+		etcdclient: etcd.NewClient([]string{url}),
+		numOfTasks: 2,
+	}
+	if err := ctl.initEtcdLayout(); err != nil {
+		t.Fatalf("initEtcdLayout failed: %v", err)
+	}
+	defer ctl.destroyEtcdLayout()
+
 	tests := []struct {
 		req  string
 		resp []byte
@@ -101,10 +138,6 @@ func TestFrameworkDataRequest(t *testing.T) {
 		dataMap[tt.req] = tt.resp
 	}
 
-	m := mustNewMember(t, "framework_test")
-	m.Launch()
-	defer m.Terminate(t)
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 	l0 := createListener(t)
 	l1 := createListener(t)
 	addressMap := map[uint64]string{
@@ -117,14 +150,14 @@ func TestFrameworkDataRequest(t *testing.T) {
 	// simulate two tasks on two nodes -- 0 and 1
 	// 0 is parent, 1 is child
 	f0 := &framework{
-		name:       "framework_test_datarequest",
+		name:       appName,
 		etcdURLs:   []string{url},
 		taskID:     0,
 		ln:         l0,
 		addressMap: addressMap,
 	}
 	f1 := &framework{
-		name:       "framework_test_datarequest",
+		name:       appName,
 		etcdURLs:   []string{url},
 		taskID:     1,
 		ln:         l1,
@@ -138,11 +171,13 @@ func TestFrameworkDataRequest(t *testing.T) {
 		pDataChan:  pDataChan,
 		setupLatch: &wg,
 	}
-	taskBuilder.setupLatch.Add(2)
+	taskBuilder.setupLatch.Add(1)
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(NewTreeTopology(2, 1))
 	go f0.Start()
 	defer f0.stop()
+	taskBuilder.setupLatch.Wait()
+	taskBuilder.setupLatch.Add(1)
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(NewTreeTopology(2, 1))
 	go f1.Start()

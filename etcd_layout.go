@@ -34,12 +34,12 @@ func MakeJobEpochPath(appName string) string {
 		Epoch)
 }
 
+func MakeTaskDirPath(appName string) string {
+	return path.Join("/", appName, TasksDir)
+}
+
 func MakeTaskMasterPath(appName string, taskID uint64) string {
-	return path.Join("/",
-		appName,
-		TasksDir,
-		strconv.FormatUint(taskID, 10),
-		TaskMaster)
+	return path.Join("/", appName, TasksDir, strconv.FormatUint(taskID, 10), TaskMaster)
 }
 
 func MakeParentMetaPath(appName string, taskID uint64) string {
