@@ -203,6 +203,7 @@ func (f *framework) Start() {
 	go f.dataResponseReceiver()
 
 	// We need to first watch epoch.
+	f.watchEpoch()
 	for f.epoch != maxUint64 {
 		select {
 		case newEpoch := <-f.epochChan:
@@ -456,7 +457,11 @@ func (f *framework) GetTopology() Topology {
 	panic("unimplemented")
 }
 
+// When node call this on framework, it simply send epoch to a maxUint64,
+// all nodes that listen to this will simply exit.
 func (f *framework) Exit() {
+	maxUint64Str := strconv.FormatUint(maxUint64, 10)
+	f.etcdClient.Create(MakeJobEpochPath(f.name), maxUint64Str, 0)
 }
 
 func (f *framework) AbortTask() {
