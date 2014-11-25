@@ -324,17 +324,13 @@ func (f *framework) FlagChildMetaReady(meta string) {
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
-	epoch, err := f.fetchEpoch()
-	if err != nil {
-		log.Fatal("Can not get epoch from etcd")
-	}
-	if epoch != f.epoch {
-		log.Fatal("local epoch does not agree with global epoch on etcd")
-	}
-	f.etcdClient.Set(
+	_, err := f.etcdClient.CompareAndSwap(
 		MakeJobEpochPath(f.name),
 		strconv.FormatUint(f.epoch+1, 10),
-		0)
+		0, strconv.FormatUint(f.epoch, 10), 0)
+	if err != nil {
+		log.Fatal("Epoch mismatch. This node might have been down and replaced.")
+	}
 }
 
 func (f *framework) watchEpoch() {
