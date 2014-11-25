@@ -143,9 +143,7 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 	return roleNone
 }
 
-func (f *framework) Start() {
-	var err error
-
+func (f *framework) fetchEpoch() (uint64, error) {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	epochPath := MakeJobEpochPath(f.name)
@@ -153,8 +151,13 @@ func (f *framework) Start() {
 	if err != nil {
 		panic("Can not get epoch from etcd")
 	}
+	return strconv.ParseUint(resp.Node.Value, 10, 64)
+}
 
-	f.epoch, err = strconv.ParseUint(resp.Node.Value, 10, 64)
+func (f *framework) Start() {
+	var err error
+
+	f.epoch, err = f.fetchEpoch()
 	if err != nil {
 		panic("Can not parse epoch from etcd")
 	}
@@ -326,11 +329,20 @@ func (f *framework) FlagChildMetaReady(meta string) {
 		0)
 }
 
+// When app code invoke this method on framework, we simply
+// update the etcd epoch to next uint64. All nodes should watch
+// for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
-	newEpoch := f.epoch + 1
+	epoch, err := f.fetchEpoch()
+	if err != nil {
+		panic("Can not get epoch from etcd")
+	}
+	if epoch != f.epoch {
+		panic("local epoch does not agree with global epoch on etcd")
+	}
 	f.etcdClient.Set(
 		MakeJobEpochPath(f.name),
-		strconv.FormatUint(newEpoch, 10),
+		strconv.FormatUint(f.epoch+1, 10),
 		0)
 }
 
