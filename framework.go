@@ -148,7 +148,7 @@ func (f *framework) fetchEpoch() (uint64, error) {
 	epochPath := MakeJobEpochPath(f.name)
 	resp, err := f.etcdClient.Get(epochPath, false, false)
 	if err != nil {
-		panic("Can not get epoch from etcd")
+		log.Fatal("Can not get epoch from etcd")
 	}
 	return strconv.ParseUint(resp.Node.Value, 10, 64)
 }
@@ -158,7 +158,7 @@ func (f *framework) Start() {
 
 	f.epoch, err = f.fetchEpoch()
 	if err != nil {
-		panic("Can not parse epoch from etcd")
+		log.Fatal("Can not parse epoch from etcd")
 	}
 
 	f.stops = make([]chan bool, 0)
@@ -166,7 +166,7 @@ func (f *framework) Start() {
 	f.dataCloseChan = make(chan struct{})
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		log.Panicf("occupyTask failed: %v", err)
+		log.Fatalf("occupyTask failed: %v", err)
 	}
 
 	// task builder and topology are defined by applications.
@@ -187,19 +187,11 @@ func (f *framework) Start() {
 	f.stops = append(f.stops, childStops...)
 
 	go f.startHttp()
+	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, f.config)
 	f.task.SetEpoch(f.epoch)
-
-	// TODO(hongchao)
-	// We need to have two levels loop here so that we can effectively
-	// stop the work that task is working on for last epoch.
-	// for f.epoch != maxUint64 {
-	// 	for exmple, this can be run here f.dataResponseReceiver()
-	// }
-	// you might want to just run the following function directly.
-	go f.dataResponseReceiver()
 
 	// We need to first watch epoch.
 	for f.epoch != maxUint64 {
@@ -332,17 +324,13 @@ func (f *framework) FlagChildMetaReady(meta string) {
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
-	epoch, err := f.fetchEpoch()
-	if err != nil {
-		panic("Can not get epoch from etcd")
-	}
-	if epoch != f.epoch {
-		panic("local epoch does not agree with global epoch on etcd")
-	}
-	f.etcdClient.Set(
+	_, err := f.etcdClient.CompareAndSwap(
 		MakeJobEpochPath(f.name),
 		strconv.FormatUint(f.epoch+1, 10),
-		0)
+		0, strconv.FormatUint(f.epoch, 10), 0)
+	if err != nil {
+		log.Fatal("Epoch mismatch. This node might have been down and replaced.")
+	}
 }
 
 func (f *framework) watchEpoch() {
