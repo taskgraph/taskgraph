@@ -75,6 +75,7 @@ type Framework interface {
 
 	// User can define the logger used by the framework, e.g. writing to s3.
 	SetLogger(*log.Logger)
+	GetLogger() log.Logger
 
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
@@ -479,6 +480,10 @@ func (f *framework) AbortTask() {
 
 func (f *framework) SetLogger(log *log.Logger) {
 	f.log = log
+}
+
+func (f *framework) GetLogger() log.Logger {
+	return *f.log
 }
 
 func (f *framework) GetTaskID() uint64 {
