@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 
@@ -72,7 +73,8 @@ type Framework interface {
 	// Some task can inform all participating tasks to new epoch
 	IncEpoch()
 
-	GetLogger() log.Logger
+	// User can define the logger used by the framework, e.g. writing to s3.
+	SetLogger(*log.Logger)
 
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
@@ -96,6 +98,7 @@ type framework struct {
 	name     string
 	etcdURLs []string
 	config   Config
+	log      *log.Logger
 
 	// user defined interfaces
 	taskBuilder TaskBuilder
@@ -148,7 +151,7 @@ func (f *framework) fetchEpoch() (uint64, error) {
 	epochPath := MakeJobEpochPath(f.name)
 	resp, err := f.etcdClient.Get(epochPath, false, false)
 	if err != nil {
-		log.Fatal("Can not get epoch from etcd")
+		f.log.Fatal("Can not get epoch from etcd")
 	}
 	return strconv.ParseUint(resp.Node.Value, 10, 64)
 }
@@ -156,10 +159,14 @@ func (f *framework) fetchEpoch() (uint64, error) {
 func (f *framework) Start() {
 	var err error
 
+	if f.log == nil {
+		f.log = log.New(os.Stdout, "framework: ", log.Lshortfile|log.Ltime)
+	}
+
 	// First, we fetch the current global epoch from etcd.
 	f.epoch, err = f.fetchEpoch()
 	if err != nil {
-		log.Fatal("Can not parse epoch from etcd")
+		f.log.Fatal("Can not parse epoch from etcd")
 	}
 
 	f.stops = make([]chan bool, 0)
@@ -167,7 +174,7 @@ func (f *framework) Start() {
 	f.dataCloseChan = make(chan struct{})
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		log.Fatalf("occupyTask failed: %v", err)
+		f.log.Fatalf("occupyTask failed: %v", err)
 	}
 
 	// task builder and topology are defined by applications.
@@ -187,6 +194,9 @@ func (f *framework) Start() {
 	f.stops = append(f.stops, parentStops...)
 	f.stops = append(f.stops, childStops...)
 
+	// We need to first watch epoch.
+	f.watchEpoch()
+
 	go f.startHttp()
 	go f.dataResponseReceiver()
 
@@ -194,8 +204,6 @@ func (f *framework) Start() {
 	f.task.Init(f.taskID, f, f.config)
 	f.task.SetEpoch(f.epoch)
 
-	// We need to first watch epoch.
-	f.watchEpoch()
 	for f.epoch != maxUint64 {
 		select {
 		case newEpoch := <-f.epochChan:
@@ -238,7 +246,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := w.Write(b); err != nil {
-		log.Printf("response write errored: %v", err)
+		h.f.log.Printf("response write errored: %v", err)
 	}
 }
 
@@ -254,7 +262,7 @@ func (f *framework) occupyTask() (uint64, error) {
 		idstr := path.Base(s.Key)
 		id, err := strconv.ParseUint(idstr, 0, 64)
 		if err != nil {
-			log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
+			f.log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
 			continue
 		}
 		// Below operations are one atomic behavior:
@@ -276,9 +284,9 @@ func (f *framework) occupyTask() (uint64, error) {
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHttp() {
-	log.Printf("framework: serving http on %s", f.ln.Addr())
+	f.log.Printf("serving http on %s", f.ln.Addr())
 	if err := http.Serve(f.ln, &dataReqHandler{f}); err != nil {
-		log.Fatalf("http.Serve() returns error: %v\n", err)
+		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
 }
 
@@ -331,7 +339,7 @@ func (f *framework) IncEpoch() {
 		strconv.FormatUint(f.epoch+1, 10),
 		0, strconv.FormatUint(f.epoch, 10), 0)
 	if err != nil {
-		log.Fatal("Epoch mismatch. This node might have been down and replaced.")
+		f.log.Fatal("Epoch mismatch. This node might have been down and replaced.")
 	}
 }
 
@@ -417,7 +425,7 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	addr, err := f.getAddress(toID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
-		log.Fatalf("getAddress(%d) failed: %v", toID, err)
+		f.log.Fatalf("getAddress(%d) failed: %v", toID, err)
 		return
 	}
 	u := url.URL{
@@ -435,15 +443,15 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	go func(urlStr string) {
 		resp, err := http.Get(urlStr)
 		if err != nil {
-			log.Fatalf("http.Get(%s) returns error: %v", urlStr, err)
+			f.log.Fatalf("http.Get(%s) returns error: %v", urlStr, err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
-			log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
+			f.log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
 		}
 		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatalf("ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
+			f.log.Fatalf("ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
 		}
 		dataResp := &dataResponse{
 			taskID: toID,
@@ -469,8 +477,8 @@ func (f *framework) AbortTask() {
 	panic("unimplemented")
 }
 
-func (f *framework) GetLogger() log.Logger {
-	panic("unimplemented")
+func (f *framework) SetLogger(log *log.Logger) {
+	f.log = log
 }
 
 func (f *framework) GetTaskID() uint64 {
