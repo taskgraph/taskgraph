@@ -136,9 +136,6 @@ func TestFrameworkDataRequest(t *testing.T) {
 		dataMap[tt.req] = tt.resp
 	}
 
-	l0 := createListener(t)
-	l1 := createListener(t)
-
 	pDataChan := make(chan *tDataBundle, 1)
 	cDataChan := make(chan *tDataBundle, 1)
 	// simulate two tasks on two nodes -- 0 and 1
@@ -146,12 +143,12 @@ func TestFrameworkDataRequest(t *testing.T) {
 	f0 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		ln:       l0,
+		ln:       createListener(t),
 	}
 	f1 := &framework{
 		name:     appName,
 		etcdURLs: []string{url},
-		ln:       l1,
+		ln:       createListener(t),
 	}
 
 	var wg sync.WaitGroup
