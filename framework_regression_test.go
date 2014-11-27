@@ -243,8 +243,8 @@ func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 }
 
 // This is used to show how to drive the network.
-func drive(jobName string, etcds []string, config Config, ntask uint64, dc chan int32) {
-	var bootstrap Bootstrap = NewBootStrap(jobName, etcds, config)
+func drive(t *testing.T, jobName string, etcds []string, config Config, ntask uint64, dc chan int32) {
+	bootstrap := NewBootStrap(jobName, etcds, config, createListener(t), nil)
 	taskBuilder := &simpleTaskBuilder{gDataChan: dc}
 	bootstrap.SetTaskBuilder(taskBuilder)
 	bootstrap.SetTopology(NewTreeTopology(2, ntask))
@@ -274,10 +274,10 @@ func tTestFramework(t *testing.T) {
 
 	// We need to set etcd so that nodes know what to do.
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(job, etcds, config, numOfTasks, gDataChan)
+		go drive(t, job, etcds, config, numOfTasks, gDataChan)
 	}
 
 	// wait for last number to comeback.
 	data := <-gDataChan
-	fmt.Println("Exiting with data = %d", data)
+	fmt.Printf("Exiting with data = %d", data)
 }
