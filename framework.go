@@ -201,13 +201,12 @@ func (f *framework) Start() {
 
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, f.config)
-	f.task.SetEpoch(f.epoch)
 
 	for f.epoch != maxUint64 {
+		f.task.SetEpoch(f.epoch)
 		select {
-		case newEpoch := <-f.epochChan:
-			f.epoch = newEpoch
-			f.task.SetEpoch(f.epoch)
+		case f.epoch = <-f.epochChan:
+			// TODO: cleanup resources.
 		case <-f.epochStop:
 			return
 		}
@@ -348,19 +347,19 @@ func (f *framework) watchEpoch() {
 	f.epochStop = make(chan bool, 1)
 
 	watchPath := MakeJobEpochPath(f.name)
-	go f.etcdClient.Watch(watchPath, 0, false, receiver, f.epochStop)
+	go f.etcdClient.Watch(watchPath, 1, false, receiver, f.epochStop)
 	go func(receiver <-chan *etcd.Response) {
 		for {
 			resp, ok := <-receiver
 			if !ok {
 				return
 			}
-			if resp.Action != "set" {
+			if resp.Action != "compareAndSwap" && resp.Action != "set" {
 				continue
 			}
 			epoch, err := strconv.ParseUint(resp.Node.Value, 10, 64)
 			if err != nil {
-				return
+				f.log.Fatal("Can't parse epoch from etcd")
 			}
 			f.epochChan <- epoch
 		}

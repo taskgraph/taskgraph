@@ -29,8 +29,8 @@ const (
 
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
-	value int32
-	data  [10]int32
+	Value int32
+	Data  [10]int32
 }
 
 // dummyMaster is prototype of parameter server, for now it does not
@@ -39,7 +39,7 @@ type dummyData struct {
 // Note: in theory, since there should be no parent of this, so we should
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
-	dataChan      chan int32
+	dataChan      chan [10]int32
 	framework     Framework
 	epoch, taskID uint64
 	logger        *log.Logger
@@ -52,10 +52,9 @@ type dummyMaster struct {
 func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
-	t.logger = log.New(os.Stdout, "dummyMaster:", log.Ldate|log.Ltime|log.Lshortfile)
-
-	// Jump start the taskgraph
-	t.framework.IncEpoch()
+	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.param = &dummyData{}
+	t.gradient = &dummyData{}
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -72,9 +71,8 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 func (t *dummyMaster) SetEpoch(epoch uint64) {
 	t.epoch = epoch
 	for i := 0; i < 10; i++ {
-		t.param.data[i] = int32(t.epoch)
+		t.param.Data[i] = int32(t.epoch)
 	}
-
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
 	t.framework.FlagChildMetaReady("ParamReady")
@@ -84,9 +82,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 func (t *dummyMaster) ServeAsParent(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.param)
 	if err != nil {
-		t.logger.Printf("Master can't encode parameter: %v, error: %v\n", t.param, err)
-		t.framework.Exit()
-		return nil
+		t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
 	}
 	return b
 }
@@ -97,7 +93,6 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
 func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
-
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	t.fromChildren[childID] = d
@@ -108,7 +103,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		for _, g := range t.fromChildren {
 			for i := 0; i < 10; i++ {
-				t.gradient.data[i] += g.data[i]
+				t.gradient.Data[i] += g.Data[i]
 			}
 		}
 
@@ -117,6 +112,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
 		if t.epoch == numOfIterations {
+			t.dataChan <- t.gradient.Data
 			t.framework.Exit()
 		} else {
 			t.framework.IncEpoch()
@@ -140,7 +136,9 @@ type dummySlave struct {
 func (t *dummySlave) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
-	t.logger = log.New(os.Stdout, "dummySlave:", log.Ldate|log.Ltime|log.Lshortfile)
+	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.param = &dummyData{}
+	t.gradient = &dummyData{}
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -158,7 +156,6 @@ func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(epoch uint64) {
 	t.epoch = epoch
-
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
 }
@@ -167,9 +164,7 @@ func (t *dummySlave) SetEpoch(epoch uint64) {
 func (t *dummySlave) ServeAsParent(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.param)
 	if err != nil {
-		t.logger.Printf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
-		t.framework.Exit()
-		return nil
+		t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
 	}
 	return b
 }
@@ -177,9 +172,7 @@ func (t *dummySlave) ServeAsParent(fromID uint64, req string) []byte {
 func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 	b, err := json.Marshal(t.gradient)
 	if err != nil {
-		t.logger.Printf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
-		t.framework.Exit()
-		return nil
+		t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
 	}
 	return b
 }
@@ -190,9 +183,8 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 
 	// We need to carry out local compuation.
 	for i := 0; i < 10; i++ {
-		t.gradient.data[i] = int32(t.framework.GetTaskID())
+		t.gradient.Data[i] = int32(t.framework.GetTaskID())
 	}
-
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
 	children := t.framework.GetTopology().GetChildren(t.epoch)
@@ -216,7 +208,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			for i := 0; i < 10; i++ {
-				t.gradient.data[i] += g.data[i]
+				t.gradient.Data[i] += g.Data[i]
 			}
 		}
 
@@ -225,7 +217,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 }
 
 type simpleTaskBuilder struct {
-	gDataChan chan int32
+	gDataChan chan [10]int32
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -237,22 +229,19 @@ type simpleTaskBuilder struct {
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 	if taskID == 0 {
 		return &dummyMaster{dataChan: tc.gDataChan}
-	} else {
-		return &dummySlave{}
 	}
+	return &dummySlave{}
 }
 
 // This is used to show how to drive the network.
-func drive(t *testing.T, jobName string, etcds []string, config Config, ntask uint64, dc chan int32) {
+func drive(t *testing.T, jobName string, etcds []string, config Config, ntask uint64, taskBuilder TaskBuilder) {
 	bootstrap := NewBootStrap(jobName, etcds, config, createListener(t), nil)
-	taskBuilder := &simpleTaskBuilder{gDataChan: dc}
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewTreeTopology(2, ntask))
+	bootstrap.SetTopology(NewTreeTopology(2, ntask-1))
 	bootstrap.Start()
 }
 
-func tTestFramework(t *testing.T) {
-
+func TestRegressionFramework(t *testing.T) {
 	m := mustNewMember(t, "framework_regression_test")
 	m.Launch()
 	defer m.Terminate(t)
@@ -262,22 +251,23 @@ func tTestFramework(t *testing.T) {
 	etcds := []string{url}
 	config := map[string]string{}
 	numOfTasks := uint64(15)
-	gDataChan := make(chan int32, 1)
+
+	// controller start first to setup task directories in etcd
 	controller := &controller{
 		name:       job,
 		etcdclient: etcd.NewClient([]string{url}),
 		numOfTasks: numOfTasks,
 	}
-
 	controller.initEtcdLayout()
 	defer controller.destroyEtcdLayout()
 
 	// We need to set etcd so that nodes know what to do.
+	taskBuilder := &simpleTaskBuilder{gDataChan: make(chan [10]int32, 1)}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcds, config, numOfTasks, gDataChan)
+		go drive(t, job, etcds, config, numOfTasks, taskBuilder)
 	}
 
 	// wait for last number to comeback.
-	data := <-gDataChan
-	fmt.Printf("Exiting with data = %d", data)
+	data := <-taskBuilder.gDataChan
+	fmt.Printf("Exiting with data = %v", data)
 }
