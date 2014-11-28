@@ -84,7 +84,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	for i, tt := range tests {
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
-		f0.FlagChildMetaReady(tt.cMeta)
+		f0.FlagMetaToChild(tt.cMeta)
 		// from child(1)'s view
 		data := <-pDataChan
 		expected := &tDataBundle{0, tt.cMeta, "", nil}
@@ -93,7 +93,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
-		f1.FlagParentMetaReady(tt.pMeta)
+		f1.FlagMetaToParent(tt.pMeta)
 		// from parent(0)'s view
 		data = <-cDataChan
 		expected = &tDataBundle{1, tt.pMeta, "", nil}

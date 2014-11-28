@@ -59,8 +59,8 @@ type Framework interface {
 	// These two are useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Flags that parent/child's metadata of the current task is ready.
-	FlagParentMetaReady(meta string)
-	FlagChildMetaReady(meta string)
+	FlagMetaToParent(meta string)
+	FlagMetaToChild(meta string)
 
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
@@ -314,14 +314,14 @@ func (f *framework) stop() {
 	}
 }
 
-func (f *framework) FlagParentMetaReady(meta string) {
+func (f *framework) FlagMetaToParent(meta string) {
 	f.etcdClient.Set(
 		MakeParentMetaPath(f.name, f.GetTaskID()),
 		meta,
 		0)
 }
 
-func (f *framework) FlagChildMetaReady(meta string) {
+func (f *framework) FlagMetaToChild(meta string) {
 	f.etcdClient.Set(
 		MakeChildMetaPath(f.name, f.GetTaskID()),
 		meta,
