@@ -75,7 +75,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 	}
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	t.framework.FlagChildMetaReady("ParamReady")
+	t.framework.FlagMetaToChild("ParamReady")
 }
 
 // These are payload rpc for application purpose.
@@ -189,11 +189,11 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	// parameter.
 	children := t.framework.GetTopology().GetChildren(t.epoch)
 	if len(children) != 0 {
-		t.framework.FlagChildMetaReady("ParamReady")
+		t.framework.FlagMetaToChild("ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		t.framework.FlagParentMetaReady("GradientReady")
+		t.framework.FlagMetaToParent("GradientReady")
 	}
 }
 
@@ -212,7 +212,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 			}
 		}
 
-		t.framework.FlagParentMetaReady("GradientReady")
+		t.framework.FlagMetaToParent("GradientReady")
 	}
 }
 
