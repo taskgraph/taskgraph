@@ -30,7 +30,7 @@ func TestTreeToplogy27(t *testing.T) {
 			[]uint64{2}, []uint64{},
 		},
 	}
-	testTreeTopology(2, 7, tests27, t)
+	testTreeTopology(2, 8, tests27, t)
 }
 
 //     0
@@ -52,7 +52,7 @@ func TestTreeToplogy28(t *testing.T) {
 			[]uint64{1}, []uint64{7, 8},
 		},
 	}
-	testTreeTopology(2, 8, tests28, t)
+	testTreeTopology(2, 9, tests28, t)
 }
 
 func testTreeTopology(fanout, number uint64, tests []treeTopoTest, t *testing.T) {
