@@ -67,8 +67,6 @@ type Framework interface {
 
 	// Some task can inform all participating tasks to exit.
 	Exit()
-	// shutdown current framework gracefully, i.e. cleaning up resources.
-	GracefulShutdown()
 
 	// This method will result in local node abort, the same task can be
 	// retried by some other node. Only useful for panic inside user code.
@@ -211,6 +209,9 @@ func (f *framework) Start() {
 			return
 		}
 	}
+
+	// clean up resources
+	f.stop()
 }
 
 type dataReqHandler struct {
@@ -300,10 +301,6 @@ func (f *framework) dataResponseReceiver() {
 			panic("unimplemented")
 		}
 	}
-}
-
-func (f *framework) GracefulShutdown() {
-	f.stop()
 }
 
 func (f *framework) stop() {
