@@ -30,7 +30,6 @@ const (
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
 	Value int32
-	Data  [10]int32
 }
 
 // dummyMaster is prototype of parameter server, for now it does not
@@ -39,7 +38,7 @@ type dummyData struct {
 // Note: in theory, since there should be no parent of this, so we should
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
-	dataChan      chan [10]int32
+	dataChan      chan int32
 	framework     Framework
 	epoch, taskID uint64
 	logger        *log.Logger
@@ -53,8 +52,6 @@ func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	t.param = &dummyData{}
-	t.gradient = &dummyData{}
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -69,10 +66,12 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
+	t.param = &dummyData{}
+	t.gradient = &dummyData{}
+
 	t.epoch = epoch
-	for i := 0; i < 10; i++ {
-		t.param.Data[i] = int32(t.epoch)
-	}
+	t.param.Value = int32(t.epoch)
+
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
 	t.framework.FlagMetaToChild("ParamReady")
@@ -102,17 +101,15 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 	// should go into the next epoch now.
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		for _, g := range t.fromChildren {
-			for i := 0; i < 10; i++ {
-				t.gradient.Data[i] += g.Data[i]
-			}
+			t.gradient.Value += g.Value
 		}
 
+		t.dataChan <- t.gradient.Value
 		// TODO(xiaoyunwu) We need to do some test here.
 
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
 		if t.epoch == numOfIterations {
-			t.dataChan <- t.gradient.Data
 			t.framework.Exit()
 		} else {
 			t.framework.IncEpoch()
@@ -137,8 +134,6 @@ func (t *dummySlave) Init(taskID uint64, framework Framework, config Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	t.param = &dummyData{}
-	t.gradient = &dummyData{}
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -155,6 +150,9 @@ func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(epoch uint64) {
+	t.param = &dummyData{}
+	t.gradient = &dummyData{}
+
 	t.epoch = epoch
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
@@ -182,9 +180,8 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	json.Unmarshal(resp, t.param)
 
 	// We need to carry out local compuation.
-	for i := 0; i < 10; i++ {
-		t.gradient.Data[i] = int32(t.framework.GetTaskID())
-	}
+	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
+
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
 	children := t.framework.GetTopology().GetChildren(t.epoch)
@@ -207,9 +204,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
-			for i := 0; i < 10; i++ {
-				t.gradient.Data[i] += g.Data[i]
-			}
+			t.gradient.Value += g.Value
 		}
 
 		t.framework.FlagMetaToParent("GradientReady")
@@ -217,7 +212,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 }
 
 type simpleTaskBuilder struct {
-	gDataChan chan [10]int32
+	gDataChan chan int32
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -262,12 +257,21 @@ func TestRegressionFramework(t *testing.T) {
 	defer controller.destroyEtcdLayout()
 
 	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &simpleTaskBuilder{gDataChan: make(chan [10]int32, 1)}
+	taskBuilder := &simpleTaskBuilder{gDataChan: make(chan int32, 10)}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcds, config, numOfTasks, taskBuilder)
 	}
 
 	// wait for last number to comeback.
-	data := <-taskBuilder.gDataChan
-	fmt.Printf("Exiting with data = %v", data)
+	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
+	getData := make([]int32, numOfIterations+1)
+	for i := uint64(0); i <= numOfIterations; i++ {
+		getData[i] = <-taskBuilder.gDataChan
+	}
+
+	for i := range wantData {
+		if wantData[i] != getData[i] {
+			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
+		}
+	}
 }

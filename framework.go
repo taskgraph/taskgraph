@@ -337,7 +337,7 @@ func (f *framework) IncEpoch() {
 		strconv.FormatUint(f.epoch+1, 10),
 		0, strconv.FormatUint(f.epoch, 10), 0)
 	if err != nil {
-		f.log.Fatal("Epoch mismatch. This node might have been down and replaced.")
+		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", f.epoch+1, f.epoch, err)
 	}
 }
 
