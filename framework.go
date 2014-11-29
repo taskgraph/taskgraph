@@ -65,9 +65,9 @@ type Framework interface {
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
 
-	// Some task (e.g. master) can aggregate all tasks and finish the entire job.
+	// Some task can inform all participating tasks to shutdown.
 	// If successful, all tasks will be gracefully shutdown.
-	AggregateJob()
+	ShutdownJob()
 
 	// Some task can inform all participating tasks to new epoch
 	IncEpoch()
@@ -453,7 +453,7 @@ func (f *framework) GetTopology() Topology {
 
 // When node call this on framework, it simply set epoch to a maxUint64,
 // All nodes will be notified of the epoch change and exit themselves.
-func (f *framework) AggregateJob() {
+func (f *framework) ShutdownJob() {
 	maxUint64Str := strconv.FormatUint(maxUint64, 10)
 	f.etcdClient.Set(MakeJobEpochPath(f.name), maxUint64Str, 0)
 }

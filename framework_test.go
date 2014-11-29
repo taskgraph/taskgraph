@@ -72,7 +72,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	go f1.Start()
 	taskBuilder.setupLatch.Wait()
 
-	defer f0.AggregateJob()
+	defer f0.ShutdownJob()
 
 	tests := []struct {
 		cMeta string
