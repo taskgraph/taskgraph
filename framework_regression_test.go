@@ -39,6 +39,7 @@ type dummyData struct {
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
 	dataChan      chan int32
+	finishChan    chan struct{}
 	framework     Framework
 	epoch, taskID uint64
 	logger        *log.Logger
@@ -111,6 +112,8 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 		// Notice that we only
 		if t.epoch == numOfIterations {
 			t.framework.Exit()
+			t.framework.GracefulShutdown()
+			close(t.finishChan)
 		} else {
 			t.framework.IncEpoch()
 		}
@@ -212,7 +215,8 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 }
 
 type simpleTaskBuilder struct {
-	gDataChan chan int32
+	gDataChan  chan int32
+	finishChan chan struct{}
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -223,7 +227,7 @@ type simpleTaskBuilder struct {
 // for current node, and also a global array of tasks.
 func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
 	if taskID == 0 {
-		return &dummyMaster{dataChan: tc.gDataChan}
+		return &dummyMaster{dataChan: tc.gDataChan, finishChan: tc.finishChan}
 	}
 	return &dummySlave{}
 }
@@ -257,7 +261,10 @@ func TestRegressionFramework(t *testing.T) {
 	defer controller.destroyEtcdLayout()
 
 	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &simpleTaskBuilder{gDataChan: make(chan int32, 10)}
+	taskBuilder := &simpleTaskBuilder{
+		gDataChan:  make(chan int32, 10),
+		finishChan: make(chan struct{}),
+	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcds, config, numOfTasks, taskBuilder)
 	}
@@ -274,4 +281,6 @@ func TestRegressionFramework(t *testing.T) {
 			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
 		}
 	}
+
+	<-taskBuilder.finishChan
 }

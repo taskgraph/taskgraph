@@ -67,6 +67,8 @@ type Framework interface {
 
 	// Some task can inform all participating tasks to exit.
 	Exit()
+	// shutdown current framework gracefully, i.e. cleaning up resources.
+	GracefulShutdown()
 
 	// This method will result in local node abort, the same task can be
 	// retried by some other node. Only useful for panic inside user code.
@@ -307,10 +309,15 @@ func (f *framework) dataResponseReceiver() {
 	}
 }
 
+func (f *framework) GracefulShutdown() {
+	f.stop()
+}
+
 func (f *framework) stop() {
 	close(f.dataCloseChan)
+	f.epochStop <- true
 	for _, c := range f.stops {
-		close(c)
+		c <- true
 	}
 }
 
