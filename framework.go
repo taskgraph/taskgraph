@@ -109,16 +109,15 @@ type framework struct {
 	taskBuilder TaskBuilder
 	topology    Topology
 
-	task          Task
-	taskID        uint64
-	epoch         uint64
-	epochChan     chan uint64
-	epochStop     chan bool
-	etcdClient    *etcd.Client
-	stops         []chan bool
-	ln            net.Listener
-	dataRespChan  chan *dataResponse
-	dataCloseChan chan struct{}
+	task         Task
+	taskID       uint64
+	epoch        uint64
+	epochChan    chan uint64
+	epochStop    chan bool
+	etcdClient   *etcd.Client
+	stops        []chan bool
+	ln           net.Listener
+	dataRespChan chan *dataResponse
 }
 
 type dataResponse struct {
@@ -198,7 +197,6 @@ func (f *framework) Start() {
 
 	go f.startHTTP()
 	f.dataRespChan = make(chan *dataResponse, 100)
-	f.dataCloseChan = make(chan struct{})
 	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
@@ -292,19 +290,14 @@ func (f *framework) startHTTP() {
 
 // Framework event loop handles data response for requests sent in DataRequest().
 func (f *framework) dataResponseReceiver() {
-	for {
-		select {
-		case dataResp := <-f.dataRespChan:
-			switch f.parentOrChild(dataResp.taskID) {
-			case roleParent:
-				go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
-			case roleChild:
-				go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
-			default:
-				panic("unimplemented")
-			}
-		case <-f.dataCloseChan:
-			return
+	for dataResp := range f.dataRespChan {
+		switch f.parentOrChild(dataResp.taskID) {
+		case roleParent:
+			go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
+		case roleChild:
+			go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
+		default:
+			panic("unimplemented")
 		}
 	}
 }
@@ -314,7 +307,7 @@ func (f *framework) GracefulShutdown() {
 }
 
 func (f *framework) stop() {
-	close(f.dataCloseChan)
+	close(f.dataRespChan)
 	f.epochStop <- true
 	for _, c := range f.stops {
 		c <- true
@@ -356,11 +349,7 @@ func (f *framework) watchEpoch() {
 	watchPath := MakeJobEpochPath(f.name)
 	go f.etcdClient.Watch(watchPath, 1, false, receiver, f.epochStop)
 	go func(receiver <-chan *etcd.Response) {
-		for {
-			resp, ok := <-receiver
-			if !ok {
-				return
-			}
+		for resp := range receiver {
 			if resp.Action != "compareAndSwap" && resp.Action != "set" {
 				continue
 			}
@@ -398,11 +387,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 
 		go f.etcdClient.Watch(watchPath, 1, false, receiver, stop)
 		go func(receiver <-chan *etcd.Response, taskID uint64) {
-			for {
-				resp, ok := <-receiver
-				if !ok {
-					return
-				}
+			for resp := range receiver {
 				if resp.Action != "set" {
 					continue
 				}
