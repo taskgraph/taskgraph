@@ -111,7 +111,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
 		if t.epoch == numOfIterations {
-			t.framework.Exit()
+			t.framework.AggregateJob()
 			close(t.finishChan)
 		} else {
 			t.framework.IncEpoch()

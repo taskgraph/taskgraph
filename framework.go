@@ -65,12 +65,9 @@ type Framework interface {
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
 
-	// Some task can inform all participating tasks to exit.
-	Exit()
-
-	// This method will result in local node abort, the same task can be
-	// retried by some other node. Only useful for panic inside user code.
-	AbortTask()
+	// Some task (e.g. master) can aggregate all tasks and finish the entire job.
+	// If successful, all tasks will be gracefully shutdown.
+	AggregateJob()
 
 	// Some task can inform all participating tasks to new epoch
 	IncEpoch()
@@ -284,6 +281,7 @@ func (f *framework) occupyTask() (uint64, error) {
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
 	f.log.Printf("serving http on %s", f.ln.Addr())
+	// TODO: http server graceful shutdown
 	if err := http.Serve(f.ln, &dataReqHandler{f}); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
@@ -455,13 +453,9 @@ func (f *framework) GetTopology() Topology {
 
 // When node call this on framework, it simply set epoch to a maxUint64,
 // All nodes will be notified of the epoch change and exit themselves.
-func (f *framework) Exit() {
+func (f *framework) AggregateJob() {
 	maxUint64Str := strconv.FormatUint(maxUint64, 10)
 	f.etcdClient.Set(MakeJobEpochPath(f.name), maxUint64Str, 0)
-}
-
-func (f *framework) AbortTask() {
-	panic("unimplemented")
 }
 
 func (f *framework) GetLogger() *log.Logger {

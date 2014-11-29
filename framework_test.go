@@ -66,13 +66,13 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	taskBuilder.setupLatch.Add(1)
 	go f0.Start()
-	defer f0.stop()
 	// we need to let first framework to take first task (parent)
 	taskBuilder.setupLatch.Wait()
 	taskBuilder.setupLatch.Add(1)
 	go f1.Start()
-	defer f1.stop()
 	taskBuilder.setupLatch.Wait()
+
+	defer f0.AggregateJob()
 
 	tests := []struct {
 		cMeta string
