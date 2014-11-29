@@ -43,11 +43,11 @@ func (t *TreeTopology) SetNumberOfTasks(nt uint64) {
 }
 
 // Creates a new tree topology with given fanout and number of tasks.
-// This will be called each
-func NewTreeTopology(fanout, maxID uint64) *TreeTopology {
+// This will be called during the task graph configuration.
+func NewTreeTopology(fanout, nTasks uint64) *TreeTopology {
 	m := &TreeTopology{
 		fanout:     fanout,
-		numOfTasks: maxID + 1,
+		numOfTasks: nTasks,
 	}
 	return m
 }

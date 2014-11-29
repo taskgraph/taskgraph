@@ -60,9 +60,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(NewTreeTopology(2, 1))
+	f0.SetTopology(NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(NewTreeTopology(2, 1))
+	f1.SetTopology(NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(1)
 	go f0.Start()
@@ -160,13 +160,13 @@ func TestFrameworkDataRequest(t *testing.T) {
 	}
 	taskBuilder.setupLatch.Add(1)
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(NewTreeTopology(2, 1))
+	f0.SetTopology(NewTreeTopology(2, 2))
 	go f0.Start()
 	defer f0.stop()
 	taskBuilder.setupLatch.Wait()
 	taskBuilder.setupLatch.Add(1)
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(NewTreeTopology(2, 1))
+	f1.SetTopology(NewTreeTopology(2, 2))
 	go f1.Start()
 	defer f1.stop()
 	taskBuilder.setupLatch.Wait()
