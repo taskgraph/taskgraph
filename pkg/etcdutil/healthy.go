@@ -7,7 +7,7 @@ import (
 )
 
 // heartbeat to etcd cluster until stop
-func heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Duration, stop chan struct{}) {
+func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Duration, stop chan struct{}) {
 }
 
 // detect failure of the given taskID

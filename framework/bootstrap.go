@@ -67,6 +67,7 @@ func (f *framework) Start() {
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
+	go f.heartbeat()
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
