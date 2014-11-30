@@ -87,7 +87,6 @@ func (f *framework) Start() {
 			return
 		}
 	}
-
 	// clean up resources
 	f.stop()
 }
@@ -99,7 +98,12 @@ func (f *framework) Start() {
 func (f *framework) startHTTP() {
 	f.log.Printf("serving http on %s", f.ln.Addr())
 	// TODO: http server graceful shutdown
-	if err := http.Serve(f.ln, &dataReqHandler{f}); err != nil {
+	handler := &dataReqHandler{
+		topo:  f.topology,
+		task:  f.task,
+		epoch: &f.epoch,
+	}
+	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
 }

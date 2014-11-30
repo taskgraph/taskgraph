@@ -1,12 +1,17 @@
 package framework
 
 import (
+	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/go-distributed/meritop"
 )
 
 type dataReqHandler struct {
-	f *framework
+	topo  meritop.Topology
+	task  meritop.Task
+	epoch *uint64
 }
 
 func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -26,16 +31,15 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ask task to serve data
 	var b []byte
 	switch {
-	case isParent(h.f.topology, h.f.epoch, fromID):
-		b = h.f.task.ServeAsChild(fromID, req)
-	case isChild(h.f.topology, h.f.epoch, fromID):
-		b = h.f.task.ServeAsParent(fromID, req)
+	case isParent(h.topo, *h.epoch, fromID):
+		b = h.task.ServeAsChild(fromID, req)
+	case isChild(h.topo, *h.epoch, fromID):
+		b = h.task.ServeAsParent(fromID, req)
 	default:
 		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
 		return
 	}
-
 	if _, err := w.Write(b); err != nil {
-		h.f.log.Printf("response write errored: %v", err)
+		log.Printf("http: response write errored: %v", err)
 	}
 }
