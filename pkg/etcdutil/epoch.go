@@ -28,8 +28,8 @@ func WatchEpoch(client *etcd.Client, appname string, stop chan bool) <-chan uint
 }
 
 func CASEpoch(client *etcd.Client, appname string, prevEpoch, epoch uint64) error {
-	prevEpochStr := strconv.FormatUint(epoch, 10)
-	epochStr := strconv.FormatUint(epoch+1, 10)
+	prevEpochStr := strconv.FormatUint(prevEpoch, 10)
+	epochStr := strconv.FormatUint(epoch, 10)
 	_, err := client.CompareAndSwap(EpochPath(appname), epochStr, 0, prevEpochStr, 0)
 	return err
 }
