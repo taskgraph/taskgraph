@@ -26,3 +26,11 @@ func WatchEpoch(client *etcd.Client, appname string, stop chan bool) <-chan uint
 	}()
 	return epochC
 }
+
+func GetEpoch(client *etcd.Client, appname string) (uint64, error) {
+	resp, err := client.Get(MakeJobEpochPath(appname), false, false)
+	if err != nil {
+		log.Fatal("etcdutil: can not get epoch from etcd")
+	}
+	return strconv.ParseUint(resp.Node.Value, 10, 64)
+}

@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
@@ -44,8 +43,10 @@ func (f *framework) Start() {
 		f.log = log.New(os.Stdout, "", log.Lshortfile|log.Ltime|log.Ldate)
 	}
 
+	f.etcdClient = etcd.NewClient(f.etcdURLs)
+
 	// First, we fetch the current global epoch from etcd.
-	f.epoch, err = f.fetchEpoch()
+	f.epoch, err = etcdutil.GetEpoch(f.etcdClient, f.name)
 	if err != nil {
 		f.log.Fatal("Can not parse epoch from etcd")
 	}
@@ -140,17 +141,6 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		}(receiver, taskID)
 	}
 	f.stops = append(f.stops, stops...)
-}
-
-func (f *framework) fetchEpoch() (uint64, error) {
-	f.etcdClient = etcd.NewClient(f.etcdURLs)
-
-	epochPath := etcdutil.MakeJobEpochPath(f.name)
-	resp, err := f.etcdClient.Get(epochPath, false, false)
-	if err != nil {
-		f.log.Fatal("Can not get epoch from etcd")
-	}
-	return strconv.ParseUint(resp.Node.Value, 10, 64)
 }
 
 func (f *framework) watchEpoch() {
