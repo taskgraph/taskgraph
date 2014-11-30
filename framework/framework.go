@@ -2,6 +2,7 @@ package framework
 
 import (
 	"log"
+	"math"
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -11,9 +12,7 @@ import (
 	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
-// This is used as special value to indicate that it is the last epoch, time
-// to exit.
-const maxUint64 uint64 = ^uint64(0)
+const exitEpoch = math.MaxUint64
 
 type framework struct {
 	// These should be passed by outside world
@@ -111,10 +110,10 @@ func (f *framework) DataRequest(toID uint64, req string) {
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
 
-// When node call this on framework, it simply set epoch to a maxUint64,
+// When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) ShutdownJob() {
-	etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, maxUint64)
+	etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch)
 }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }

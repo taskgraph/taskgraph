@@ -83,7 +83,7 @@ func (f *framework) Start() {
 	// After framework init finished, it should init task.
 	f.task.Init(f.taskID, f, f.config)
 
-	for f.epoch != maxUint64 {
+	for f.epoch != exitEpoch {
 		f.task.SetEpoch(f.epoch)
 		select {
 		case f.epoch = <-f.epochChan:
