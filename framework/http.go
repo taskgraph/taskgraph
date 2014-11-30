@@ -25,10 +25,10 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := q.Get(dataRequestReq)
 	// ask task to serve data
 	var b []byte
-	switch h.f.parentOrChild(fromID) {
-	case roleParent:
+	switch {
+	case isParent(h.f.topology, h.f.epoch, fromID):
 		b = h.f.task.ServeAsChild(fromID, req)
-	case roleChild:
+	case isChild(h.f.topology, h.f.epoch, fromID):
 		b = h.f.task.ServeAsParent(fromID, req)
 	default:
 		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)

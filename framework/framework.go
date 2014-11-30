@@ -15,14 +15,6 @@ import (
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
-type taskRole int
-
-const (
-	roleNone taskRole = iota
-	roleParent
-	roleChild
-)
-
 const (
 	dataRequestPrefix string = "/datareq"
 	dataRequestTaskID string = "taskID"
@@ -92,10 +84,10 @@ func (f *framework) occupyTask() (uint64, error) {
 // Framework event loop handles data response for requests sent in DataRequest().
 func (f *framework) dataResponseReceiver() {
 	for dataResp := range f.dataRespChan {
-		switch f.parentOrChild(dataResp.taskID) {
-		case roleParent:
+		switch {
+		case isParent(f.topology, f.epoch, dataResp.taskID):
 			go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
-		case roleChild:
+		case isChild(f.topology, f.epoch, dataResp.taskID):
 			go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
 		default:
 			panic("unimplemented")
@@ -198,13 +190,3 @@ func (f *framework) ShutdownJob() {
 func (f *framework) GetLogger() *log.Logger { return f.log }
 
 func (f *framework) GetTaskID() uint64 { return f.taskID }
-
-func (f *framework) parentOrChild(taskID uint64) taskRole {
-	if isParent(f.topology, f.epoch, taskID) {
-		return roleParent
-	}
-	if isChild(f.topology, f.epoch, taskID) {
-		return roleChild
-	}
-	return roleNone
-}

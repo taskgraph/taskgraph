@@ -12,6 +12,14 @@ import (
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
+type taskRole int
+
+const (
+	roleNone taskRole = iota
+	roleParent
+	roleChild
+)
+
 // One need to pass in at least these two for framework to start. The config
 // is used to pass on to task implementation for its configuration.
 func NewBootStrap(jobName string, etcdURLs []string, config meritop.Config, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
