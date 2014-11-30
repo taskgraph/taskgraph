@@ -80,7 +80,6 @@ func (f *framework) IncEpoch() {
 	if err != nil {
 		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", f.epoch+1, f.epoch, err)
 	}
-	f.epoch = f.epoch + 1
 }
 
 // getAddress will return the host:port address of the service taking care of
