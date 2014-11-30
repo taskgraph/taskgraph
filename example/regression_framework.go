@@ -1,4 +1,12 @@
-package meritop
+package example
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+
+	"github.com/go-distributed/meritop"
+)
 
 /*
 The dummy task is designed for regresion test of meritop framework.
@@ -13,18 +21,8 @@ master will print out the epochID and aggregated vector. After all 10 epoch, it 
 job.
 */
 
-import (
-	"encoding/json"
-	"fmt"
-	"log"
-	"os"
-	"testing"
-
-	"github.com/coreos/go-etcd/etcd"
-)
-
 const (
-	numOfIterations uint64 = uint64(10)
+	NumOfIterations uint64 = uint64(10)
 )
 
 // dummyData is used to carry parameter and gradient;
@@ -40,7 +38,7 @@ type dummyData struct {
 type dummyMaster struct {
 	dataChan      chan int32
 	finishChan    chan struct{}
-	framework     Framework
+	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
 
@@ -49,7 +47,7 @@ type dummyMaster struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummyMaster) Init(taskID uint64, framework Framework, config Config) {
+func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -110,7 +108,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
-		if t.epoch == numOfIterations {
+		if t.epoch == NumOfIterations {
 			t.framework.ShutdownJob()
 			close(t.finishChan)
 		} else {
@@ -123,7 +121,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 // It mainly does to things, pass on parameters to its children, and collect
 // gradient back then add them together before make it available to its parent.
 type dummySlave struct {
-	framework     Framework
+	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
 
@@ -132,7 +130,7 @@ type dummySlave struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummySlave) Init(taskID uint64, framework Framework, config Config) {
+func (t *dummySlave) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -213,9 +211,9 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	}
 }
 
-type simpleTaskBuilder struct {
-	gDataChan  chan int32
-	finishChan chan struct{}
+type SimpleTaskBuilder struct {
+	GDataChan  chan int32
+	FinishChan chan struct{}
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -224,62 +222,9 @@ type simpleTaskBuilder struct {
 // This method is called once by framework implementation to get the
 // right task implementation for the node/task. It requires the taskID
 // for current node, and also a global array of tasks.
-func (tc simpleTaskBuilder) GetTask(taskID uint64) Task {
+func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 	if taskID == 0 {
-		return &dummyMaster{dataChan: tc.gDataChan, finishChan: tc.finishChan}
+		return &dummyMaster{dataChan: tc.GDataChan, finishChan: tc.FinishChan}
 	}
 	return &dummySlave{}
-}
-
-// This is used to show how to drive the network.
-func drive(t *testing.T, jobName string, etcds []string, config Config, ntask uint64, taskBuilder TaskBuilder) {
-	bootstrap := NewBootStrap(jobName, etcds, config, createListener(t), nil)
-	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewTreeTopology(2, ntask))
-	bootstrap.Start()
-}
-
-func TestRegressionFramework(t *testing.T) {
-	m := mustNewMember(t, "framework_regression_test")
-	m.Launch()
-	defer m.Terminate(t)
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
-
-	job := "framework_regression_test"
-	etcds := []string{url}
-	config := map[string]string{}
-	numOfTasks := uint64(15)
-
-	// controller start first to setup task directories in etcd
-	controller := &controller{
-		name:       job,
-		etcdclient: etcd.NewClient([]string{url}),
-		numOfTasks: numOfTasks,
-	}
-	controller.initEtcdLayout()
-	defer controller.destroyEtcdLayout()
-
-	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &simpleTaskBuilder{
-		gDataChan:  make(chan int32, 10),
-		finishChan: make(chan struct{}),
-	}
-	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcds, config, numOfTasks, taskBuilder)
-	}
-
-	// wait for last number to comeback.
-	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
-	getData := make([]int32, numOfIterations+1)
-	for i := uint64(0); i <= numOfIterations; i++ {
-		getData[i] = <-taskBuilder.gDataChan
-	}
-
-	for i := range wantData {
-		if wantData[i] != getData[i] {
-			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
-		}
-	}
-
-	<-taskBuilder.finishChan
 }

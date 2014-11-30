@@ -1,4 +1,4 @@
-package meritop
+package framework
 
 import (
 	"fmt"
@@ -12,6 +12,8 @@ import (
 	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
 type taskRole int
@@ -32,58 +34,9 @@ const (
 // to exit.
 const maxUint64 uint64 = ^uint64(0)
 
-// This interface is used by application during taskgraph configuration phase.
-type Bootstrap interface {
-	// These allow application developer to set the task configuration so framework
-	// implementation knows which task to invoke at each node.
-	SetTaskBuilder(taskBuilder TaskBuilder)
-
-	// This allow the application to specify how tasks are connection at each epoch
-	SetTopology(topology Topology)
-
-	// After all the configure is done, driver need to call start so that all
-	// nodes will get into the event loop to run the application.
-	Start()
-}
-
-// Note that framework can decide how update can be done, and how to serve the updatelog.
-type BackedUpFramework interface {
-	// Ask framework to do update on this update on this task, which consists
-	// of one primary and some backup copies.
-	Update(taskID uint64, log UpdateLog)
-}
-
-// Framework hides distributed system complexity and provides users convenience of
-// high level features.
-type Framework interface {
-	// These two are useful for task to inform the framework their status change.
-	// metaData has to be really small, since it might be stored in etcd.
-	// Set meta flag to notify parent/child of the change.
-	FlagMetaToParent(meta string)
-	FlagMetaToChild(meta string)
-
-	// This allow the task implementation query its neighbors.
-	GetTopology() Topology
-
-	// Some task can inform all participating tasks to shutdown.
-	// If successful, all tasks will be gracefully shutdown.
-	ShutdownJob()
-
-	// Some task can inform all participating tasks to new epoch
-	IncEpoch()
-
-	GetLogger() *log.Logger
-
-	// Request data from parent or children.
-	DataRequest(toID uint64, meta string)
-
-	// This is used to figure out taskid for current node
-	GetTaskID() uint64
-}
-
 // One need to pass in at least these two for framework to start. The config
 // is used to pass on to task implementation for its configuration.
-func NewBootStrap(jobName string, etcdURLs []string, config Config, ln net.Listener, logger *log.Logger) Bootstrap {
+func NewBootStrap(jobName string, etcdURLs []string, config meritop.Config, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
 	return &framework{
 		name:     jobName,
 		etcdURLs: etcdURLs,
@@ -97,14 +50,14 @@ type framework struct {
 	// These should be passed by outside world
 	name     string
 	etcdURLs []string
-	config   Config
+	config   meritop.Config
 	log      *log.Logger
 
 	// user defined interfaces
-	taskBuilder TaskBuilder
-	topology    Topology
+	taskBuilder meritop.TaskBuilder
+	topology    meritop.Topology
 
-	task         Task
+	task         meritop.Task
 	taskID       uint64
 	epoch        uint64
 	epochChan    chan uint64
@@ -121,11 +74,11 @@ type dataResponse struct {
 	data   []byte
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder TaskBuilder) {
+func (f *framework) SetTaskBuilder(taskBuilder meritop.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) SetTopology(topology Topology) {
+func (f *framework) SetTopology(topology meritop.Topology) {
 	f.topology = topology
 }
 
@@ -147,7 +100,7 @@ func (f *framework) parentOrChild(taskID uint64) taskRole {
 func (f *framework) fetchEpoch() (uint64, error) {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
-	epochPath := MakeJobEpochPath(f.name)
+	epochPath := etcdutil.MakeJobEpochPath(f.name)
 	resp, err := f.etcdClient.Get(epochPath, false, false)
 	if err != nil {
 		f.log.Fatal("Can not get epoch from etcd")
@@ -182,8 +135,8 @@ func (f *framework) Start() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.etcdClient.Create(MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.etcdClient.Create(MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
+	f.etcdClient.Create(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 
@@ -249,8 +202,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() (uint64, error) {
 	// get all nodes under task dir
-	slots, err := f.etcdClient.Get(
-		MakeTaskDirPath(f.name), true, true)
+	slots, err := f.etcdClient.Get(etcdutil.MakeTaskDirPath(f.name), true, true)
 	if err != nil {
 		return 0, err
 	}
@@ -265,7 +217,7 @@ func (f *framework) occupyTask() (uint64, error) {
 		// - See if current task is unassigned.
 		// - If it's unassgined, currently task will set its ip address to the key.
 		_, err = f.etcdClient.CompareAndSwap(
-			MakeTaskMasterPath(f.name, id),
+			etcdutil.MakeTaskMasterPath(f.name, id),
 			f.ln.Addr().String(),
 			0, "empty", 0)
 		if err == nil {
@@ -310,17 +262,11 @@ func (f *framework) stop() {
 }
 
 func (f *framework) FlagMetaToParent(meta string) {
-	f.etcdClient.Set(
-		MakeParentMetaPath(f.name, f.GetTaskID()),
-		meta,
-		0)
+	f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), meta, 0)
 }
 
 func (f *framework) FlagMetaToChild(meta string) {
-	f.etcdClient.Set(
-		MakeChildMetaPath(f.name, f.GetTaskID()),
-		meta,
-		0)
+	f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), meta, 0)
 }
 
 // When app code invoke this method on framework, we simply
@@ -328,7 +274,7 @@ func (f *framework) FlagMetaToChild(meta string) {
 // for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
 	_, err := f.etcdClient.CompareAndSwap(
-		MakeJobEpochPath(f.name),
+		etcdutil.MakeJobEpochPath(f.name),
 		strconv.FormatUint(f.epoch+1, 10),
 		0, strconv.FormatUint(f.epoch, 10), 0)
 	if err != nil {
@@ -341,7 +287,7 @@ func (f *framework) watchEpoch() {
 	f.epochChan = make(chan uint64, 1)
 	f.epochStop = make(chan bool, 1)
 
-	watchPath := MakeJobEpochPath(f.name)
+	watchPath := etcdutil.MakeJobEpochPath(f.name)
 	go f.etcdClient.Watch(watchPath, 1, false, receiver, f.epochStop)
 	go func(receiver <-chan *etcd.Response) {
 		for resp := range receiver {
@@ -370,11 +316,11 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		switch who {
 		case roleParent:
 			// Watch parent's child.
-			watchPath = MakeChildMetaPath(f.name, taskID)
+			watchPath = etcdutil.MakeChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
 		case roleChild:
 			// Watch child's parent.
-			watchPath = MakeParentMetaPath(f.name, taskID)
+			watchPath = etcdutil.MakeParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
 		default:
 			panic("unimplemented")
@@ -398,7 +344,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 // Currently we grab the information from etcd every time. Local cache could be used.
 // If it failed, e.g. network failure, it should return error.
 func (f *framework) getAddress(id uint64) (string, error) {
-	resp, err := f.etcdClient.Get(MakeTaskMasterPath(f.name, id), false, false)
+	resp, err := f.etcdClient.Get(etcdutil.MakeTaskMasterPath(f.name, id), false, false)
 	if err != nil {
 		return "", err
 	}
@@ -447,21 +393,15 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	}(urlStr)
 }
 
-func (f *framework) GetTopology() Topology {
-	return f.topology
-}
+func (f *framework) GetTopology() meritop.Topology { return f.topology }
 
 // When node call this on framework, it simply set epoch to a maxUint64,
 // All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) ShutdownJob() {
 	maxUint64Str := strconv.FormatUint(maxUint64, 10)
-	f.etcdClient.Set(MakeJobEpochPath(f.name), maxUint64Str, 0)
+	f.etcdClient.Set(etcdutil.MakeJobEpochPath(f.name), maxUint64Str, 0)
 }
 
-func (f *framework) GetLogger() *log.Logger {
-	return f.log
-}
+func (f *framework) GetLogger() *log.Logger { return f.log }
 
-func (f *framework) GetTaskID() uint64 {
-	return f.taskID
-}
+func (f *framework) GetTaskID() uint64 { return f.taskID }
