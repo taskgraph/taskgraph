@@ -12,13 +12,9 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
-)
-
-const (
-	dataRequestPrefix string = "/datareq"
-	dataRequestTaskID string = "taskID"
-	dataRequestReq    string = "req"
+	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
 // This is used as special value to indicate that it is the last epoch, time
@@ -85,9 +81,9 @@ func (f *framework) occupyTask() (uint64, error) {
 func (f *framework) dataResponseReceiver() {
 	for dataResp := range f.dataRespChan {
 		switch {
-		case isParent(f.topology, f.epoch, dataResp.taskID):
+		case topoutil.IsParent(f.topology, f.epoch, dataResp.taskID):
 			go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
-		case isChild(f.topology, f.epoch, dataResp.taskID):
+		case topoutil.IsChild(f.topology, f.epoch, dataResp.taskID):
 			go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
 		default:
 			panic("unimplemented")
@@ -147,11 +143,11 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
-		Path:   dataRequestPrefix,
+		Path:   frameworkhttp.DataRequestPrefix,
 	}
 	q := u.Query()
-	q.Add(dataRequestTaskID, strconv.FormatUint(f.taskID, 10))
-	q.Add(dataRequestReq, req)
+	q.Add(frameworkhttp.DataRequestTaskID, strconv.FormatUint(f.taskID, 10))
+	q.Add(frameworkhttp.DataRequestReq, req)
 	u.RawQuery = q.Encode()
 	urlStr := u.String()
 	// send request
@@ -190,3 +186,5 @@ func (f *framework) ShutdownJob() {
 func (f *framework) GetLogger() *log.Logger { return f.log }
 
 func (f *framework) GetTaskID() uint64 { return f.taskID }
+
+func (f *framework) GetEpoch() uint64 { return f.epoch }

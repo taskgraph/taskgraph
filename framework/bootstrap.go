@@ -9,6 +9,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
@@ -98,11 +99,8 @@ func (f *framework) Start() {
 func (f *framework) startHTTP() {
 	f.log.Printf("serving http on %s", f.ln.Addr())
 	// TODO: http server graceful shutdown
-	handler := &dataReqHandler{
-		topo:  f.topology,
-		task:  f.task,
-		epoch: &f.epoch,
-	}
+	epocher := frameworkhttp.Epocher(f)
+	handler := frameworkhttp.NewDataRequestHandler(f.topology, f.task, epocher)
 	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
