@@ -4,8 +4,6 @@ import (
 	"log"
 	"net"
 
-	"strconv"
-
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/framework/frameworkhttp"
@@ -79,13 +77,11 @@ func (f *framework) FlagMetaToChild(meta string) {
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch() {
-	_, err := f.etcdClient.CompareAndSwap(
-		etcdutil.MakeJobEpochPath(f.name),
-		strconv.FormatUint(f.epoch+1, 10),
-		0, strconv.FormatUint(f.epoch, 10), 0)
+	err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, f.epoch+1)
 	if err != nil {
 		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", f.epoch+1, f.epoch, err)
 	}
+	f.epoch = f.epoch + 1
 }
 
 // getAddress will return the host:port address of the service taking care of
@@ -118,8 +114,7 @@ func (f *framework) GetTopology() meritop.Topology { return f.topology }
 // When node call this on framework, it simply set epoch to a maxUint64,
 // All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) ShutdownJob() {
-	maxUint64Str := strconv.FormatUint(maxUint64, 10)
-	f.etcdClient.Set(etcdutil.MakeJobEpochPath(f.name), maxUint64Str, 0)
+	etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, maxUint64)
 }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }
