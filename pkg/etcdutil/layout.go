@@ -15,6 +15,7 @@ import (
 //   /{app}/nodes/: register nodes under this directory
 //   /{app}/nodes/{nodeID}/address -> scheme://host:port/{path(if http)}
 //   /{app}/nodes/{nodeID}/ttl -> keep alive timeout
+//   /{app}/failedTasks/{taskID}
 
 const (
 	TasksDir       = "tasks"

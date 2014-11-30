@@ -55,7 +55,11 @@ func (f *framework) Start() {
 	}
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		f.log.Fatalf("occupyTask failed: %v", err)
+		// if err == full
+		err := f.standby()
+		if err != nil {
+			f.log.Fatalf("occupyTask failed: %v", err)
+		}
 	}
 
 	// task builder and topology are defined by applications.
@@ -63,6 +67,8 @@ func (f *framework) Start() {
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
+	go f.heartbeat()
+	go f.detectAndReportFailures()
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
