@@ -1,11 +1,9 @@
 package framework
 
 import (
-	"fmt"
 	"log"
 	"net"
 
-	"path"
 	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -45,34 +43,6 @@ type dataResponse struct {
 	taskID uint64
 	req    string
 	data   []byte
-}
-
-// occupyTask will grab the first unassigned task and register itself on etcd.
-func (f *framework) occupyTask() (uint64, error) {
-	// get all nodes under task dir
-	slots, err := f.etcdClient.Get(etcdutil.MakeTaskDirPath(f.name), true, true)
-	if err != nil {
-		return 0, err
-	}
-	for _, s := range slots.Node.Nodes {
-		idstr := path.Base(s.Key)
-		id, err := strconv.ParseUint(idstr, 0, 64)
-		if err != nil {
-			f.log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
-			continue
-		}
-		// Below operations are one atomic behavior:
-		// - See if current task is unassigned.
-		// - If it's unassgined, currently task will set its ip address to the key.
-		_, err = f.etcdClient.CompareAndSwap(
-			etcdutil.MakeTaskMasterPath(f.name, id),
-			f.ln.Addr().String(),
-			0, "empty", 0)
-		if err == nil {
-			return id, nil
-		}
-	}
-	return 0, fmt.Errorf("no unassigned task found")
 }
 
 // Framework event loop handles data response for requests sent in DataRequest().
