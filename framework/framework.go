@@ -61,21 +61,6 @@ type dataResponse struct {
 	data   []byte
 }
 
-func (f *framework) parentOrChild(taskID uint64) taskRole {
-	for _, id := range f.topology.GetParents(f.epoch) {
-		if taskID == id {
-			return roleParent
-		}
-	}
-
-	for _, id := range f.topology.GetChildren(f.epoch) {
-		if taskID == id {
-			return roleChild
-		}
-	}
-	return roleNone
-}
-
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() (uint64, error) {
 	// get all nodes under task dir
@@ -213,3 +198,13 @@ func (f *framework) ShutdownJob() {
 func (f *framework) GetLogger() *log.Logger { return f.log }
 
 func (f *framework) GetTaskID() uint64 { return f.taskID }
+
+func (f *framework) parentOrChild(taskID uint64) taskRole {
+	if isParent(f.topology, f.epoch, taskID) {
+		return roleParent
+	}
+	if isChild(f.topology, f.epoch, taskID) {
+		return roleChild
+	}
+	return roleNone
+}
