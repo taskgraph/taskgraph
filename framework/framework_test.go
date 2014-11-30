@@ -9,6 +9,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/controller"
 	"github.com/go-distributed/meritop/example"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
@@ -28,7 +29,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
 	// launch controller to setup etcd layout
-	ctl := meritop.NewController(appName, etcd.NewClient([]string{url}), 2)
+	ctl := controller.New(appName, etcd.NewClient([]string{url}), 2)
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
 	// launch controller to setup etcd layout
-	ctl := meritop.NewController(appName, etcd.NewClient([]string{url}), 2)
+	ctl := controller.New(appName, etcd.NewClient([]string{url}), 2)
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}

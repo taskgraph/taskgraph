@@ -1,5 +1,6 @@
 #!/bin/bash -e
 
 go test -v
+go test -v ./controller
 go test -v ./example
 go test -v ./framework

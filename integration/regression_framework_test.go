@@ -7,6 +7,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/controller"
 	"github.com/go-distributed/meritop/example"
 	"github.com/go-distributed/meritop/framework"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
@@ -24,7 +25,7 @@ func TestRegressionFramework(t *testing.T) {
 	numOfTasks := uint64(15)
 
 	// controller start first to setup task directories in etcd
-	controller := meritop.NewController(job, etcd.NewClient([]string{url}), numOfTasks)
+	controller := controller.New(job, etcd.NewClient([]string{url}), numOfTasks)
 	controller.InitEtcdLayout()
 	defer controller.DestroyEtcdLayout()
 

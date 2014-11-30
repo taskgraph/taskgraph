@@ -1,4 +1,4 @@
-package meritop
+package controller
 
 import (
 	"fmt"

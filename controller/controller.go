@@ -1,4 +1,4 @@
-package meritop
+package controller
 
 import (
 	"github.com/coreos/go-etcd/etcd"
@@ -14,7 +14,7 @@ type Controller struct {
 	numOfTasks uint64
 }
 
-func NewController(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
+func New(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
 	return &Controller{name, etcd, numOfTasks}
 }
 
