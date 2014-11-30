@@ -28,10 +28,8 @@ const (
 	NodeTTL        = "ttl"
 )
 
-func MakeJobEpochPath(appName string) string {
-	return path.Join("/",
-		appName,
-		Epoch)
+func EpochPath(appName string) string {
+	return path.Join("/", appName, Epoch)
 }
 
 func MakeTaskDirPath(appName string) string {

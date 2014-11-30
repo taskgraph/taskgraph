@@ -20,7 +20,7 @@ func New(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
 
 func (c *Controller) InitEtcdLayout() (err error) {
 	// Initilize the job epoch to 0
-	c.etcdclient.Create(etcdutil.MakeJobEpochPath(c.name), "0", 0)
+	c.etcdclient.Create(etcdutil.EpochPath(c.name), "0", 0)
 
 	// initiate etcd data layout
 	// currently it creates as many unassigned tasks as task masters.
