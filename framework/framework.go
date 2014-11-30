@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 
@@ -33,18 +32,6 @@ const (
 // This is used as special value to indicate that it is the last epoch, time
 // to exit.
 const maxUint64 uint64 = ^uint64(0)
-
-// One need to pass in at least these two for framework to start. The config
-// is used to pass on to task implementation for its configuration.
-func NewBootStrap(jobName string, etcdURLs []string, config meritop.Config, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
-	return &framework{
-		name:     jobName,
-		etcdURLs: etcdURLs,
-		config:   config,
-		ln:       ln,
-		log:      logger,
-	}
-}
 
 type framework struct {
 	// These should be passed by outside world
@@ -74,14 +61,6 @@ type dataResponse struct {
 	data   []byte
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder meritop.TaskBuilder) {
-	f.taskBuilder = taskBuilder
-}
-
-func (f *framework) SetTopology(topology meritop.Topology) {
-	f.topology = topology
-}
-
 func (f *framework) parentOrChild(taskID uint64) taskRole {
 	for _, id := range f.topology.GetParents(f.epoch) {
 		if taskID == id {
@@ -106,97 +85,6 @@ func (f *framework) fetchEpoch() (uint64, error) {
 		f.log.Fatal("Can not get epoch from etcd")
 	}
 	return strconv.ParseUint(resp.Node.Value, 10, 64)
-}
-
-func (f *framework) Start() {
-	var err error
-
-	if f.log == nil {
-		f.log = log.New(os.Stdout, "", log.Lshortfile|log.Ltime|log.Ldate)
-	}
-
-	// First, we fetch the current global epoch from etcd.
-	f.epoch, err = f.fetchEpoch()
-	if err != nil {
-		f.log.Fatal("Can not parse epoch from etcd")
-	}
-
-	if f.taskID, err = f.occupyTask(); err != nil {
-		f.log.Fatalf("occupyTask failed: %v", err)
-	}
-
-	// task builder and topology are defined by applications.
-	// Both should be initialized at this point.
-	// Get the task implementation and topology for this node (indentified by taskID)
-	f.task = f.taskBuilder.GetTask(f.taskID)
-	f.topology.SetTaskID(f.taskID)
-
-	// setup etcd watches
-	// - create self's parent and child meta flag
-	// - watch parents' child meta flag
-	// - watch children's parent meta flag
-	f.etcdClient.Create(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.etcdClient.Create(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
-	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
-
-	// We need to first watch epoch.
-	f.watchEpoch()
-
-	go f.startHTTP()
-	f.dataRespChan = make(chan *dataResponse, 100)
-	go f.dataResponseReceiver()
-
-	// After framework init finished, it should init task.
-	f.task.Init(f.taskID, f, f.config)
-
-	for f.epoch != maxUint64 {
-		f.task.SetEpoch(f.epoch)
-		select {
-		case f.epoch = <-f.epochChan:
-			// TODO: cleanup resources.
-		case <-f.epochStop:
-			return
-		}
-	}
-
-	// clean up resources
-	f.stop()
-}
-
-type dataReqHandler struct {
-	f *framework
-}
-
-func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != dataRequestPrefix {
-		http.Error(w, "bad path", http.StatusBadRequest)
-		return
-	}
-	// parse url query
-	q := r.URL.Query()
-	fromIDStr := q.Get(dataRequestTaskID)
-	fromID, err := strconv.ParseUint(fromIDStr, 0, 64)
-	if err != nil {
-		http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
-		return
-	}
-	req := q.Get(dataRequestReq)
-	// ask task to serve data
-	var b []byte
-	switch h.f.parentOrChild(fromID) {
-	case roleParent:
-		b = h.f.task.ServeAsChild(fromID, req)
-	case roleChild:
-		b = h.f.task.ServeAsParent(fromID, req)
-	default:
-		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
-		return
-	}
-
-	if _, err := w.Write(b); err != nil {
-		h.f.log.Printf("response write errored: %v", err)
-	}
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
