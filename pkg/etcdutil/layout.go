@@ -1,4 +1,4 @@
-package meritop
+package etcdutil
 
 import (
 	"path"

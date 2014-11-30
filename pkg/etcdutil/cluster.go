@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package meritop
+package etcdutil
 
 import (
 	"fmt"
@@ -52,7 +52,7 @@ type member struct {
 	hss []*httptest.Server
 }
 
-func mustNewMember(t *testing.T, name string) *member {
+func MustNewMember(t *testing.T, name string) *member {
 	var err error
 	m := &member{}
 

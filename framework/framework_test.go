@@ -1,4 +1,4 @@
-package meritop
+package framework
 
 import (
 	"fmt"
@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/example"
+	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
 // TestFrameworkFlagMetaReady and TestFrameworkDataRequest test basic workflows of
@@ -16,25 +19,20 @@ import (
 // there will be some data transferring and captured by application task.
 // Here we have implemented a helper user task to capture those data, test if
 // it's passed from framework correctly and unmodified.
-
 func TestFrameworkFlagMetaReady(t *testing.T) {
 	appName := "framework_test_flagmetaready"
 	// launch testing etcd server
-	m := mustNewMember(t, appName)
+	m := etcdutil.MustNewMember(t, appName)
 	m.Launch()
 	defer m.Terminate(t)
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
 	// launch controller to setup etcd layout
-	ctl := &controller{
-		name:       appName,
-		etcdclient: etcd.NewClient([]string{url}),
-		numOfTasks: 2,
-	}
-	if err := ctl.initEtcdLayout(); err != nil {
+	ctl := meritop.NewController(appName, etcd.NewClient([]string{url}), 2)
+	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
-	defer ctl.destroyEtcdLayout()
+	defer ctl.DestroyEtcdLayout()
 
 	pDataChan := make(chan *tDataBundle, 1)
 	cDataChan := make(chan *tDataBundle, 1)
@@ -60,9 +58,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(NewTreeTopology(2, 2))
+	f0.SetTopology(example.NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(NewTreeTopology(2, 2))
+	f1.SetTopology(example.NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(1)
 	go f0.Start()
@@ -106,21 +104,17 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 func TestFrameworkDataRequest(t *testing.T) {
 	appName := "framework_test_flagmetaready"
 	// launch testing etcd server
-	m := mustNewMember(t, appName)
+	m := etcdutil.MustNewMember(t, appName)
 	m.Launch()
 	defer m.Terminate(t)
 	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
 
 	// launch controller to setup etcd layout
-	ctl := &controller{
-		name:       appName,
-		etcdclient: etcd.NewClient([]string{url}),
-		numOfTasks: 2,
-	}
-	if err := ctl.initEtcdLayout(); err != nil {
+	ctl := meritop.NewController(appName, etcd.NewClient([]string{url}), 2)
+	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
-	defer ctl.destroyEtcdLayout()
+	defer ctl.DestroyEtcdLayout()
 
 	tests := []struct {
 		req  string
@@ -160,13 +154,13 @@ func TestFrameworkDataRequest(t *testing.T) {
 	}
 	taskBuilder.setupLatch.Add(1)
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(NewTreeTopology(2, 2))
+	f0.SetTopology(example.NewTreeTopology(2, 2))
 	go f0.Start()
 	defer f0.stop()
 	taskBuilder.setupLatch.Wait()
 	taskBuilder.setupLatch.Add(1)
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(NewTreeTopology(2, 2))
+	f1.SetTopology(example.NewTreeTopology(2, 2))
 	go f1.Start()
 	defer f1.stop()
 	taskBuilder.setupLatch.Wait()
@@ -218,7 +212,7 @@ type testableTaskBuilder struct {
 	setupLatch *sync.WaitGroup
 }
 
-func (b *testableTaskBuilder) GetTask(taskID uint64) Task {
+func (b *testableTaskBuilder) GetTask(taskID uint64) meritop.Task {
 	switch taskID {
 	case 0:
 		return &testableTask{dataMap: b.dataMap, dataChan: b.cDataChan,
@@ -233,7 +227,7 @@ func (b *testableTaskBuilder) GetTask(taskID uint64) Task {
 
 type testableTask struct {
 	id         uint64
-	framework  Framework
+	framework  meritop.Framework
 	setupLatch *sync.WaitGroup
 	// dataMap will be used to serve data according to request
 	dataMap map[string][]byte
@@ -246,7 +240,7 @@ type testableTask struct {
 	dataChan chan *tDataBundle
 }
 
-func (t *testableTask) Init(taskID uint64, framework Framework, config Config) {
+func (t *testableTask) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
 	t.id = taskID
 	t.framework = framework
 	t.setupLatch.Done()

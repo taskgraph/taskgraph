@@ -1,4 +1,4 @@
-package meritop
+package example
 
 import "testing"
 

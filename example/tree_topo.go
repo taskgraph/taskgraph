@@ -1,8 +1,7 @@
+package example
+
 //The tree structure is basically assume that all the task forms a tree.
 //Also the tree structure stays the same between epochs.
-
-package meritop
-
 type TreeTopology struct {
 	fanout, numOfTasks uint64
 	taskID             uint64
@@ -30,17 +29,11 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *TreeTopology) GetParents(epoch uint64) []uint64 {
-	return t.parents
-}
+func (t *TreeTopology) GetParents(epoch uint64) []uint64 { return t.parents }
 
-func (t *TreeTopology) GetChildren(epoch uint64) []uint64 {
-	return t.children
-}
+func (t *TreeTopology) GetChildren(epoch uint64) []uint64 { return t.children }
 
-func (t *TreeTopology) SetNumberOfTasks(nt uint64) {
-	t.numOfTasks = nt
-}
+func (t *TreeTopology) SetNumberOfTasks(nt uint64) { t.numOfTasks = nt }
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
