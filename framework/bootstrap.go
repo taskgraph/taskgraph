@@ -55,7 +55,11 @@ func (f *framework) Start() {
 	}
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		f.log.Fatalf("occupyTask failed: %v", err)
+		// if err == full
+		err := f.standby()
+		if err != nil {
+			f.log.Fatalf("occupyTask failed: %v", err)
+		}
 	}
 
 	// task builder and topology are defined by applications.
