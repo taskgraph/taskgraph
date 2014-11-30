@@ -73,7 +73,7 @@ func (f *framework) Start() {
 	f.watchEpoch()
 
 	go f.startHTTP()
-	f.dataRespChan = make(chan *dataResponse, 100)
+	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
 	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.

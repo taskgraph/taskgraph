@@ -1,8 +1,10 @@
 package frameworkhttp
 
 import (
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-distributed/meritop"
@@ -14,6 +16,12 @@ const (
 	DataRequestTaskID string = "taskID"
 	DataRequestReq    string = "req"
 )
+
+type DataResponse struct {
+	TaskID uint64
+	Req    string
+	Data   []byte
+}
 
 type dataReqHandler struct {
 	topo    meritop.Topology
@@ -56,5 +64,37 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := w.Write(b); err != nil {
 		log.Printf("http: response write errored: %v", err)
+	}
+}
+
+func RequestData(addr string, from, to uint64, req string) *DataResponse {
+	u := url.URL{
+		Scheme: "http",
+		Host:   addr,
+		Path:   DataRequestPrefix,
+	}
+	q := u.Query()
+	q.Add(DataRequestTaskID, strconv.FormatUint(from, 10))
+	q.Add(DataRequestReq, req)
+	u.RawQuery = q.Encode()
+	urlStr := u.String()
+	// send request
+	// pass the response to the awaiting event loop for data response
+	resp, err := http.Get(urlStr)
+	if err != nil {
+		log.Fatalf("http: get(%s) returns error: %v", urlStr, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("http: ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
+	}
+	return &DataResponse{
+		TaskID: to,
+		Req:    req,
+		Data:   data,
 	}
 }

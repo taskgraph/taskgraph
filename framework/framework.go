@@ -2,11 +2,9 @@ package framework
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
-	"net/url"
+
 	"path"
 	"strconv"
 
@@ -40,7 +38,7 @@ type framework struct {
 	etcdClient   *etcd.Client
 	stops        []chan bool
 	ln           net.Listener
-	dataRespChan chan *dataResponse
+	dataRespChan chan *frameworkhttp.DataResponse
 }
 
 type dataResponse struct {
@@ -81,10 +79,10 @@ func (f *framework) occupyTask() (uint64, error) {
 func (f *framework) dataResponseReceiver() {
 	for dataResp := range f.dataRespChan {
 		switch {
-		case topoutil.IsParent(f.topology, f.epoch, dataResp.taskID):
-			go f.task.ParentDataReady(dataResp.taskID, dataResp.req, dataResp.data)
-		case topoutil.IsChild(f.topology, f.epoch, dataResp.taskID):
-			go f.task.ChildDataReady(dataResp.taskID, dataResp.req, dataResp.data)
+		case topoutil.IsParent(f.topology, f.epoch, dataResp.TaskID):
+			go f.task.ParentDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
+		case topoutil.IsChild(f.topology, f.epoch, dataResp.TaskID):
+			go f.task.ChildDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
 		default:
 			panic("unimplemented")
 		}
@@ -140,38 +138,9 @@ func (f *framework) DataRequest(toID uint64, req string) {
 		f.log.Fatalf("getAddress(%d) failed: %v", toID, err)
 		return
 	}
-	u := url.URL{
-		Scheme: "http",
-		Host:   addr,
-		Path:   frameworkhttp.DataRequestPrefix,
-	}
-	q := u.Query()
-	q.Add(frameworkhttp.DataRequestTaskID, strconv.FormatUint(f.taskID, 10))
-	q.Add(frameworkhttp.DataRequestReq, req)
-	u.RawQuery = q.Encode()
-	urlStr := u.String()
-	// send request
-	// pass the response to the awaiting event loop for data response
-	go func(urlStr string) {
-		resp, err := http.Get(urlStr)
-		if err != nil {
-			f.log.Fatalf("http.Get(%s) returns error: %v", urlStr, err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			f.log.Fatalf("response code = %d, assume = %d", resp.StatusCode, 200)
-		}
-		data, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			f.log.Fatalf("ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
-		}
-		dataResp := &dataResponse{
-			taskID: toID,
-			req:    req,
-			data:   data,
-		}
-		f.dataRespChan <- dataResp
-	}(urlStr)
+	go func() {
+		f.dataRespChan <- frameworkhttp.RequestData(addr, f.taskID, toID, req)
+	}()
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
