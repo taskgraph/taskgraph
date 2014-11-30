@@ -11,12 +11,12 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 }
 
 // detect failure of the given taskID
-func detectFailure(client *etcd.Client, name string, taskID uint64, stop chan struct{}) chan struct{} {
-	return make(chan struct{})
+func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan struct{}) uint64 {
+	return 1
 }
 
 // report failure to etcd cluster
-func reportFailure(client *etcd.Client, name string, taskID uint64) {
+func ReportFailure(client *etcd.Client, name string, taskID uint64) {
 
 }
 
