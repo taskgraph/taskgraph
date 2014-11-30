@@ -154,22 +154,6 @@ func (f *framework) fetchEpoch() (uint64, error) {
 }
 
 func (f *framework) watchEpoch() {
-	receiver := make(chan *etcd.Response, 1)
-	f.epochChan = make(chan uint64, 1)
 	f.epochStop = make(chan bool, 1)
-
-	watchPath := etcdutil.MakeJobEpochPath(f.name)
-	go f.etcdClient.Watch(watchPath, 1, false, receiver, f.epochStop)
-	go func(receiver <-chan *etcd.Response) {
-		for resp := range receiver {
-			if resp.Action != "compareAndSwap" && resp.Action != "set" {
-				continue
-			}
-			epoch, err := strconv.ParseUint(resp.Node.Value, 10, 64)
-			if err != nil {
-				f.log.Fatal("Can't parse epoch from etcd")
-			}
-			f.epochChan <- epoch
-		}
-	}(receiver)
+	f.epochChan = etcdutil.WatchEpoch(f.etcdClient, f.name, f.epochStop)
 }

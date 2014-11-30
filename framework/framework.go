@@ -33,7 +33,7 @@ type framework struct {
 	task         meritop.Task
 	taskID       uint64
 	epoch        uint64
-	epochChan    chan uint64
+	epochChan    <-chan uint64
 	epochStop    chan bool
 	etcdClient   *etcd.Client
 	stops        []chan bool
