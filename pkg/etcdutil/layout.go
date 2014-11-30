@@ -12,6 +12,7 @@ import (
 //   /{app}/tasks/{taskID}/{replicaID} -> pointer to nodes, 0 replicaID means master
 //   /{app}/tasks/{taskID}/parentMeta
 //   /{app}/tasks/{taskID}/childMeta
+//   /{app}/tasks/{taskID}/healthy
 //   /{app}/nodes/: register nodes under this directory
 //   /{app}/nodes/{nodeID}/address -> scheme://host:port/{path(if http)}
 //   /{app}/nodes/{nodeID}/ttl -> keep alive timeout
@@ -27,10 +28,15 @@ const (
 	TaskChildMeta  = "ChildMeta"
 	NodeAddr       = "address"
 	NodeTTL        = "ttl"
+	healthy        = "healthy"
 )
 
 func EpochPath(appName string) string {
 	return path.Join("/", appName, Epoch)
+}
+
+func HealthyPath(appName string, taskID uint64) string {
+	return path.Join("/", appName, TasksDir, strconv.FormatUint(taskID, 10), healthy)
 }
 
 func MakeTaskDirPath(appName string) string {

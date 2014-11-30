@@ -130,14 +130,8 @@ func (f *framework) occupyTask() (uint64, error) {
 			f.log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
 			continue
 		}
-		// Below operations are one atomic behavior:
-		// - See if current task is unassigned.
-		// - If it's unassgined, currently task will set its ip address to the key.
-		_, err = f.etcdClient.CompareAndSwap(
-			etcdutil.MakeTaskMasterPath(f.name, id),
-			f.ln.Addr().String(),
-			0, "empty", 0)
-		if err == nil {
+		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, id, f.ln.Addr().String())
+		if ok {
 			return id, nil
 		}
 	}
