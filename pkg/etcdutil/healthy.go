@@ -24,13 +24,13 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 
 // detect failure of the given taskID
 func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bool) uint64 {
-	waitIndex := uint64(0)
 	key := HealthyPath(name, taskID)
 	resp, err := client.Get(key, false, false)
-	if err == nil {
-		waitIndex = resp.EtcdIndex + 1
+	if err != nil {
+		// TODO: should check key not found
+		return taskID
 	}
-	// possible race between Get and Watch
+	waitIndex := resp.EtcdIndex + 1
 	for {
 		resp, err = client.Watch(key, waitIndex, false, nil, stop)
 		if err != nil {

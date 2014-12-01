@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"math"
 	"time"
 
 	"github.com/go-distributed/meritop/pkg/etcdutil"
@@ -20,25 +21,30 @@ func (f *framework) heartbeat() {
 
 func (f *framework) detectAndReportFailures() {
 	failures := make(chan uint64)
+	// TODO: We assume all tasks are setup at this point. So if there is task
+	// not having `health` nodes, it implies node failure.
+	time.Sleep(1000 * time.Millisecond)
 	// assume the topo does not change with epoch for now
 	// TODO: stop routines...
 	for _, id := range f.topology.GetChildren(f.epoch) {
-		go func() {
+		go func(id uint64) {
 			for {
 				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
 			}
-		}()
+		}(id)
 	}
 	for _, id := range f.topology.GetParents(f.epoch) {
-		go func() {
+		go func(id uint64) {
 			for {
 				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
 			}
-		}()
+		}(id)
 	}
 
 	// TODO: close failures channel when framework is stopped.
 	for ft := range failures {
-		etcdutil.ReportFailure(f.etcdClient, f.name, ft)
+		if ft != math.MaxUint64 {
+			etcdutil.ReportFailure(f.etcdClient, f.name, ft)
+		}
 	}
 }
