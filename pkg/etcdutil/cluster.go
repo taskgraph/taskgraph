@@ -52,6 +52,16 @@ type member struct {
 	hss []*httptest.Server
 }
 
+func StartNewEtcdServer(t *testing.T, name string) *member {
+	m := MustNewMember(t, name)
+	m.Launch()
+	return m
+}
+
+func (m *member) URL() string {
+	return fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+}
+
 func MustNewMember(t *testing.T, name string) *member {
 	var err error
 	m := &member{}
