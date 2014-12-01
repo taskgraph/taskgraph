@@ -49,7 +49,10 @@ func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bo
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
 func ReportFailure(client *etcd.Client, name string, taskID uint64) {
-	client.Set(FailedTaskPath(name, taskID), "failed", 0)
+	_, err := client.Set(FailedTaskPath(name, taskID), "failed", 0)
+	if err != nil {
+		panic("unimplemented")
+	}
 }
 
 // WaitFailure blocks until it gets a hint of taks failure
