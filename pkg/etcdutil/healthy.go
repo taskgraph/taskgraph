@@ -27,7 +27,7 @@ func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bo
 	key := HealthyPath(name, taskID)
 	resp, err := client.Get(key, false, false)
 	if err != nil {
-		// TODO: should check key not found
+		// TODO: should check "key not found"
 		return taskID, nil
 	}
 	waitIndex := resp.EtcdIndex + 1
