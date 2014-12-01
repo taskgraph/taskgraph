@@ -65,3 +65,27 @@ func TestDetectFailure(t *testing.T) {
 		t.Fatalf("failedTaskID want = %d, get = %d", taskID, failedTaskID)
 	}
 }
+
+func TestReportAndWaitFailure(t *testing.T) {
+	name := "TestReportAndWaitFailure"
+	m := etcdutil.StartNewEtcdServer(t, name)
+	defer m.Terminate(t)
+
+	// a waits for failure of task 1, b reports a failure, then a gets it.
+	client := etcd.NewClient([]string{m.URL()})
+	taskID := uint64(1)
+	failure := make(chan uint64, 1)
+	go func() {
+		failed, err := etcdutil.WaitFailure(client, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		failure <- failed
+	}()
+	time.Sleep(200 * time.Millisecond)
+	etcdutil.ReportFailure(client, name, taskID)
+	failedTaskID := <-failure
+	if failedTaskID != taskID {
+		t.Fatalf("failedTaskID want = %d, get = %d", taskID, failedTaskID)
+	}
+}

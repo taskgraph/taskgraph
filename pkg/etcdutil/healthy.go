@@ -2,6 +2,8 @@ package etcdutil
 
 import (
 	"math"
+	"path"
+	"strconv"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -47,12 +49,21 @@ func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bo
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
 func ReportFailure(client *etcd.Client, name string, taskID uint64) {
-
+	client.Set(FailedTaskPath(name, taskID), "failed", 0)
 }
 
 // WaitFailure blocks until it gets a hint of taks failure
-func WaitFailure(client *etcd.Client, name string) uint64 {
-	return 1
+func WaitFailure(client *etcd.Client, name string) (uint64, error) {
+	resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)
+	if err != nil {
+		return 0, err
+	}
+	idStr := path.Base(resp.Node.Key)
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func computeTTL(interval time.Duration) uint64 {

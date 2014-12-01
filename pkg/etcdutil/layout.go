@@ -22,6 +22,7 @@ const (
 	TasksDir       = "tasks"
 	NodesDir       = "nodes"
 	ConfigDir      = "config"
+	FailedDir      = "failedTasks"
 	Epoch          = "epoch"
 	TaskMaster     = "0"
 	TaskParentMeta = "ParentMeta"
@@ -37,6 +38,13 @@ func EpochPath(appName string) string {
 
 func HealthyPath(appName string, taskID uint64) string {
 	return path.Join("/", appName, TasksDir, strconv.FormatUint(taskID, 10), healthy)
+}
+func FailedTaskDir(appName string) string {
+	return path.Join("/", appName, FailedDir)
+}
+
+func FailedTaskPath(appName string, taskID uint64) string {
+	return path.Join(FailedTaskDir(appName), strconv.FormatUint(taskID, 10))
 }
 
 func MakeTaskDirPath(appName string) string {
