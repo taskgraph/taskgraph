@@ -23,8 +23,25 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 }
 
 // detect failure of the given taskID
-func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan struct{}) uint64 {
-	return 0
+func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bool) uint64 {
+	waitIndex := uint64(0)
+	key := HealthyPath(name, taskID)
+	resp, err := client.Get(key, false, false)
+	if err == nil {
+		waitIndex = resp.EtcdIndex + 1
+	}
+	// possible race between Get and Watch
+	for {
+		resp, err = client.Watch(key, waitIndex, false, nil, stop)
+		if err != nil {
+			// on client closing
+			return math.MaxUint64
+		}
+		if resp.Action == "delete" || resp.Action == "expire" {
+			return taskID
+		}
+		waitIndex = resp.EtcdIndex + 1
+	}
 }
 
 // report failure to etcd cluster

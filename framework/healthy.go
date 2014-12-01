@@ -25,14 +25,14 @@ func (f *framework) detectAndReportFailures() {
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		go func() {
 			for {
-				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan struct{}))
+				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
 			}
 		}()
 	}
 	for _, id := range f.topology.GetParents(f.epoch) {
 		go func() {
 			for {
-				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan struct{}))
+				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
 			}
 		}()
 	}
