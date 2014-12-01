@@ -54,7 +54,11 @@ func TestDetectFailure(t *testing.T) {
 
 	client.Create(etcdutil.HealthyPath(name, taskID), "health", ttl)
 	go func() {
-		failure <- etcdutil.DetectFailure(client, name, taskID, nil)
+		failed, err := etcdutil.DetectFailure(client, name, taskID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		failure <- failed
 	}()
 	failedTaskID := <-failure
 	if failedTaskID != taskID {

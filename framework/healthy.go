@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"math"
 	"time"
 
 	"github.com/go-distributed/meritop/pkg/etcdutil"
@@ -29,22 +28,28 @@ func (f *framework) detectAndReportFailures() {
 	for _, id := range f.topology.GetChildren(f.epoch) {
 		go func(id uint64) {
 			for {
-				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
+				failed, err := etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
+				if err != nil {
+					return
+				}
+				failures <- failed
 			}
 		}(id)
 	}
 	for _, id := range f.topology.GetParents(f.epoch) {
 		go func(id uint64) {
 			for {
-				failures <- etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
+				failed, err := etcdutil.DetectFailure(f.etcdClient, f.name, id, make(chan bool))
+				if err != nil {
+					return
+				}
+				failures <- failed
 			}
 		}(id)
 	}
 
 	// TODO: close failures channel when framework is stopped.
 	for ft := range failures {
-		if ft != math.MaxUint64 {
-			etcdutil.ReportFailure(f.etcdClient, f.name, ft)
-		}
+		etcdutil.ReportFailure(f.etcdClient, f.name, ft)
 	}
 }
