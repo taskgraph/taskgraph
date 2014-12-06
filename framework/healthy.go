@@ -39,7 +39,7 @@ func (f *framework) detectAndReportFailures() {
 	}
 
 	// TODO: close failures channel when framework is stopped.
-	for ft := range failures {
-		etcdutil.ReportFailure(f.etcdClient, f.name, ft)
+	for failed := range failures {
+		etcdutil.ReportFailure(f.etcdClient, f.name, failed)
 	}
 }
