@@ -1,9 +1,10 @@
-package example
+package framework
 
 import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/go-distributed/meritop"
 )
@@ -38,16 +39,18 @@ type dummyData struct {
 type dummyMaster struct {
 	dataChan      chan int32
 	finishChan    chan struct{}
+	taskStopChan  chan bool
 	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
+	config        map[string]string
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
+func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -65,6 +68,11 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
+	if t.config["failmaster"] == "yes" && t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
+		t.framework.(*framework).stop()
+		t.taskStopChan <- true
+		return
+	}
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 
@@ -130,7 +138,7 @@ type dummySlave struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummySlave) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
+func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -212,8 +220,10 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 }
 
 type SimpleTaskBuilder struct {
-	GDataChan  chan int32
-	FinishChan chan struct{}
+	GDataChan    chan int32
+	FinishChan   chan struct{}
+	TaskStopChan chan bool
+	Config       map[string]string
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -224,7 +234,12 @@ type SimpleTaskBuilder struct {
 // for current node, and also a global array of tasks.
 func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 	if taskID == 0 {
-		return &dummyMaster{dataChan: tc.GDataChan, finishChan: tc.FinishChan}
+		return &dummyMaster{
+			dataChan:     tc.GDataChan,
+			finishChan:   tc.FinishChan,
+			taskStopChan: tc.TaskStopChan,
+			config:       tc.Config,
+		}
 	}
 	return &dummySlave{}
 }

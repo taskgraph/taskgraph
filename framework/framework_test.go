@@ -241,7 +241,7 @@ type testableTask struct {
 	dataChan chan *tDataBundle
 }
 
-func (t *testableTask) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
+func (t *testableTask) Init(taskID uint64, framework meritop.Framework) {
 	t.id = taskID
 	t.framework = framework
 	t.setupLatch.Done()

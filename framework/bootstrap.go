@@ -23,13 +23,11 @@ const (
 	roleChild
 )
 
-// One need to pass in at least these two for framework to start. The config
-// is used to pass on to task implementation for its configuration.
-func NewBootStrap(jobName string, etcdURLs []string, config meritop.Config, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
+// One need to pass in at least these two for framework to start.
+func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
 	return &framework{
 		name:     jobName,
 		etcdURLs: etcdURLs,
-		config:   config,
 		ln:       ln,
 		log:      logger,
 	}
@@ -87,7 +85,7 @@ func (f *framework) Start() {
 	go f.dataResponseReceiver()
 
 	// After framework init finished, it should init task.
-	f.task.Init(f.taskID, f, f.config)
+	f.task.Init(f.taskID, f)
 
 	for f.epoch != exitEpoch {
 		f.task.SetEpoch(f.epoch)
@@ -99,7 +97,7 @@ func (f *framework) Start() {
 		}
 	}
 	// clean up resources
-	f.stop()
+	f.releaseResources()
 }
 
 // Framework http server for data request.

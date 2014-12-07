@@ -18,22 +18,22 @@ type framework struct {
 	// These should be passed by outside world
 	name     string
 	etcdURLs []string
-	config   meritop.Config
 	log      *log.Logger
 
 	// user defined interfaces
 	taskBuilder meritop.TaskBuilder
 	topology    meritop.Topology
 
-	task         meritop.Task
-	taskID       uint64
-	epoch        uint64
-	epochChan    <-chan uint64
-	epochStop    chan bool
-	etcdClient   *etcd.Client
-	stops        []chan bool
-	ln           net.Listener
-	dataRespChan chan *frameworkhttp.DataResponse
+	task          meritop.Task
+	taskID        uint64
+	epoch         uint64
+	epochChan     <-chan uint64
+	epochStop     chan bool
+	heartbeatStop chan struct{}
+	etcdClient    *etcd.Client
+	stops         []chan bool
+	ln            net.Listener
+	dataRespChan  chan *frameworkhttp.DataResponse
 }
 
 type dataResponse struct {
@@ -53,14 +53,6 @@ func (f *framework) dataResponseReceiver() {
 		default:
 			panic("unimplemented")
 		}
-	}
-}
-
-func (f *framework) stop() {
-	close(f.dataRespChan)
-	f.epochStop <- true
-	for _, c := range f.stops {
-		c <- true
 	}
 }
 
@@ -108,6 +100,18 @@ func (f *framework) DataRequest(toID uint64, req string) {
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
+
+func (f *framework) releaseResources() {
+	close(f.heartbeatStop)
+	close(f.dataRespChan)
+	for _, c := range f.stops {
+		c <- true
+	}
+}
+
+func (f *framework) stop() {
+	f.epochStop <- true
+}
 
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
