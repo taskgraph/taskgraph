@@ -87,12 +87,13 @@ func (f *framework) Start() {
 	go f.dataResponseReceiver()
 
 	defer f.releaseResources()
-	f.task.SetEpoch(f.epoch)
-	for f.epoch = range f.epochChan {
-		if f.epoch == exitEpoch {
+	for f.epoch != exitEpoch {
+		f.task.SetEpoch(f.epoch)
+		var ok bool
+		f.epoch, ok = <-f.epochChan
+		if !ok {
 			break
 		}
-		f.task.SetEpoch(f.epoch)
 	}
 }
 
