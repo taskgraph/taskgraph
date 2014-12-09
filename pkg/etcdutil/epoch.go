@@ -12,10 +12,12 @@ func GetAndWatchEpoch(client *etcd.Client, appname string, epochC chan uint64, s
 	if err != nil {
 		log.Fatal("etcdutil: can not get epoch from etcd")
 	}
-
+	ep, err := strconv.ParseUint(resp.Node.Value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
 	receiver := make(chan *etcd.Response, 1)
 	go client.Watch(EpochPath(appname), resp.EtcdIndex+1, false, receiver, stop)
-
 	go func() {
 		for resp := range receiver {
 			if resp.Action != "compareAndSwap" && resp.Action != "set" {
@@ -29,7 +31,7 @@ func GetAndWatchEpoch(client *etcd.Client, appname string, epochC chan uint64, s
 		}
 	}()
 
-	return strconv.ParseUint(resp.Node.Value, 10, 64)
+	return ep, nil
 }
 
 func CASEpoch(client *etcd.Client, appname string, prevEpoch, epoch uint64) error {

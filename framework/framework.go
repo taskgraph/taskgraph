@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"net"
@@ -57,11 +58,21 @@ func (f *framework) dataResponseReceiver() {
 }
 
 func (f *framework) FlagMetaToParent(meta string) {
-	f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), meta, 0)
+	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+	_, err := f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, 0)
+	if err != nil {
+		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
+			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
+	}
 }
 
 func (f *framework) FlagMetaToChild(meta string) {
-	f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), meta, 0)
+	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+	_, err := f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), value, 0)
+	if err != nil {
+		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
+			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
+	}
 }
 
 // When app code invoke this method on framework, we simply

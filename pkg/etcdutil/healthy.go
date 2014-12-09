@@ -15,7 +15,6 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 		if err != nil {
 			return err
 		}
-
 		select {
 		case <-time.After(interval):
 		case <-stop:
@@ -48,11 +47,9 @@ func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bo
 
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
-func ReportFailure(client *etcd.Client, name string, taskID uint64) {
+func ReportFailure(client *etcd.Client, name string, taskID uint64) error {
 	_, err := client.Set(FailedTaskPath(name, taskID), "failed", 0)
-	if err != nil {
-		panic("unimplemented")
-	}
+	return err
 }
 
 // WaitFailure blocks until it gets a hint of taks failure

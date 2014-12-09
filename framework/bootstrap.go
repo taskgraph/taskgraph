@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
@@ -47,10 +48,10 @@ func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		// if err == full
-		if err := f.standby(); err != nil {
-			f.log.Fatalf("occupyTask failed: %v", err)
-		}
+		// if err := f.standby(); err != nil {
+		// 	f.log.Fatalf("occupyTask failed: %v", err)
+		// }
+		f.log.Fatal("doesn't support standby now")
 	}
 
 	// task builder and topology are defined by applications.
@@ -63,15 +64,16 @@ func (f *framework) Start() {
 	// yet, then there will a null pointer access
 	f.task.Init(f.taskID, f)
 
-	// First, we fetch the current global epoch from etcd.
 	f.epochChan = make(chan uint64, 1)
+	f.epochStop = make(chan bool, 1)
+	// meta will have epoch prepended so we must get epoch before any watch on meta
 	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
 
 	go f.heartbeat()
-	go f.detectAndReportFailures()
+	// go f.detectAndReportFailures()
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -85,9 +87,11 @@ func (f *framework) Start() {
 	go f.dataResponseReceiver()
 
 	defer f.releaseResources()
-	f.log.Printf("Start the work, task: %d\n", f.taskID)
 	f.task.SetEpoch(f.epoch)
 	for f.epoch = range f.epochChan {
+		if f.epoch == exitEpoch {
+			break
+		}
 		f.task.SetEpoch(f.epoch)
 	}
 }
@@ -153,33 +157,37 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 
 		// When a node working for a task crashed, a new node will take over
 		// the task and continue what's left. It assumes that progress is stalled
-		// until the new node comes to help.
+		// until the new node comes (no middle stages being dismissed by newcomer).
 		// The same assumption applies to watch epoch.
-		var watchIndex uint64 // for "key not found"
+
+		// The reason to do a get here is avoid etcd complaining index of 1 is outdated.
 		resp, err := f.etcdClient.Get(watchPath, false, false)
+		var watchIndex uint64
 		if err != nil {
-			// key not found is expected for situation where a node progresses to here
-			// before neighbors finish set-up.
 			if !etcdutil.IsKeyNotFound(err) {
-				f.log.Fatalf("etcd get(%s) failed: %v", watchPath, err)
+				f.log.Fatalf("etcd get failed (not KeyNotFound):", err)
 			} else {
 				watchIndex = 1
 			}
 		} else {
 			watchIndex = resp.EtcdIndex + 1
+			receiver <- resp
 		}
 		go f.etcdClient.Watch(watchPath, watchIndex, false, receiver, stop)
 		go func(receiver <-chan *etcd.Response, taskID uint64) {
-			if resp != nil {
-				f.log.Println("hehe task:", f.taskID, "path:", watchPath, resp.Node.Value)
-				taskCallback(taskID, resp.Node.Value)
-			}
 			for resp := range receiver {
-				if resp.Action != "set" {
+				if resp.Action != "set" && resp.Action != "get" {
 					continue
 				}
-				f.log.Println("task:", f.taskID, "path:", watchPath, resp.Node.Value)
-				taskCallback(taskID, resp.Node.Value)
+				values := strings.SplitN(resp.Node.Value, "-", 2)
+				ep, err := strconv.ParseUint(values[0], 10, 64)
+				if err != nil {
+					f.log.Printf("WARN: not a unit64 prepended to meta: %s\n", values[0])
+				}
+				if ep < f.epoch {
+					continue
+				}
+				taskCallback(taskID, values[1])
 			}
 		}(receiver, taskID)
 	}

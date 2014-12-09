@@ -7,7 +7,7 @@ import (
 )
 
 func TryOccupyTask(client *etcd.Client, name string, taskID uint64, connection string) bool {
-	_, err := client.Create(HealthyPath(name, taskID), "health", 30)
+	_, err := client.Create(HealthyPath(name, taskID), "health", 3)
 	if err != nil {
 		return false
 	}
