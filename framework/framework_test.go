@@ -157,14 +157,14 @@ func TestFrameworkDataRequest(t *testing.T) {
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(example.NewTreeTopology(2, 2))
 	go f0.Start()
-	defer f0.stop()
 	taskBuilder.setupLatch.Wait()
 	taskBuilder.setupLatch.Add(1)
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(example.NewTreeTopology(2, 2))
 	go f1.Start()
-	defer f1.stop()
 	taskBuilder.setupLatch.Wait()
+
+	defer f0.ShutdownJob()
 
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady

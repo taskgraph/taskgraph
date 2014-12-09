@@ -27,11 +27,11 @@ type framework struct {
 	task          meritop.Task
 	taskID        uint64
 	epoch         uint64
-	epochChan     <-chan uint64
-	epochStop     chan bool
+	epochChan     chan uint64
+	epochStop     chan bool // for etcd
 	heartbeatStop chan struct{}
 	etcdClient    *etcd.Client
-	stops         []chan bool
+	stops         []chan bool // for etcd
 	ln            net.Listener
 	dataRespChan  chan *frameworkhttp.DataResponse
 }
@@ -87,7 +87,6 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	// getAddressFromTaskID
 	addr, err := f.getAddress(toID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
@@ -102,6 +101,7 @@ func (f *framework) DataRequest(toID uint64, req string) {
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
 
 func (f *framework) releaseResources() {
+	f.epochStop <- true
 	close(f.heartbeatStop)
 	close(f.dataRespChan)
 	for _, c := range f.stops {
@@ -109,8 +109,9 @@ func (f *framework) releaseResources() {
 	}
 }
 
+// this will shutdown local node instead of global job.
 func (f *framework) stop() {
-	f.epochStop <- true
+	close(f.epochChan)
 }
 
 // When node call this on framework, it simply set epoch to exitEpoch,

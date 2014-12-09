@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	heartbeatInterval = 5 * time.Second
+	heartbeatInterval = 1 * time.Second
 )
 
 // TODO: we need to let framework pass in stop chan

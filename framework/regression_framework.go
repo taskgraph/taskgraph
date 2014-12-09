@@ -62,12 +62,14 @@ func (t *dummyMaster) Exit() {}
 // Ideally, we should also have the following:
 func (t *dummyMaster) ParentMetaReady(parentID uint64, meta string) {}
 func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
+	t.logger.Printf("master ChildMetaReady, epoch: %d, task: %d\n", t.epoch, t.taskID)
 	// Get data from child. When all the data is back, starts the next epoch.
 	t.framework.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
+	t.logger.Println("master SetEpoch:", epoch, "task:", t.taskID)
 	if t.config["failmaster"] == "yes" && t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
 		t.framework.(*framework).stop()
 		t.taskStopChan <- true
@@ -99,6 +101,7 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
 func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
+	t.logger.Printf("master ChildDataReady, epoch: %d, task: %d\n", t.epoch, t.taskID)
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	t.fromChildren[childID] = d
@@ -149,15 +152,18 @@ func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
 func (t *dummySlave) ParentMetaReady(parentID uint64, meta string) {
+	t.logger.Println("slave ParentMetaReady")
 	t.framework.DataRequest(parentID, meta)
 }
 
 func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
+	t.logger.Println("slave ChildMetaReady", t.framework.GetTaskID())
 	t.framework.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(epoch uint64) {
+	t.logger.Println("slave SetEpoch:", epoch, "task:", t.taskID)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 

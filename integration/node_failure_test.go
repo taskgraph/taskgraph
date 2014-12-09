@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"log"
 	"testing"
 	"time"
 
@@ -15,12 +16,13 @@ import (
 // 2. continue what's left;
 // 3. finish the job with the same result.
 func TestRegressFailedMaster(t *testing.T) {
+	t.Skip()
 	m := etcdutil.StartNewEtcdServer(t, "regression_failmaster_test")
 	defer m.Terminate(t)
 
 	job := "framework_regression_test"
 	etcdURLs := []string{m.URL()}
-	numOfTasks := uint64(15)
+	numOfTasks := uint64(2)
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
@@ -41,10 +43,9 @@ func TestRegressFailedMaster(t *testing.T) {
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
-	t.Skip()
 	if <-taskBuilder.TaskStopChan {
 		// assuming health key expire after this.
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 		taskBuilder.Config = map[string]string{}
 		// this time we start a new bootstrap whose task master doesn't fail.
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
@@ -55,6 +56,7 @@ func TestRegressFailedMaster(t *testing.T) {
 	getData := make([]int32, framework.NumOfIterations+1)
 	for i := uint64(0); i <= framework.NumOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
+		log.Println("iteration:", i)
 	}
 
 	for i := range wantData {

@@ -46,16 +46,9 @@ func (f *framework) Start() {
 
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
-	// First, we fetch the current global epoch from etcd.
-	f.epoch, err = etcdutil.GetEpoch(f.etcdClient, f.name)
-	if err != nil {
-		f.log.Fatal("Can not parse epoch from etcd")
-	}
-
 	if f.taskID, err = f.occupyTask(); err != nil {
 		// if err == full
-		err := f.standby()
-		if err != nil {
+		if err := f.standby(); err != nil {
 			f.log.Fatalf("occupyTask failed: %v", err)
 		}
 	}
@@ -65,6 +58,18 @@ func (f *framework) Start() {
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
+	// task init is put before any other routines.
+	// For example, if a watch of parent meta is triggered but task isn't init-ed
+	// yet, then there will a null pointer access
+	f.task.Init(f.taskID, f)
+
+	// First, we fetch the current global epoch from etcd.
+	f.epochChan = make(chan uint64, 1)
+	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
+	if err != nil {
+		f.log.Fatalf("WatchEpoch failed: %v", err)
+	}
+
 	go f.heartbeat()
 	go f.detectAndReportFailures()
 
@@ -72,32 +77,19 @@ func (f *framework) Start() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.etcdClient.Create(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), "", 0)
-	f.etcdClient.Create(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), "", 0)
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
-
-	// We need to first watch epoch.
-	f.watchEpoch()
 
 	go f.startHTTP()
 	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
 	go f.dataResponseReceiver()
 
-	// After framework init finished, it should init task.
-	f.task.Init(f.taskID, f)
-
-	for f.epoch != exitEpoch {
+	defer f.releaseResources()
+	f.log.Printf("Start the work, task: %d\n", f.taskID)
+	f.task.SetEpoch(f.epoch)
+	for f.epoch = range f.epochChan {
 		f.task.SetEpoch(f.epoch)
-		select {
-		case f.epoch = <-f.epochChan:
-			// TODO: cleanup resources.
-		case <-f.epochStop:
-			return
-		}
 	}
-	// clean up resources
-	f.releaseResources()
 }
 
 // Framework http server for data request.
@@ -159,20 +151,37 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 			panic("unimplemented")
 		}
 
-		go f.etcdClient.Watch(watchPath, 1, false, receiver, stop)
+		// When a node working for a task crashed, a new node will take over
+		// the task and continue what's left. It assumes that progress is stalled
+		// until the new node comes to help.
+		// The same assumption applies to watch epoch.
+		var watchIndex uint64 // for "key not found"
+		resp, err := f.etcdClient.Get(watchPath, false, false)
+		if err != nil {
+			// key not found is expected for situation where a node progresses to here
+			// before neighbors finish set-up.
+			if !etcdutil.IsKeyNotFound(err) {
+				f.log.Fatalf("etcd get(%s) failed: %v", watchPath, err)
+			} else {
+				watchIndex = 1
+			}
+		} else {
+			watchIndex = resp.EtcdIndex + 1
+		}
+		go f.etcdClient.Watch(watchPath, watchIndex, false, receiver, stop)
 		go func(receiver <-chan *etcd.Response, taskID uint64) {
+			if resp != nil {
+				f.log.Println("hehe task:", f.taskID, "path:", watchPath, resp.Node.Value)
+				taskCallback(taskID, resp.Node.Value)
+			}
 			for resp := range receiver {
 				if resp.Action != "set" {
 					continue
 				}
+				f.log.Println("task:", f.taskID, "path:", watchPath, resp.Node.Value)
 				taskCallback(taskID, resp.Node.Value)
 			}
 		}(receiver, taskID)
 	}
 	f.stops = append(f.stops, stops...)
-}
-
-func (f *framework) watchEpoch() {
-	f.epochStop = make(chan bool, 1)
-	f.epochChan = etcdutil.WatchEpoch(f.etcdClient, f.name, f.epochStop)
 }

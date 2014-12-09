@@ -1,7 +1,6 @@
 package etcdutil
 
 import (
-	"math"
 	"path"
 	"strconv"
 	"time"
@@ -16,6 +15,7 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 		if err != nil {
 			return err
 		}
+
 		select {
 		case <-time.After(interval):
 		case <-stop:
@@ -70,5 +70,8 @@ func WaitFailure(client *etcd.Client, name string) (uint64, error) {
 }
 
 func computeTTL(interval time.Duration) uint64 {
-	return uint64(math.Min(5*float64(interval/time.Second), 1))
+	if interval/time.Second < 1 {
+		return 3
+	}
+	return 3 * uint64(interval/time.Second)
 }

@@ -30,7 +30,7 @@ func TestRegressionFramework(t *testing.T) {
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
-		GDataChan:  make(chan int32, 10),
+		GDataChan:  make(chan int32, 11),
 		FinishChan: make(chan struct{}),
 		Config:     map[string]string{},
 	}
@@ -44,7 +44,6 @@ func TestRegressionFramework(t *testing.T) {
 	for i := uint64(0); i <= framework.NumOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
 	}
-
 	for i := range wantData {
 		if wantData[i] != getData[i] {
 			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
