@@ -70,7 +70,10 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
-	if t.config["failmaster"] == "yes" && t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
+	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+	if t.config != nil &&
+		t.config["failmaster"] == "yes" &&
+		t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
 		t.framework.(*framework).stop()
 		t.taskStopChan <- true
 		return
@@ -101,6 +104,8 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
 func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
+	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+		t.taskID, t.epoch, childID, len(t.fromChildren))
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	t.fromChildren[childID] = d
@@ -163,6 +168,7 @@ func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(epoch uint64) {
+	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 
@@ -189,6 +195,7 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 }
 
 func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
+	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	t.param = new(dummyData)
 	json.Unmarshal(resp, t.param)
 

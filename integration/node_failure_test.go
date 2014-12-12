@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"log"
 	"testing"
 	"time"
 
@@ -42,9 +43,10 @@ func TestRegressionFailedMaster(t *testing.T) {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 	if <-taskBuilder.TaskStopChan {
+		log.Println("Starting a new node")
 		// assuming health key expire after this.
 		time.Sleep(4 * time.Second)
-		taskBuilder.Config = map[string]string{}
+		taskBuilder.Config = nil
 		// this time we start a new bootstrap whose task master doesn't fail.
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}

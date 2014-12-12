@@ -35,6 +35,7 @@ type framework struct {
 	stops         []chan bool // for etcd
 	ln            net.Listener
 	dataRespChan  chan *frameworkhttp.DataResponse
+	dataReqStop   chan struct{}
 }
 
 type dataResponse struct {
@@ -105,7 +106,11 @@ func (f *framework) DataRequest(toID uint64, req string) {
 		return
 	}
 	go func() {
-		f.dataRespChan <- frameworkhttp.RequestData(addr, f.taskID, toID, req)
+		d := frameworkhttp.RequestData(addr, f.taskID, toID, req)
+		select {
+		case f.dataRespChan <- d:
+		case <-f.dataReqStop:
+		}
 	}()
 }
 
@@ -114,6 +119,7 @@ func (f *framework) GetTopology() meritop.Topology { return f.topology }
 func (f *framework) releaseResources() {
 	f.epochStop <- true
 	close(f.heartbeatStop)
+	close(f.dataReqStop) // must be closed before dataRespChan
 	close(f.dataRespChan)
 	for _, c := range f.stops {
 		c <- true

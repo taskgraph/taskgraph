@@ -32,7 +32,6 @@ func TestRegressionFramework(t *testing.T) {
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:  make(chan int32, 11),
 		FinishChan: make(chan struct{}),
-		Config:     map[string]string{},
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcds, numOfTasks, taskBuilder)

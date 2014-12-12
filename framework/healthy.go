@@ -13,10 +13,12 @@ var (
 // TODO: we need to let framework pass in stop chan
 func (f *framework) heartbeat() {
 	f.heartbeatStop = make(chan struct{})
-	err := etcdutil.Heartbeat(f.etcdClient, f.name, f.taskID, heartbeatInterval, f.heartbeatStop)
-	if err != nil {
-		f.log.Printf("Heartbeat stops with error: %v\n", err)
-	}
+	go func() {
+		err := etcdutil.Heartbeat(f.etcdClient, f.name, f.taskID, heartbeatInterval, f.heartbeatStop)
+		if err != nil {
+			f.log.Printf("Heartbeat stops with error: %v\n", err)
+		}
+	}()
 }
 
 func (f *framework) detectAndReportFailures() {

@@ -72,7 +72,7 @@ func (f *framework) Start() {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
 
-	go f.heartbeat()
+	f.heartbeat()
 	// go f.detectAndReportFailures()
 
 	// setup etcd watches
@@ -82,8 +82,9 @@ func (f *framework) Start() {
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 
-	go f.startHTTP()
 	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataReqStop = make(chan struct{})
+	go f.startHTTP()
 	go f.dataResponseReceiver()
 
 	defer f.releaseResources()
@@ -102,7 +103,7 @@ func (f *framework) Start() {
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
-	f.log.Printf("serving http on %s", f.ln.Addr())
+	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
 	// TODO: http server graceful shutdown
 	epocher := frameworkhttp.Epocher(f)
 	handler := frameworkhttp.NewDataRequestHandler(f.topology, f.task, epocher)
@@ -122,7 +123,7 @@ func (f *framework) occupyTask() (uint64, error) {
 		idstr := path.Base(s.Key)
 		id, err := strconv.ParseUint(idstr, 0, 64)
 		if err != nil {
-			f.log.Printf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
+			f.log.Fatalf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
 			continue
 		}
 		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, id, f.ln.Addr().String())
@@ -137,7 +138,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
-		receiver := make(chan *etcd.Response, 10)
+		receiver := make(chan *etcd.Response, 1)
 		stop := make(chan bool, 1)
 		stops[i] = stop
 
@@ -159,14 +160,12 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		// When a node working for a task crashed, a new node will take over
 		// the task and continue what's left. It assumes that progress is stalled
 		// until the new node comes (no middle stages being dismissed by newcomer).
-		// The same assumption applies to watch epoch.
 
-		// The reason to do a get here is avoid etcd complaining index of 1 is outdated.
 		resp, err := f.etcdClient.Get(watchPath, false, false)
 		var watchIndex uint64
 		if err != nil {
 			if !etcdutil.IsKeyNotFound(err) {
-				f.log.Fatalf("etcd get failed (not KeyNotFound):", err)
+				f.log.Fatalf("etcd get failed (not KeyNotFound): %v", err)
 			} else {
 				watchIndex = 1
 			}
@@ -180,10 +179,13 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 				if resp.Action != "set" && resp.Action != "get" {
 					continue
 				}
+				// epoch is prepended to meta. When a new one starts and replaces
+				// the old one, it doesn't need to handle previous things, whose
+				// epoch is smaller than current one.
 				values := strings.SplitN(resp.Node.Value, "-", 2)
 				ep, err := strconv.ParseUint(values[0], 10, 64)
 				if err != nil {
-					f.log.Printf("WARN: not a unit64 prepended to meta: %s\n", values[0])
+					f.log.Fatalf("WARN: not a unit64 prepended to meta: %s", values[0])
 				}
 				if ep < f.epoch {
 					continue
