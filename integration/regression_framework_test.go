@@ -21,7 +21,6 @@ func TestRegressionFramework(t *testing.T) {
 
 	job := "framework_regression_test"
 	etcds := []string{url}
-	config := map[string]string{}
 	numOfTasks := uint64(15)
 
 	// controller start first to setup task directories in etcd
@@ -30,21 +29,20 @@ func TestRegressionFramework(t *testing.T) {
 	defer controller.DestroyEtcdLayout()
 
 	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &example.SimpleTaskBuilder{
-		GDataChan:  make(chan int32, 10),
+	taskBuilder := &framework.SimpleTaskBuilder{
+		GDataChan:  make(chan int32, 11),
 		FinishChan: make(chan struct{}),
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcds, config, numOfTasks, taskBuilder)
+		go drive(t, job, etcds, numOfTasks, taskBuilder)
 	}
 
 	// wait for last number to comeback.
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
-	getData := make([]int32, example.NumOfIterations+1)
-	for i := uint64(0); i <= example.NumOfIterations; i++ {
+	getData := make([]int32, framework.NumOfIterations+1)
+	for i := uint64(0); i <= framework.NumOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
 	}
-
 	for i := range wantData {
 		if wantData[i] != getData[i] {
 			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
@@ -63,8 +61,8 @@ func createListener(t *testing.T) net.Listener {
 }
 
 // This is used to show how to drive the network.
-func drive(t *testing.T, jobName string, etcds []string, config meritop.Config, ntask uint64, taskBuilder meritop.TaskBuilder) {
-	bootstrap := framework.NewBootStrap(jobName, etcds, config, createListener(t), nil)
+func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder meritop.TaskBuilder) {
+	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil)
 	bootstrap.SetTaskBuilder(taskBuilder)
 	bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
 	bootstrap.Start()

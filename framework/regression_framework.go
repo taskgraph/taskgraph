@@ -1,9 +1,10 @@
-package example
+package framework
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
-	"os"
+	"strconv"
 
 	"github.com/go-distributed/meritop"
 )
@@ -38,19 +39,22 @@ type dummyData struct {
 type dummyMaster struct {
 	dataChan      chan int32
 	finishChan    chan struct{}
+	taskStopChan  chan bool
 	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
+	config        map[string]string
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
+func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
-	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	// t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -59,12 +63,21 @@ func (t *dummyMaster) Exit() {}
 // Ideally, we should also have the following:
 func (t *dummyMaster) ParentMetaReady(parentID uint64, meta string) {}
 func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
+	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 	// Get data from child. When all the data is back, starts the next epoch.
 	t.framework.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
+	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+	if t.config != nil &&
+		t.config["failmaster"] == "yes" &&
+		t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
+		t.framework.(*framework).stop()
+		t.taskStopChan <- true
+		return
+	}
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 
@@ -91,6 +104,8 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
 func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
+	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+		t.taskID, t.epoch, childID, len(t.fromChildren))
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	t.fromChildren[childID] = d
@@ -130,10 +145,11 @@ type dummySlave struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummySlave) Init(taskID uint64, framework meritop.Framework, config meritop.Config) {
+func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
-	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	// t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -141,15 +157,18 @@ func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
 func (t *dummySlave) ParentMetaReady(parentID uint64, meta string) {
+	t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 	t.framework.DataRequest(parentID, meta)
 }
 
 func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
+	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 	t.framework.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(epoch uint64) {
+	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 
@@ -176,6 +195,7 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 }
 
 func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
+	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	t.param = new(dummyData)
 	json.Unmarshal(resp, t.param)
 
@@ -212,8 +232,10 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 }
 
 type SimpleTaskBuilder struct {
-	GDataChan  chan int32
-	FinishChan chan struct{}
+	GDataChan    chan int32
+	FinishChan   chan struct{}
+	TaskStopChan chan bool
+	Config       map[string]string
 }
 
 // Leave it at global level so that we use this to terminate and test.
@@ -224,7 +246,12 @@ type SimpleTaskBuilder struct {
 // for current node, and also a global array of tasks.
 func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 	if taskID == 0 {
-		return &dummyMaster{dataChan: tc.GDataChan, finishChan: tc.FinishChan}
+		return &dummyMaster{
+			dataChan:     tc.GDataChan,
+			finishChan:   tc.FinishChan,
+			taskStopChan: tc.TaskStopChan,
+			config:       tc.Config,
+		}
 	}
 	return &dummySlave{}
 }

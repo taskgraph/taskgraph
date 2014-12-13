@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"net"
@@ -18,22 +19,23 @@ type framework struct {
 	// These should be passed by outside world
 	name     string
 	etcdURLs []string
-	config   meritop.Config
 	log      *log.Logger
 
 	// user defined interfaces
 	taskBuilder meritop.TaskBuilder
 	topology    meritop.Topology
 
-	task         meritop.Task
-	taskID       uint64
-	epoch        uint64
-	epochChan    <-chan uint64
-	epochStop    chan bool
-	etcdClient   *etcd.Client
-	stops        []chan bool
-	ln           net.Listener
-	dataRespChan chan *frameworkhttp.DataResponse
+	task          meritop.Task
+	taskID        uint64
+	epoch         uint64
+	epochChan     chan uint64
+	epochStop     chan bool // for etcd
+	heartbeatStop chan struct{}
+	etcdClient    *etcd.Client
+	stops         []chan bool // for etcd
+	ln            net.Listener
+	dataRespChan  chan *frameworkhttp.DataResponse
+	dataReqStop   chan struct{}
 }
 
 type dataResponse struct {
@@ -56,20 +58,22 @@ func (f *framework) dataResponseReceiver() {
 	}
 }
 
-func (f *framework) stop() {
-	close(f.dataRespChan)
-	f.epochStop <- true
-	for _, c := range f.stops {
-		c <- true
+func (f *framework) FlagMetaToParent(meta string) {
+	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+	_, err := f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, 0)
+	if err != nil {
+		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
+			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
 	}
 }
 
-func (f *framework) FlagMetaToParent(meta string) {
-	f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), meta, 0)
-}
-
 func (f *framework) FlagMetaToChild(meta string) {
-	f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), meta, 0)
+	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+	_, err := f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), value, 0)
+	if err != nil {
+		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
+			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
+	}
 }
 
 // When app code invoke this method on framework, we simply
@@ -95,7 +99,6 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	// getAddressFromTaskID
 	addr, err := f.getAddress(toID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
@@ -103,11 +106,30 @@ func (f *framework) DataRequest(toID uint64, req string) {
 		return
 	}
 	go func() {
-		f.dataRespChan <- frameworkhttp.RequestData(addr, f.taskID, toID, req)
+		d := frameworkhttp.RequestData(addr, f.taskID, toID, req)
+		select {
+		case f.dataRespChan <- d:
+		case <-f.dataReqStop:
+		}
 	}()
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
+
+func (f *framework) releaseResources() {
+	f.epochStop <- true
+	close(f.heartbeatStop)
+	close(f.dataReqStop) // must be closed before dataRespChan
+	close(f.dataRespChan)
+	for _, c := range f.stops {
+		c <- true
+	}
+}
+
+// this will shutdown local node instead of global job.
+func (f *framework) stop() {
+	close(f.epochChan)
+}
 
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.

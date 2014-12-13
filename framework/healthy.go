@@ -7,15 +7,18 @@ import (
 )
 
 var (
-	heartbeatInterval = 15 * time.Second
+	heartbeatInterval = 1 * time.Second
 )
 
 // TODO: we need to let framework pass in stop chan
 func (f *framework) heartbeat() {
-	err := etcdutil.Heartbeat(f.etcdClient, f.name, f.taskID, heartbeatInterval, make(chan struct{}))
-	if err != nil {
-		f.log.Printf("Heartbeat stops with failure: %v\n", err)
-	}
+	f.heartbeatStop = make(chan struct{})
+	go func() {
+		err := etcdutil.Heartbeat(f.etcdClient, f.name, f.taskID, heartbeatInterval, f.heartbeatStop)
+		if err != nil {
+			f.log.Printf("Heartbeat stops with error: %v\n", err)
+		}
+	}()
 }
 
 func (f *framework) detectAndReportFailures() {
@@ -40,6 +43,9 @@ func (f *framework) detectAndReportFailures() {
 
 	// TODO: close failures channel when framework is stopped.
 	for failed := range failures {
-		etcdutil.ReportFailure(f.etcdClient, f.name, failed)
+		err := etcdutil.ReportFailure(f.etcdClient, f.name, failed)
+		if err != nil {
+			f.log.Printf("ReportFailure failed: %v\n", err)
+		}
 	}
 }
