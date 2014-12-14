@@ -2,8 +2,8 @@ package framework
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 
 	"github.com/go-distributed/meritop"
@@ -53,8 +53,8 @@ type dummyMaster struct {
 func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
-	// t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Task need to finish up for exit, last chance to save work?
@@ -74,6 +74,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 	if t.config != nil &&
 		t.config["failmaster"] == "yes" &&
 		t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
+		t.logger.Printf("task %d is doomed to fail at epoch %d\n", t.taskID, epoch)
 		t.framework.(*framework).stop()
 		t.taskStopChan <- true
 		return
@@ -148,8 +149,8 @@ type dummySlave struct {
 func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
 	t.taskID = taskID
 	t.framework = framework
-	// t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Task need to finish up for exit, last chance to save work?
