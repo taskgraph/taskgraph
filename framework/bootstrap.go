@@ -71,6 +71,7 @@ func (f *framework) Start() {
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
+	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
 
 	f.heartbeat()
 	// go f.detectAndReportFailures()
@@ -87,7 +88,7 @@ func (f *framework) Start() {
 	go f.startHTTP()
 	go f.dataResponseReceiver()
 
-	defer f.releaseResources()
+	defer f.releaseResource()
 	for f.epoch != exitEpoch {
 		f.task.SetEpoch(f.epoch)
 		var ok bool

@@ -116,7 +116,8 @@ func (f *framework) DataRequest(toID uint64, req string) {
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
 
-func (f *framework) releaseResources() {
+func (f *framework) releaseResource() {
+	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
 	f.epochStop <- true
 	close(f.heartbeatStop)
 	close(f.dataReqStop) // must be closed before dataRespChan
