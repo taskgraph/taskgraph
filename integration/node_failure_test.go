@@ -32,7 +32,7 @@ func TestRegressionFailedMaster(t *testing.T) {
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:    make(chan int32, 10),
 		FinishChan:   make(chan struct{}),
-		TaskStopChan: make(chan bool, 1),
+		NodeProducer: make(chan bool, 1),
 		// this task master will fail
 		Config: map[string]string{
 			"failmaster": "yes",
@@ -42,7 +42,7 @@ func TestRegressionFailedMaster(t *testing.T) {
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
-	if <-taskBuilder.TaskStopChan {
+	if <-taskBuilder.NodeProducer {
 		log.Println("Starting a new node")
 		// assuming health key expire after this.
 		time.Sleep(4 * time.Second)

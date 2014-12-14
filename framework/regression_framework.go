@@ -39,7 +39,7 @@ type dummyData struct {
 type dummyMaster struct {
 	dataChan      chan int32
 	finishChan    chan struct{}
-	taskStopChan  chan bool
+	NodeProducer  chan bool
 	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
@@ -76,7 +76,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 		t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
 		t.logger.Printf("task %d is doomed to fail at epoch %d\n", t.taskID, epoch)
 		t.framework.(*framework).stop()
-		t.taskStopChan <- true
+		t.NodeProducer <- true
 		return
 	}
 	t.param = &dummyData{}
@@ -235,7 +235,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 type SimpleTaskBuilder struct {
 	GDataChan    chan int32
 	FinishChan   chan struct{}
-	TaskStopChan chan bool
+	NodeProducer chan bool
 	Config       map[string]string
 }
 
@@ -250,7 +250,7 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 		return &dummyMaster{
 			dataChan:     tc.GDataChan,
 			finishChan:   tc.FinishChan,
-			taskStopChan: tc.TaskStopChan,
+			NodeProducer: tc.NodeProducer,
 			config:       tc.Config,
 		}
 	}
