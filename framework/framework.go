@@ -82,7 +82,8 @@ func (f *framework) FlagMetaToChild(meta string) {
 func (f *framework) IncEpoch() {
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, f.epoch+1)
 	if err != nil {
-		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", f.epoch+1, f.epoch, err)
+		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
+			f.taskID, f.epoch+1, f.epoch, err)
 	}
 }
 

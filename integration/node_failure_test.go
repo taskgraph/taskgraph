@@ -33,10 +33,10 @@ func TestRegressionFailedMaster(t *testing.T) {
 		GDataChan:    make(chan int32, 10),
 		FinishChan:   make(chan struct{}),
 		NodeProducer: make(chan bool, 1),
-		// this task master will fail
 		Config: map[string]string{
-			"failmaster": "yes",
-			"failepoch":  "1",
+			"SetEpoch":  "fail",
+			"failepoch": "1",
+			"faillevel": "100",
 		},
 	}
 	for i := uint64(0); i < numOfTasks; i++ {

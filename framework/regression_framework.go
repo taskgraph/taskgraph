@@ -3,6 +3,7 @@ package framework
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"os"
 	"strconv"
 
@@ -63,7 +64,7 @@ func (t *dummyMaster) Exit() {}
 // Ideally, we should also have the following:
 func (t *dummyMaster) ParentMetaReady(parentID uint64, meta string) {}
 func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
-	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
+	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	// Get data from child. When all the data is back, starts the next epoch.
 	t.framework.DataRequest(childID, meta)
 }
@@ -71,14 +72,10 @@ func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
-	if t.config != nil &&
-		t.config["failmaster"] == "yes" &&
-		t.config["failepoch"] == strconv.FormatUint(epoch, 10) {
-		t.logger.Printf("task %d is doomed to fail at epoch %d\n", t.taskID, epoch)
-		t.framework.(*framework).stop()
-		t.NodeProducer <- true
+	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
 	}
+
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 
@@ -131,6 +128,36 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 			t.framework.IncEpoch()
 		}
 	}
+}
+
+func (t *dummyMaster) testablyFail(method string, args ...string) bool {
+	if t.config == nil {
+		return false
+	}
+	if t.config[method] != "fail" {
+		return false
+	}
+	switch method {
+	case "SetEpoch":
+		if len(args) == 0 || t.config["failepoch"] == "" {
+			// doesn't care about which epoch
+			break
+		}
+		if t.config["failepoch"] != args[0] {
+			return false
+		}
+	}
+	level, err := strconv.Atoi(t.config["faillevel"])
+	if err != nil {
+		return false
+	}
+	if level < rand.Intn(100)+1 {
+		return false
+	}
+	t.logger.Printf("task %d testably fail, method: %s\n", t.taskID, method)
+	t.framework.(*framework).stop()
+	t.NodeProducer <- true
+	return true
 }
 
 // dummySlave is an prototype for data shard in machine learning applications.
@@ -216,6 +243,7 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 }
 
 func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
+	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	t.fromChildren[childID] = new(dummyData)
 	json.Unmarshal(resp, t.fromChildren[childID])
 
@@ -232,15 +260,13 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	}
 }
 
+// used for testing
 type SimpleTaskBuilder struct {
 	GDataChan    chan int32
 	FinishChan   chan struct{}
 	NodeProducer chan bool
 	Config       map[string]string
 }
-
-// Leave it at global level so that we use this to terminate and test.
-// cDataChan := make(chan *tDataBundle, 1)
 
 // This method is called once by framework implementation to get the
 // right task implementation for the node/task. It requires the taskID
