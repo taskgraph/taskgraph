@@ -46,6 +46,9 @@ func TaskHealthyPath(appName string, taskID uint64) string {
 func FailedTaskDir(appName string) string {
 	return path.Join("/", appName, FailedDir)
 }
+func FailedTaskPath(appName, idStr string) string {
+	return path.Join(FailedTaskDir(appName), idStr)
+}
 
 func MakeTaskDirPath(appName string) string {
 	return path.Join("/", appName, TasksDir)

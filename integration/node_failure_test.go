@@ -25,8 +25,9 @@ func TestRegressionFailedMaster(t *testing.T) {
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
-	controller.InitEtcdLayout()
-	defer controller.DestroyEtcdLayout()
+	go controller.Start()
+	defer controller.Stop()
+	time.Sleep(500 * time.Millisecond)
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
@@ -43,10 +44,9 @@ func TestRegressionFailedMaster(t *testing.T) {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 	if <-taskBuilder.NodeProducer {
-		log.Println("Starting a new node")
-		// assuming health key expire after this.
-		time.Sleep(4 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		taskBuilder.Config = nil
+		log.Println("Starting a new node")
 		// this time we start a new bootstrap whose task master doesn't fail.
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}

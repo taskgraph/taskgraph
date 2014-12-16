@@ -1,6 +1,7 @@
 package etcdutil
 
 import (
+	"log"
 	"path"
 	"strconv"
 	"time"
@@ -31,15 +32,16 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 		if resp.Action != "expire" && resp.Action != "delete" {
 			continue
 		}
-		ReportFailure(client, resp.Node.Key)
+		ReportFailure(client, name, resp.Node.Key)
 	}
 	return nil
 }
 
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
-func ReportFailure(client *etcd.Client, failedTask string) error {
-	_, err := client.Set(failedTask, "failed", 0)
+func ReportFailure(client *etcd.Client, name, failedTask string) error {
+	idStr := path.Base(failedTask)
+	_, err := client.Set(FailedTaskPath(name, idStr), "failed", 0)
 	return err
 }
 
@@ -49,6 +51,7 @@ func WaitFailure(client *etcd.Client, name string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+	log.Println("resp:", resp.Action, resp.Node.Key)
 	idStr := path.Base(resp.Node.Key)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {

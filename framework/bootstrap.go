@@ -48,6 +48,7 @@ func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	if f.taskID, err = f.occupyTask(); err != nil {
+		f.log.Println("standbying...")
 		if err := f.standby(); err != nil {
 			f.log.Fatalf("standby failed: %v", err)
 		}
