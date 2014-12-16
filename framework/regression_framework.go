@@ -137,24 +137,16 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 	if t.config[method] != "fail" {
 		return false
 	}
-	switch method {
-	case "SetEpoch":
-		if len(args) == 0 || t.config["failepoch"] == "" {
-			// doesn't care about which epoch
-			break
-		}
+	if len(args) >= 1 && t.config["failepoch"] != "" {
+		// we need to care about fail at specific epoch
 		if t.config["failepoch"] != args[0] {
 			return false
 		}
 	}
-	level, err := strconv.Atoi(t.config["faillevel"])
-	if err != nil {
+	if !probablyFail(t.config["faillevel"]) {
 		return false
 	}
-	if level < rand.Intn(100)+1 {
-		return false
-	}
-	t.logger.Printf("task %d testably fail, method: %s\n", t.taskID, method)
+	t.logger.Printf("master task %d testably fail, method: %s\n", t.taskID, method)
 	t.framework.(*framework).stop()
 	t.NodeProducer <- true
 	return true
@@ -167,6 +159,8 @@ type dummySlave struct {
 	framework     meritop.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
+	NodeProducer  chan bool
+	config        map[string]string
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
@@ -224,6 +218,9 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
+	if t.testablyFail("ParentDataReady") {
+		return
+	}
 	t.param = new(dummyData)
 	json.Unmarshal(resp, t.param)
 
@@ -259,6 +256,32 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 		t.framework.FlagMetaToParent("GradientReady")
 	}
 }
+func (t *dummySlave) testablyFail(method string, args ...string) bool {
+	if t.config == nil {
+		return false
+	}
+	if t.config[method] != "fail" {
+		return false
+	}
+	if !probablyFail(t.config["faillevel"]) {
+		return false
+	}
+	t.logger.Printf("slave task %d testably fail, method: %s\n", t.taskID, method)
+	t.framework.(*framework).stop()
+	t.NodeProducer <- true
+	return true
+}
+
+func probablyFail(levelStr string) bool {
+	level, err := strconv.Atoi(levelStr)
+	if err != nil {
+		return false
+	}
+	if level < rand.Intn(100)+1 {
+		return false
+	}
+	return true
+}
 
 // used for testing
 type SimpleTaskBuilder struct {
@@ -280,5 +303,8 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 			config:       tc.Config,
 		}
 	}
-	return &dummySlave{}
+	return &dummySlave{
+		NodeProducer: tc.NodeProducer,
+		config:       tc.Config,
+	}
 }

@@ -1,7 +1,7 @@
 package etcdutil
 
 import (
-	"log"
+	"fmt"
 	"path"
 	"strconv"
 	"time"
@@ -32,7 +32,7 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 		if resp.Action != "expire" && resp.Action != "delete" {
 			continue
 		}
-		ReportFailure(client, name, resp.Node.Key)
+		ReportFailure(client, name, path.Base(resp.Node.Key))
 	}
 	return nil
 }
@@ -40,18 +40,26 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
 func ReportFailure(client *etcd.Client, name, failedTask string) error {
-	idStr := path.Base(failedTask)
-	_, err := client.Set(FailedTaskPath(name, idStr), "failed", 0)
+	_, err := client.Set(FailedTaskPath(name, failedTask), "failed", 0)
 	return err
 }
 
 // WaitFailure blocks until it gets a hint of taks failure
 func WaitFailure(client *etcd.Client, name string) (uint64, error) {
-	resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)
-	if err != nil {
-		return 0, err
+	respChan := make(chan *etcd.Response, 1)
+	go func() {
+		resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)
+		if err != nil {
+			return
+		}
+		respChan <- resp
+	}()
+	var resp *etcd.Response
+	select {
+	case resp = <-respChan:
+	case <-time.After(10 * time.Second):
+		return 0, fmt.Errorf("WaitFailure timeout!")
 	}
-	log.Println("resp:", resp.Action, resp.Node.Key)
 	idStr := path.Base(resp.Node.Key)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {

@@ -13,5 +13,6 @@ func (f *framework) standby() error {
 			f.taskID = failedTask
 			return nil
 		}
+		f.log.Printf("Try task %d failed. Wait failure again.\n", failedTask)
 	}
 }

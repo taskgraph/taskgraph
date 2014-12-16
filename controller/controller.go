@@ -28,16 +28,22 @@ func New(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
 	}
 }
 
+// A controller typical workflow:
+// 1. controller sets up etcd layout before any task starts running.
+// 2. Being ready, controller lets other tasks to run and reports any failure found.
 func (c *Controller) Start() error {
 	if err := c.InitEtcdLayout(); err != nil {
 		return err
 	}
-	return c.startFailureDetection()
+	go c.startFailureDetection()
+	c.logger.Printf("Controller starting, name: %s, numberOfTask: %d\n", c.name, c.numOfTasks)
+	return nil
 }
 
 func (c *Controller) Stop() error {
 	c.DestroyEtcdLayout()
 	c.stopFailureDetection()
+	c.logger.Printf("Controller stoping...\n")
 	return nil
 }
 
