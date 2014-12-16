@@ -48,10 +48,9 @@ func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		// if err := f.standby(); err != nil {
-		// 	f.log.Fatalf("occupyTask failed: %v", err)
-		// }
-		f.log.Fatal("doesn't support standby now")
+		if err := f.standby(); err != nil {
+			f.log.Fatalf("standby failed: %v", err)
+		}
 	}
 
 	// task builder and topology are defined by applications.
@@ -74,7 +73,6 @@ func (f *framework) Start() {
 	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
 
 	f.heartbeat()
-	// go f.detectAndReportFailures()
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
