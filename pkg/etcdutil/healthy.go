@@ -46,6 +46,19 @@ func ReportFailure(client *etcd.Client, name, failedTask string) error {
 
 // WaitFailure blocks until it gets a hint of taks failure
 func WaitFailure(client *etcd.Client, name string) (uint64, error) {
+	slots, err := client.Get(FailedTaskDir(name), false, true)
+	if err != nil {
+		return 0, err
+	}
+	for _, s := range slots.Node.Nodes {
+		idStr := path.Base(s.Key)
+		id, err := strconv.ParseUint(idStr, 0, 64)
+		if err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+
 	respChan := make(chan *etcd.Response, 1)
 	go func() {
 		resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)

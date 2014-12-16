@@ -35,6 +35,8 @@ func (c *Controller) Start() error {
 	if err := c.InitEtcdLayout(); err != nil {
 		return err
 	}
+	// Currently no previous changes will be watches before watch is setup.
+	// We assumes that ttl is usually a few seconds. watch is setup before that.
 	go c.startFailureDetection()
 	c.logger.Printf("Controller starting, name: %s, numberOfTask: %d\n", c.name, c.numOfTasks)
 	return nil
@@ -50,6 +52,10 @@ func (c *Controller) Stop() error {
 func (c *Controller) InitEtcdLayout() (err error) {
 	// Initilize the job epoch to 0
 	if _, err = c.etcdclient.Create(etcdutil.EpochPath(c.name), "0", 0); err != nil {
+		return err
+	}
+
+	if _, err := c.etcdclient.CreateDir(etcdutil.FailedTaskDir(c.name), 0); err != nil {
 		return err
 	}
 

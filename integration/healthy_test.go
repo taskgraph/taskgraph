@@ -9,7 +9,6 @@ import (
 )
 
 func TestHeartbeat(t *testing.T) {
-	t.Skip()
 	name := "TestHeartbeat"
 	m := etcdutil.StartNewEtcdServer(t, name)
 	defer m.Terminate(t)
@@ -29,14 +28,14 @@ func TestHeartbeat(t *testing.T) {
 
 	client.Create(etcdutil.TaskHealthyPath(name, taskID), "health", ttl)
 	go etcdutil.Heartbeat(client, name, taskID, interval, stop)
-	time.Sleep(10 * interval)
+	time.Sleep(6 * interval)
 	_, err = client.Get(etcdutil.TaskHealthyPath(name, taskID), false, false)
 	if err != nil {
 		t.Fatalf("client.Get failed: %v", err)
 	}
 
 	close(stop)
-	time.Sleep(10 * interval)
+	time.Sleep(6 * interval)
 	_, err = client.Get(etcdutil.TaskHealthyPath(name, taskID), false, false)
 	if err == nil {
 		t.Fatal("ttl node should expire")
