@@ -66,15 +66,14 @@ func WaitFailure(client *etcd.Client, name string) (uint64, error) {
 		for {
 			resp, err := client.Watch(FailedTaskDir(name), watchIndex, true, nil, nil)
 			if err != nil {
-				log.Printf("WARN: ")
+				log.Printf("WARN: WaitFailure watch failed: %v\n", err)
+				return
+			}
+			if resp.Action == "set" {
+				respChan <- resp
 				return
 			}
 			watchIndex = resp.EtcdIndex + 1
-			if resp.Action != "set" {
-				continue
-			}
-			respChan <- resp
-			return
 		}
 	}()
 	var resp *etcd.Response
