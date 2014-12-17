@@ -2,6 +2,7 @@ package etcdutil
 
 import (
 	"fmt"
+	"log"
 	"path"
 	"strconv"
 	"time"
@@ -59,13 +60,22 @@ func WaitFailure(client *etcd.Client, name string) (uint64, error) {
 		return id, nil
 	}
 
+	watchIndex := slots.EtcdIndex + 1
 	respChan := make(chan *etcd.Response, 1)
 	go func() {
-		resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)
-		if err != nil {
+		for {
+			resp, err := client.Watch(FailedTaskDir(name), watchIndex, true, nil, nil)
+			if err != nil {
+				log.Printf("WARN: ")
+				return
+			}
+			watchIndex = resp.EtcdIndex + 1
+			if resp.Action != "set" {
+				continue
+			}
+			respChan <- resp
 			return
 		}
-		respChan <- resp
 	}()
 	var resp *etcd.Response
 	select {

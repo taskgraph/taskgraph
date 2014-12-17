@@ -71,6 +71,12 @@ func (f *framework) Start() {
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
+	if f.epoch == exitEpoch {
+		f.log.Printf("task %d found that job has finished\n", f.taskID)
+		f.epochStop <- true
+		return
+	}
+	f.task.SetEpoch(f.epoch)
 	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
 
 	f.heartbeat()
@@ -88,13 +94,11 @@ func (f *framework) Start() {
 	go f.dataResponseReceiver()
 
 	defer f.releaseResource()
-	for f.epoch != exitEpoch {
-		f.task.SetEpoch(f.epoch)
-		var ok bool
-		f.epoch, ok = <-f.epochChan
-		if !ok {
+	for f.epoch = range f.epochChan {
+		if f.epoch == exitEpoch {
 			break
 		}
+		f.task.SetEpoch(f.epoch)
 	}
 }
 
