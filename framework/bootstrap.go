@@ -81,17 +81,17 @@ func (f *framework) Start() {
 
 	f.heartbeat()
 
+	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataReqStop = make(chan struct{})
+	go f.startHTTP()
+	go f.dataResponseReceiver()
+
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
-
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
-	f.dataReqStop = make(chan struct{})
-	go f.startHTTP()
-	go f.dataResponseReceiver()
 
 	defer f.releaseResource()
 	for f.epoch = range f.epochChan {
