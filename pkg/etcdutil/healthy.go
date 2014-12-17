@@ -3,6 +3,7 @@ package etcdutil
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"path"
 	"strconv"
 	"time"
@@ -51,7 +52,9 @@ func WaitFailure(client *etcd.Client, name string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, s := range slots.Node.Nodes {
+	if total := len(slots.Node.Nodes); total > 0 {
+		ri := rand.Intn(total)
+		s := slots.Node.Nodes[ri]
 		idStr := path.Base(s.Key)
 		id, err := strconv.ParseUint(idStr, 0, 64)
 		if err != nil {
