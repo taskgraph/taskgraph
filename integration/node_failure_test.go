@@ -57,7 +57,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 
 	for i := range wantData {
 		if wantData[i] != getData[i] {
-			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
+			t.Errorf("#%d: data want = %d, get = %d", i, wantData[i], getData[i])
 		}
 	}
 	<-taskBuilder.FinishChan
@@ -87,6 +87,8 @@ func TestSlaveParentDataReadyFailure(t *testing.T) {
 		},
 	}
 	go func() {
+		// The failure is theoretically unlimited. So this won't stop until this test finishes.
+		// Task will signal failure to "NodeProducer" and ask for a new node to start.
 		for _ = range taskBuilder.NodeProducer {
 			log.Println("Starting a new node")
 			go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
@@ -104,7 +106,7 @@ func TestSlaveParentDataReadyFailure(t *testing.T) {
 
 	for i := range wantData {
 		if wantData[i] != getData[i] {
-			t.Errorf("#%d: data want = %d, get = %d\n", i, wantData[i], getData[i])
+			t.Errorf("#%d: data want = %d, get = %d", i, wantData[i], getData[i])
 		}
 	}
 	close(taskBuilder.NodeProducer)

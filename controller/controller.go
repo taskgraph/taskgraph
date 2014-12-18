@@ -77,7 +77,7 @@ func (c *Controller) DestroyEtcdLayout() error {
 
 func (c *Controller) startFailureDetection() error {
 	c.failDetectStop = make(chan bool, 1)
-	return etcdutil.DetectFailure(c.etcdclient, c.name, c.failDetectStop)
+	return etcdutil.DetectFailure(c.etcdclient, c.name, c.failDetectStop, c.logger)
 }
 
 func (c *Controller) stopFailureDetection() error {
