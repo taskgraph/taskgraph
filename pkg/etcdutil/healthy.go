@@ -1,6 +1,9 @@
 package etcdutil
 
 import (
+	"fmt"
+	"log"
+	"math/rand"
 	"path"
 	"strconv"
 	"time"
@@ -11,7 +14,7 @@ import (
 // heartbeat to etcd cluster until stop
 func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Duration, stop chan struct{}) error {
 	for {
-		_, err := client.Set(HealthyPath(name, taskID), "health", computeTTL(interval))
+		_, err := client.Set(TaskHealthyPath(name, taskID), "health", computeTTL(interval))
 		if err != nil {
 			return err
 		}
@@ -24,39 +27,68 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 }
 
 // detect failure of the given taskID
-func DetectFailure(client *etcd.Client, name string, taskID uint64, stop chan bool) (uint64, error) {
-	key := HealthyPath(name, taskID)
-	resp, err := client.Get(key, false, false)
-	if err != nil {
-		// TODO: should check "key not found"
-		return taskID, nil
-	}
-	waitIndex := resp.EtcdIndex + 1
-	for {
-		resp, err = client.Watch(key, waitIndex, false, nil, stop)
+func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log.Logger) error {
+	receiver := make(chan *etcd.Response, 1)
+	go client.Watch(HealthyPath(name), 0, true, receiver, stop)
+	for resp := range receiver {
+		if resp.Action != "expire" && resp.Action != "delete" {
+			continue
+		}
+		err := ReportFailure(client, name, path.Base(resp.Node.Key))
 		if err != nil {
-			// on client closing
-			return 0, err
+			logger.Printf("ReportFailure returns error: %v", err)
 		}
-		if resp.Action == "delete" || resp.Action == "expire" {
-			return taskID, nil
-		}
-		waitIndex = resp.EtcdIndex + 1
 	}
+	return nil
 }
 
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
-func ReportFailure(client *etcd.Client, name string, taskID uint64) error {
-	_, err := client.Set(FailedTaskPath(name, taskID), "failed", 0)
+func ReportFailure(client *etcd.Client, name, failedTask string) error {
+	_, err := client.Set(FailedTaskPath(name, failedTask), "failed", 0)
 	return err
 }
 
 // WaitFailure blocks until it gets a hint of taks failure
-func WaitFailure(client *etcd.Client, name string) (uint64, error) {
-	resp, err := client.Watch(FailedTaskDir(name), 0, true, nil, nil)
+func WaitFailure(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
+	slots, err := client.Get(FailedTaskDir(name), false, true)
 	if err != nil {
 		return 0, err
+	}
+	if total := len(slots.Node.Nodes); total > 0 {
+		ri := rand.Intn(total)
+		s := slots.Node.Nodes[ri]
+		idStr := path.Base(s.Key)
+		id, err := strconv.ParseUint(idStr, 0, 64)
+		if err != nil {
+			return 0, err
+		}
+		logger.Printf("got failures %v at index %d, randomly choose %d to try...", ListKeys(slots.Node.Nodes), slots.EtcdIndex, ri)
+		return id, nil
+	}
+
+	watchIndex := slots.EtcdIndex + 1
+	respChan := make(chan *etcd.Response, 1)
+	go func() {
+		for {
+			logger.Printf("start to wait failure at index %d", watchIndex)
+			resp, err := client.Watch(FailedTaskDir(name), watchIndex, true, nil, nil)
+			if err != nil {
+				logger.Printf("WARN: WaitFailure watch failed: %v", err)
+				return
+			}
+			if resp.Action == "set" {
+				respChan <- resp
+				return
+			}
+			watchIndex = resp.EtcdIndex + 1
+		}
+	}()
+	var resp *etcd.Response
+	select {
+	case resp = <-respChan:
+	case <-time.After(10 * time.Second):
+		return 0, fmt.Errorf("WaitFailure timeout!")
 	}
 	idStr := path.Base(resp.Node.Key)
 	id, err := strconv.ParseUint(idStr, 10, 64)

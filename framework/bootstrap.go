@@ -48,10 +48,10 @@ func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	if f.taskID, err = f.occupyTask(); err != nil {
-		// if err := f.standby(); err != nil {
-		// 	f.log.Fatalf("occupyTask failed: %v", err)
-		// }
-		f.log.Fatal("doesn't support standby now")
+		f.log.Println("standbying...")
+		if err := f.standby(); err != nil {
+			f.log.Fatalf("standby failed: %v", err)
+		}
 	}
 
 	// task builder and topology are defined by applications.
@@ -71,10 +71,20 @@ func (f *framework) Start() {
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
+	if f.epoch == exitEpoch {
+		f.log.Printf("task %d found that job has finished\n", f.taskID)
+		f.epochStop <- true
+		return
+	}
+	f.task.SetEpoch(f.epoch)
 	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
 
 	f.heartbeat()
-	// go f.detectAndReportFailures()
+
+	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataReqStop = make(chan struct{})
+	go f.startHTTP()
+	go f.dataResponseReceiver()
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -83,19 +93,12 @@ func (f *framework) Start() {
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
-	f.dataReqStop = make(chan struct{})
-	go f.startHTTP()
-	go f.dataResponseReceiver()
-
 	defer f.releaseResource()
-	for f.epoch != exitEpoch {
-		f.task.SetEpoch(f.epoch)
-		var ok bool
-		f.epoch, ok = <-f.epochChan
-		if !ok {
+	for f.epoch = range f.epochChan {
+		if f.epoch == exitEpoch {
 			break
 		}
+		f.task.SetEpoch(f.epoch)
 	}
 }
 
