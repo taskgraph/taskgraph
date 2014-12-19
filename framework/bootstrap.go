@@ -119,7 +119,7 @@ func (f *framework) startHTTP() {
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() (uint64, error) {
 	// get all nodes under task dir
-	slots, err := f.etcdClient.Get(etcdutil.MakeTaskDirPath(f.name), true, true)
+	slots, err := f.etcdClient.Get(etcdutil.TaskDirPath(f.name), true, true)
 	if err != nil {
 		return 0, err
 	}
@@ -151,11 +151,11 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		switch who {
 		case roleParent:
 			// Watch parent's child.
-			watchPath = etcdutil.MakeChildMetaPath(f.name, taskID)
+			watchPath = etcdutil.ChildMetaPath(f.name, taskID)
 			taskCallback = f.task.ParentMetaReady
 		case roleChild:
 			// Watch child's parent.
-			watchPath = etcdutil.MakeParentMetaPath(f.name, taskID)
+			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
 			taskCallback = f.task.ChildMetaReady
 		default:
 			panic("unimplemented")

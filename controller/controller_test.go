@@ -35,7 +35,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 		c.InitEtcdLayout()
 
 		for taskID := uint64(0); taskID < tt.numberOfTasks; taskID++ {
-			key := etcdutil.MakeTaskMasterPath(tt.name, taskID)
+			key := etcdutil.TaskMasterPath(tt.name, taskID)
 			_, err := etcdClient.Get(key, false, false)
 			if err != nil {
 				t.Errorf("#%d: etcdClient.Get failed: %v", i, err)
