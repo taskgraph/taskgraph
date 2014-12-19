@@ -60,19 +60,19 @@ func (f *framework) dataResponseReceiver() {
 
 func (f *framework) FlagMetaToParent(meta string) {
 	value := fmt.Sprintf("%d-%s", f.epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.ParentMetaPath(f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
+			etcdutil.ParentMetaPath(f.name, f.GetTaskID()), value, err)
 	}
 }
 
 func (f *framework) FlagMetaToChild(meta string) {
 	value := fmt.Sprintf("%d-%s", f.epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MakeChildMetaPath(f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.ChildMetaPath(f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MakeParentMetaPath(f.name, f.GetTaskID()), value, err)
+			etcdutil.ChildMetaPath(f.name, f.GetTaskID()), value, err)
 	}
 }
 
@@ -92,7 +92,7 @@ func (f *framework) IncEpoch() {
 // Currently we grab the information from etcd every time. Local cache could be used.
 // If it failed, e.g. network failure, it should return error.
 func (f *framework) getAddress(id uint64) (string, error) {
-	resp, err := f.etcdClient.Get(etcdutil.MakeTaskMasterPath(f.name, id), false, false)
+	resp, err := f.etcdClient.Get(etcdutil.TaskMasterPath(f.name, id), false, false)
 	if err != nil {
 		return "", err
 	}
