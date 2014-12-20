@@ -117,17 +117,6 @@ func (f *framework) DataRequest(toID uint64, req string) {
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }
 
-func (f *framework) releaseResource() {
-	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
-	f.epochStop <- true
-	close(f.heartbeatStop)
-	close(f.dataReqStop) // must be closed before dataRespChan
-	close(f.dataRespChan)
-	for _, c := range f.stops {
-		c <- true
-	}
-}
-
 // this will shutdown local node instead of global job.
 func (f *framework) stop() {
 	close(f.epochChan)

@@ -53,6 +53,21 @@ func (f *framework) Start() {
 			f.log.Fatalf("standby failed: %v", err)
 		}
 	}
+	f.heartbeat()
+
+	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
+	f.epochStop = make(chan bool, 1)   // stop etcd watch
+	// meta will have epoch prepended so we must get epoch before any watch on meta
+	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
+	if err != nil {
+		f.log.Fatalf("WatchEpoch failed: %v", err)
+	}
+	if f.epoch == exitEpoch {
+		f.log.Printf("task %d found that job has finished\n", f.taskID)
+		f.epochStop <- true
+		return
+	}
+	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
 
 	// task builder and topology are defined by applications.
 	// Both should be initialized at this point.
@@ -64,42 +79,57 @@ func (f *framework) Start() {
 	// yet, then there will a null pointer access
 	f.task.Init(f.taskID, f)
 
-	f.epochChan = make(chan uint64, 1)
-	f.epochStop = make(chan bool, 1)
-	// meta will have epoch prepended so we must get epoch before any watch on meta
-	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
-	if err != nil {
-		f.log.Fatalf("WatchEpoch failed: %v", err)
-	}
-	if f.epoch == exitEpoch {
-		f.log.Printf("task %d found that job has finished\n", f.taskID)
-		f.epochStop <- true
-		return
-	}
-	f.task.SetEpoch(f.epoch)
-	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
+	// TODO(hongchao): I haven't figured out a way to shut server down..
+	go f.startHTTP()
 
-	f.heartbeat()
+	defer f.releaseResource()
+	for {
+		f.setEpochStarted()
+		nextEpoch := f.waitEpochFinished()
+		if f.epoch = nextEpoch; f.epoch == exitEpoch {
+			break
+		}
+	}
+}
+
+func (f *framework) setEpochStarted() {
+	f.task.SetEpoch(f.epoch)
 
 	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
 	f.dataReqStop = make(chan struct{})
-	go f.startHTTP()
 	go f.dataResponseReceiver()
-
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
+}
 
-	defer f.releaseResource()
-	for f.epoch = range f.epochChan {
-		if f.epoch == exitEpoch {
-			break
-		}
-		f.task.SetEpoch(f.epoch)
+func (f *framework) waitEpochFinished() uint64 {
+	// TODO: we need to discuss how to end current epoch job.
+	nextEpoch, ok := <-f.epochChan
+	if !ok {
+		nextEpoch = exitEpoch
 	}
+	f.releaseEpochResource()
+	return nextEpoch
+}
+
+func (f *framework) releaseEpochResource() {
+	close(f.dataReqStop) // must be closed before dataRespChan
+	close(f.dataRespChan)
+	for _, c := range f.stops {
+		c <- true
+	}
+	f.stops = nil
+}
+
+// release resources: heartbeat, epoch watch.
+func (f *framework) releaseResource() {
+	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
+	f.epochStop <- true
+	close(f.heartbeatStop)
 }
 
 // Framework http server for data request.
@@ -191,7 +221,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 				if err != nil {
 					f.log.Fatalf("WARN: not a unit64 prepended to meta: %s", values[0])
 				}
-				if ep < f.epoch {
+				if ep != f.epoch {
 					continue
 				}
 				taskCallback(taskID, values[1])
