@@ -125,6 +125,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 			t.framework.ShutdownJob()
 			close(t.finishChan)
 		} else {
+			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
 			t.framework.IncEpoch()
 		}
 	}
