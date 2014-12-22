@@ -53,7 +53,6 @@ func (f *framework) Start() {
 			f.log.Fatalf("standby failed: %v", err)
 		}
 	}
-	f.heartbeat()
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
 	f.epochStop = make(chan bool, 1)   // stop etcd watch
@@ -68,6 +67,7 @@ func (f *framework) Start() {
 		return
 	}
 	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
+	f.heartbeat()
 
 	// task builder and topology are defined by applications.
 	// Both should be initialized at this point.
@@ -85,14 +85,31 @@ func (f *framework) Start() {
 	f.dataReqStop = make(chan struct{})
 	go f.dataResponseReceiver()
 
-	defer f.releaseResource()
+	f.eventloop()
+	f.releaseResource()
+}
+
+func (f *framework) eventloop() {
+	f.setEpochStarted()
+
 	for {
-		f.setEpochStarted()
-		nextEpoch := f.waitEpochFinished()
-		if f.epoch = nextEpoch; f.epoch == exitEpoch {
+		select {
+		case f.epoch = <-f.waitEpochFinished():
+			if f.epoch != exitEpoch {
+				f.setEpochStarted()
+			}
+			// case <-datareqsend:
+			// case <-datareqrecv:
+			// case <-datarespsend:
+			// case <-dataresprecv:
+			// case <-metaready:
+		}
+
+		if f.epoch == exitEpoch {
 			break
 		}
 	}
+	f.log.Printf("task %d exits event loop!", f.taskID)
 }
 
 func (f *framework) setEpochStarted() {
@@ -106,14 +123,15 @@ func (f *framework) setEpochStarted() {
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 }
 
-func (f *framework) waitEpochFinished() uint64 {
-	// TODO: we need to discuss how to end current epoch job.
+func (f *framework) waitEpochFinished() <-chan uint64 {
 	nextEpoch, ok := <-f.epochChan
 	if !ok {
 		nextEpoch = exitEpoch
 	}
 	f.releaseEpochResource()
-	return nextEpoch
+	epochChan := make(chan uint64, 1)
+	epochChan <- nextEpoch
+	return epochChan
 }
 
 func (f *framework) releaseEpochResource() {
