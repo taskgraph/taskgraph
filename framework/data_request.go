@@ -49,7 +49,10 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		dataChan: dataChan,
 	}
 
-	b := <-dataChan
+	b, ok := <-dataChan
+	if !ok {
+		panic("TODO: we need to back pressure for epoch discrepancy")
+	}
 	if _, err := w.Write(b); err != nil {
 		log.Printf("http: response write failed: %v", err)
 	}
@@ -66,7 +69,15 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 		panic("unimplemented")
 	}
 	// Getting the data from task could take a long time. We need to let
-	// the response to send go through event loop again to check epoch
+	// the response to send go through event loop again to check epoch.
+	checkChan := make(chan bool, 1)
+	f.dataRespToSendChan <- &dataRequest{
+		Epoch:     dr.Epoch,
+		checkChan: checkChan,
+	}
+	if check := <-checkChan; !check {
+		close(dr.dataChan)
+	}
 	dr.dataChan <- b
 }
 

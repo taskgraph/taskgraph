@@ -36,11 +36,12 @@ type framework struct {
 	heartbeatStop chan struct{}
 
 	// event loop
-	epochChan         chan uint64
-	metaChan          chan *metaChange
-	dataReqtoSendChan chan *dataRequest
-	dataReqRecvedChan chan *dataRequest
-	dataRespChan      chan *dataResponse
+	epochChan          chan uint64
+	metaChan           chan *metaChange
+	dataReqtoSendChan  chan *dataRequest
+	dataReqChan        chan *dataRequest
+	dataRespToSendChan chan *dataRequest
+	dataRespChan       chan *dataResponse
 }
 
 func (f *framework) FlagMetaToParent(meta string) {

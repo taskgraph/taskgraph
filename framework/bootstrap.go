@@ -84,7 +84,8 @@ func (f *framework) Start() {
 func (f *framework) eventloop() {
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqRecvedChan = make(chan *dataRequest, 100)
+	f.dataReqChan = make(chan *dataRequest, 100)
+	f.dataRespToSendChan = make(chan *dataRequest, 100)
 	f.dataRespChan = make(chan *dataResponse, 100)
 
 	// from this point the task will start doing work
@@ -123,13 +124,18 @@ func (f *framework) eventloop() {
 				break
 			}
 			go f.sendRequest(req)
-		case req := <-f.dataReqRecvedChan:
+		case req := <-f.dataReqChan:
 			if req.Epoch != f.epoch {
-				// TODO: we need to back pressure that epoch is different
-				panic("unimplemented")
+				close(req.dataChan)
+				break
 			}
 			go f.handleDataReq(req)
-			// case <-datarespsend:
+		case check := <-f.dataRespToSendChan:
+			if check.Epoch != f.epoch {
+				check.checkChan <- false
+				break
+			}
+			check.checkChan <- true
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
 				break
@@ -175,7 +181,7 @@ func (f *framework) releaseResource() {
 func (f *framework) startHTTP() {
 	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
 	// TODO: http server graceful shutdown
-	handler := &dataReqHandler{f.dataReqRecvedChan}
+	handler := &dataReqHandler{f.dataReqChan}
 	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
