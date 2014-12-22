@@ -9,7 +9,6 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
-	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
 const exitEpoch = math.MaxUint64
@@ -35,7 +34,6 @@ type framework struct {
 	epochStop chan bool
 
 	heartbeatStop chan struct{}
-	dataReqStop   chan struct{}
 
 	// event loop
 	epochChan         chan uint64
@@ -43,20 +41,6 @@ type framework struct {
 	dataReqtoSendChan chan *dataRequest
 	dataReqRecvedChan chan *dataRequest
 	dataRespChan      chan *dataResponse
-}
-
-// Framework event loop handles data response for requests sent in DataRequest().
-func (f *framework) dataResponseReceiver() {
-	for dataResp := range f.dataRespChan {
-		switch {
-		case topoutil.IsParent(f.topology, f.epoch, dataResp.TaskID):
-			go f.task.ParentDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
-		case topoutil.IsChild(f.topology, f.epoch, dataResp.TaskID):
-			go f.task.ChildDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
-		default:
-			panic("unimplemented")
-		}
-	}
 }
 
 func (f *framework) FlagMetaToParent(meta string) {
@@ -120,10 +104,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		return
 	}
 	d := requestData(addr, dr.Req, f.taskID, dr.TaskID, dr.Epoch, f.log)
-	select {
-	case f.dataRespChan <- d:
-	case <-f.dataReqStop:
-	}
+	f.dataRespChan <- d
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }

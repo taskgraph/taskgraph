@@ -76,9 +76,6 @@ func (f *framework) Start() {
 
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
-	f.dataRespChan = make(chan *dataResponse, 100)
-	f.dataReqStop = make(chan struct{})
-	go f.dataResponseReceiver()
 
 	f.eventloop()
 	f.releaseResource()
@@ -88,6 +85,7 @@ func (f *framework) eventloop() {
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqRecvedChan = make(chan *dataRequest, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
 
 	// from this point the task will start doing work
 	f.task.Init(f.taskID, f)
@@ -132,7 +130,11 @@ func (f *framework) eventloop() {
 			}
 			go f.handleDataReq(req)
 			// case <-datarespsend:
-			// case <-dataresprecv:
+		case resp := <-f.dataRespChan:
+			if resp.Epoch != f.epoch {
+				break
+			}
+			go f.handleDataResp(resp)
 		}
 
 		if f.epoch == exitEpoch {
@@ -162,8 +164,6 @@ func (f *framework) releaseEpochResource() {
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
 	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
-	close(f.dataReqStop) // must be closed before dataRespChan
-	close(f.dataRespChan)
 	f.epochStop <- true
 	close(f.heartbeatStop)
 }

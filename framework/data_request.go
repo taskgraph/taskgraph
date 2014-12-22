@@ -58,13 +58,15 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (f *framework) handleDataReq(dr *dataRequest) {
 	var b []byte
 	switch {
-	case topoutil.IsParent(f.GetTopology(), dr.Epoch, dr.TaskID):
+	case topoutil.IsParent(f.topology, dr.Epoch, dr.TaskID):
 		b = f.task.ServeAsChild(dr.TaskID, dr.Req)
-	case topoutil.IsChild(f.GetTopology(), dr.Epoch, dr.TaskID):
+	case topoutil.IsChild(f.topology, dr.Epoch, dr.TaskID):
 		b = f.task.ServeAsParent(dr.TaskID, dr.Req)
 	default:
 		panic("unimplemented")
 	}
+	// Getting the data from task could take a long time. We need to let
+	// the response to send go through event loop again to check epoch
 	dr.dataChan <- b
 }
 
@@ -97,7 +99,19 @@ func requestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	}
 	return &dataResponse{
 		TaskID: to,
+		Epoch:  epoch,
 		Req:    req,
 		Data:   data,
+	}
+}
+
+func (f *framework) handleDataResp(resp *dataResponse) {
+	switch {
+	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
+		f.task.ParentDataReady(resp.TaskID, resp.Req, resp.Data)
+	case topoutil.IsChild(f.topology, resp.Epoch, resp.TaskID):
+		f.task.ChildDataReady(resp.TaskID, resp.Req, resp.Data)
+	default:
+		panic("unimplemented")
 	}
 }

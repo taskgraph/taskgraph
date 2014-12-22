@@ -16,6 +16,7 @@ type dataRequest struct {
 
 type dataResponse struct {
 	TaskID uint64
+	Epoch  uint64
 	Req    string
 	Data   []byte
 }
