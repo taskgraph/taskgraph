@@ -8,7 +8,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 	"github.com/go-distributed/meritop/pkg/topoutil"
 )
@@ -39,16 +38,11 @@ type framework struct {
 	dataReqStop   chan struct{}
 
 	// event loop
-	epochChan    chan uint64
-	metaChan     chan *metaChange
-	dataReqChan  chan *dataReqToSend
-	dataRespChan chan *frameworkhttp.DataResponse
-}
-
-type dataResponse struct {
-	taskID uint64
-	req    string
-	data   []byte
+	epochChan         chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataReqRecvedChan chan *dataRequest
+	dataRespChan      chan *dataResponse
 }
 
 // Framework event loop handles data response for requests sent in DataRequest().
@@ -107,21 +101,25 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	f.dataReqChan <- &dataReqToSend{
-		to:    toID,
-		req:   req,
-		epoch: f.epoch,
+	// assumption here:
+	// Event driven task will call this in a synchronous way so that
+	// the epoch won't change at the time task sending this request.
+	// Epoch may change, however, before the request is actually being sent.
+	f.dataReqtoSendChan <- &dataRequest{
+		TaskID: toID,
+		Epoch:  f.epoch,
+		Req:    req,
 	}
 }
 
-func (f *framework) sendRequest(dr *dataReqToSend) {
-	addr, err := f.getAddress(dr.to)
+func (f *framework) sendRequest(dr *dataRequest) {
+	addr, err := f.getAddress(dr.TaskID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", dr.to, err)
+		f.log.Fatalf("getAddress(%d) failed: %v", dr.TaskID, err)
 		return
 	}
-	d := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.to, dr.epoch, f.log)
+	d := requestData(addr, dr.Req, f.taskID, dr.TaskID, dr.Epoch, f.log)
 	select {
 	case f.dataRespChan <- d:
 	case <-f.dataReqStop:

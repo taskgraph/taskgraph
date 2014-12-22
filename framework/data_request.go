@@ -1,4 +1,4 @@
-package frameworkhttp
+package framework
 
 import (
 	"io/ioutil"
@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
@@ -18,24 +17,8 @@ const (
 	DataRequestEpoch  string = "epoch"
 )
 
-type DataResponse struct {
-	TaskID uint64
-	Req    string
-	Data   []byte
-}
-
 type dataReqHandler struct {
-	topo    meritop.Topology
-	task    meritop.Task
-	epocher Epocher
-}
-
-func NewDataRequestHandler(topo meritop.Topology, task meritop.Task, epocher Epocher) http.Handler {
-	return &dataReqHandler{
-		topo:    topo,
-		task:    task,
-		epocher: epocher,
-	}
+	reqChan chan *dataRequest
 }
 
 func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -51,24 +34,41 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "taskID couldn't be parsed", http.StatusBadRequest)
 		return
 	}
-	req := q.Get(DataRequestReq)
-	// ask task to serve data
-	var b []byte
-	switch {
-	case topoutil.IsParent(h.topo, h.epocher.GetEpoch(), fromID):
-		b = h.task.ServeAsChild(fromID, req)
-	case topoutil.IsChild(h.topo, h.epocher.GetEpoch(), fromID):
-		b = h.task.ServeAsParent(fromID, req)
-	default:
-		http.Error(w, "taskID isn't a parent or child of this task", http.StatusBadRequest)
-		return
+	epochStr := q.Get(DataRequestEpoch)
+	epoch, err := strconv.ParseUint(epochStr, 0, 64)
+	if err != nil {
+		panic("epoch string couldn't be parsed")
 	}
+	req := q.Get(DataRequestReq)
+
+	dataChan := make(chan []byte, 1)
+	h.reqChan <- &dataRequest{
+		TaskID:   fromID,
+		Epoch:    epoch,
+		Req:      req,
+		dataChan: dataChan,
+	}
+
+	b := <-dataChan
 	if _, err := w.Write(b); err != nil {
-		log.Printf("http: response write errored: %v", err)
+		log.Printf("http: response write failed: %v", err)
 	}
 }
 
-func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Logger) *DataResponse {
+func (f *framework) handleDataReq(dr *dataRequest) {
+	var b []byte
+	switch {
+	case topoutil.IsParent(f.GetTopology(), dr.Epoch, dr.TaskID):
+		b = f.task.ServeAsChild(dr.TaskID, dr.Req)
+	case topoutil.IsChild(f.GetTopology(), dr.Epoch, dr.TaskID):
+		b = f.task.ServeAsParent(dr.TaskID, dr.Req)
+	default:
+		panic("unimplemented")
+	}
+	dr.dataChan <- b
+}
+
+func requestData(addr string, req string, from, to, epoch uint64, logger *log.Logger) *dataResponse {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
@@ -84,7 +84,7 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	// pass the response to the awaiting event loop for data response
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		logger.Fatalf("http: get(%s) returns error: %v", urlStr, err)
+		logger.Fatalf("http: get failed: %v", err)
 	}
 	defer resp.Body.Close()
 	// TODO: we need to handle epoch discrepancy response
@@ -95,7 +95,7 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	if err != nil {
 		logger.Fatalf("http: ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
 	}
-	return &DataResponse{
+	return &dataResponse{
 		TaskID: to,
 		Req:    req,
 		Data:   data,

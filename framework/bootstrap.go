@@ -12,7 +12,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
@@ -77,7 +76,7 @@ func (f *framework) Start() {
 
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
 	f.dataReqStop = make(chan struct{})
 	go f.dataResponseReceiver()
 
@@ -87,7 +86,8 @@ func (f *framework) Start() {
 
 func (f *framework) eventloop() {
 	f.metaChan = make(chan *metaChange, 100)
-	f.dataReqChan = make(chan *dataReqToSend, 100)
+	f.dataReqtoSendChan = make(chan *dataRequest, 100)
+	f.dataReqRecvedChan = make(chan *dataRequest, 100)
 
 	// from this point the task will start doing work
 	f.task.Init(f.taskID, f)
@@ -120,12 +120,17 @@ func (f *framework) eventloop() {
 			default:
 				panic("unimplemented")
 			}
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
+		case req := <-f.dataReqtoSendChan:
+			if req.Epoch != f.epoch {
 				break
 			}
 			go f.sendRequest(req)
-			// case <-datareqrecv:
+		case req := <-f.dataReqRecvedChan:
+			if req.Epoch != f.epoch {
+				// TODO: we need to back pressure that epoch is different
+				panic("unimplemented")
+			}
+			go f.handleDataReq(req)
 			// case <-datarespsend:
 			// case <-dataresprecv:
 		}
@@ -170,8 +175,7 @@ func (f *framework) releaseResource() {
 func (f *framework) startHTTP() {
 	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
 	// TODO: http server graceful shutdown
-	epocher := frameworkhttp.Epocher(f)
-	handler := frameworkhttp.NewDataRequestHandler(f.topology, f.task, epocher)
+	handler := &dataReqHandler{f.dataReqRecvedChan}
 	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}

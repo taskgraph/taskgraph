@@ -7,8 +7,15 @@ type metaChange struct {
 	meta  string
 }
 
-type dataReqToSend struct {
-	to    uint64
-	req   string
-	epoch uint64
+type dataRequest struct {
+	TaskID   uint64
+	Epoch    uint64
+	Req      string
+	dataChan chan []byte
+}
+
+type dataResponse struct {
+	TaskID uint64
+	Req    string
+	Data   []byte
 }
