@@ -87,7 +87,7 @@ func (f *framework) Start() {
 
 func (f *framework) eventloop() {
 	f.metaChan = make(chan *metaChange, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
+	f.dataReqChan = make(chan *dataReqToSend, 100)
 
 	// from this point the task will start doing work
 	f.task.Init(f.taskID, f)

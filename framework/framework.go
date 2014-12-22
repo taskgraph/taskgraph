@@ -41,7 +41,7 @@ type framework struct {
 	// event loop
 	epochChan    chan uint64
 	metaChan     chan *metaChange
-	dataReqChan  chan *dataRequest
+	dataReqChan  chan *dataReqToSend
 	dataRespChan chan *frameworkhttp.DataResponse
 }
 
@@ -107,21 +107,21 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	f.dataReqChan <- &dataRequest{
+	f.dataReqChan <- &dataReqToSend{
 		to:    toID,
 		req:   req,
 		epoch: f.epoch,
 	}
 }
 
-func (f *framework) sendRequest(dr *dataRequest) {
+func (f *framework) sendRequest(dr *dataReqToSend) {
 	addr, err := f.getAddress(dr.to)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
 		f.log.Fatalf("getAddress(%d) failed: %v", dr.to, err)
 		return
 	}
-	d := frameworkhttp.RequestData(addr, f.taskID, dr.to, dr.req, dr.epoch)
+	d := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.to, dr.epoch, f.log)
 	select {
 	case f.dataRespChan <- d:
 	case <-f.dataReqStop:

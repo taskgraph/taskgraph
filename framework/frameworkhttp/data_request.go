@@ -68,7 +68,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func RequestData(addr string, from, to uint64, req string, epoch uint64) *DataResponse {
+func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Logger) *DataResponse {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
@@ -84,15 +84,16 @@ func RequestData(addr string, from, to uint64, req string, epoch uint64) *DataRe
 	// pass the response to the awaiting event loop for data response
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		log.Fatalf("http: get(%s) returns error: %v", urlStr, err)
+		logger.Fatalf("http: get(%s) returns error: %v", urlStr, err)
 	}
 	defer resp.Body.Close()
+	// TODO: we need to handle epoch discrepancy response
 	if resp.StatusCode != 200 {
-		log.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
+		logger.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("http: ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
+		logger.Fatalf("http: ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
 	}
 	return &DataResponse{
 		TaskID: to,

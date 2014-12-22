@@ -7,7 +7,7 @@ type metaChange struct {
 	meta  string
 }
 
-type dataRequest struct {
+type dataReqToSend struct {
 	to    uint64
 	req   string
 	epoch uint64
