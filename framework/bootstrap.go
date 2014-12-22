@@ -87,6 +87,7 @@ func (f *framework) Start() {
 
 func (f *framework) eventloop() {
 	f.metaChan = make(chan *metaChange, 100)
+	f.dataReqChan = make(chan *dataRequest, 100)
 
 	// from this point the task will start doing work
 	f.task.Init(f.taskID, f)
@@ -119,7 +120,11 @@ func (f *framework) eventloop() {
 			default:
 				panic("unimplemented")
 			}
-			// case <-datareqsend:
+		case req := <-f.dataReqChan:
+			if req.epoch != f.epoch {
+				break
+			}
+			go f.sendRequest(req)
 			// case <-datareqrecv:
 			// case <-datarespsend:
 			// case <-dataresprecv:

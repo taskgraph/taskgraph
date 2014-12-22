@@ -25,18 +25,24 @@ type framework struct {
 	taskBuilder meritop.TaskBuilder
 	topology    meritop.Topology
 
-	task          meritop.Task
-	taskID        uint64
-	epoch         uint64
-	epochChan     chan uint64
-	epochStop     chan bool // for etcd
+	task       meritop.Task
+	taskID     uint64
+	epoch      uint64
+	etcdClient *etcd.Client
+	ln         net.Listener
+
+	// etcd stops
+	stops     []chan bool
+	epochStop chan bool
+
 	heartbeatStop chan struct{}
-	etcdClient    *etcd.Client
-	stops         []chan bool // for etcd
-	ln            net.Listener
-	dataRespChan  chan *frameworkhttp.DataResponse
 	dataReqStop   chan struct{}
-	metaChan      chan *metaChange
+
+	// event loop
+	epochChan    chan uint64
+	metaChan     chan *metaChange
+	dataReqChan  chan *dataRequest
+	dataRespChan chan *frameworkhttp.DataResponse
 }
 
 type dataResponse struct {
@@ -101,19 +107,25 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	addr, err := f.getAddress(toID)
+	f.dataReqChan <- &dataRequest{
+		to:    toID,
+		req:   req,
+		epoch: f.epoch,
+	}
+}
+
+func (f *framework) sendRequest(dr *dataRequest) {
+	addr, err := f.getAddress(dr.to)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", toID, err)
+		f.log.Fatalf("getAddress(%d) failed: %v", dr.to, err)
 		return
 	}
-	go func() {
-		d := frameworkhttp.RequestData(addr, f.taskID, toID, req)
-		select {
-		case f.dataRespChan <- d:
-		case <-f.dataReqStop:
-		}
-	}()
+	d := frameworkhttp.RequestData(addr, f.taskID, dr.to, dr.req, dr.epoch)
+	select {
+	case f.dataRespChan <- d:
+	case <-f.dataReqStop:
+	}
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }

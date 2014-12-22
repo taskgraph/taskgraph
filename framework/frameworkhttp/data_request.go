@@ -15,6 +15,7 @@ const (
 	DataRequestPrefix string = "/datareq"
 	DataRequestTaskID string = "taskID"
 	DataRequestReq    string = "req"
+	DataRequestEpoch  string = "epoch"
 )
 
 type DataResponse struct {
@@ -67,7 +68,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func RequestData(addr string, from, to uint64, req string) *DataResponse {
+func RequestData(addr string, from, to uint64, req string, epoch uint64) *DataResponse {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
@@ -76,6 +77,7 @@ func RequestData(addr string, from, to uint64, req string) *DataResponse {
 	q := u.Query()
 	q.Add(DataRequestTaskID, strconv.FormatUint(from, 10))
 	q.Add(DataRequestReq, req)
+	q.Add(DataRequestEpoch, strconv.FormatUint(epoch, 10))
 	u.RawQuery = q.Encode()
 	urlStr := u.String()
 	// send request
