@@ -36,6 +36,7 @@ type framework struct {
 	ln            net.Listener
 	dataRespChan  chan *frameworkhttp.DataResponse
 	dataReqStop   chan struct{}
+	metaChan      chan *metaChange
 }
 
 type dataResponse struct {

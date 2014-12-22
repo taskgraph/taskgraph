@@ -74,10 +74,6 @@ func (f *framework) Start() {
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
-	// task init is put before any other routines.
-	// For example, if a watch of parent meta is triggered but task isn't init-ed
-	// yet, then there will a null pointer access
-	f.task.Init(f.taskID, f)
 
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
@@ -90,26 +86,49 @@ func (f *framework) Start() {
 }
 
 func (f *framework) eventloop() {
+	f.metaChan = make(chan *metaChange, 100)
+
+	// from this point the task will start doing work
+	f.task.Init(f.taskID, f)
 	f.setEpochStarted()
 
+	f.log.Printf("task %d starts event loop", f.taskID)
+	defer f.log.Printf("task %d exits event loop!", f.taskID)
 	for {
 		select {
-		case f.epoch = <-f.waitEpochFinished():
-			if f.epoch != exitEpoch {
-				f.setEpochStarted()
+		case nextEpoch, ok := <-f.epochChan:
+			f.releaseEpochResource()
+			if !ok { // single task exit
+				nextEpoch = exitEpoch
+				return
+			}
+			if f.epoch = nextEpoch; f.epoch == exitEpoch {
+				return
+			}
+			// start the next epoch's work
+			f.setEpochStarted()
+		case mc := <-f.metaChan:
+			if mc.epoch != f.epoch {
+				break
+			}
+			switch mc.who {
+			case roleParent:
+				go f.task.ParentMetaReady(mc.from, mc.meta)
+			case roleChild:
+				go f.task.ChildMetaReady(mc.from, mc.meta)
+			default:
+				panic("unimplemented")
 			}
 			// case <-datareqsend:
 			// case <-datareqrecv:
 			// case <-datarespsend:
 			// case <-dataresprecv:
-			// case <-metaready:
 		}
 
 		if f.epoch == exitEpoch {
 			break
 		}
 	}
-	f.log.Printf("task %d exits event loop!", f.taskID)
 }
 
 func (f *framework) setEpochStarted() {
@@ -121,17 +140,6 @@ func (f *framework) setEpochStarted() {
 	// - watch children's parent meta flag
 	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
-}
-
-func (f *framework) waitEpochFinished() <-chan uint64 {
-	nextEpoch, ok := <-f.epochChan
-	if !ok {
-		nextEpoch = exitEpoch
-	}
-	f.releaseEpochResource()
-	epochChan := make(chan uint64, 1)
-	epochChan <- nextEpoch
-	return epochChan
 }
 
 func (f *framework) releaseEpochResource() {
@@ -195,16 +203,13 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		stops[i] = stop
 
 		var watchPath string
-		var taskCallback func(uint64, string)
 		switch who {
 		case roleParent:
-			// Watch parent's child.
+			// Watch parent's child-meta.
 			watchPath = etcdutil.ChildMetaPath(f.name, taskID)
-			taskCallback = f.task.ParentMetaReady
 		case roleChild:
-			// Watch child's parent.
+			// Watch child's parent-meta.
 			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
-			taskCallback = f.task.ChildMetaReady
 		default:
 			panic("unimplemented")
 		}
@@ -237,12 +242,14 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 				values := strings.SplitN(resp.Node.Value, "-", 2)
 				ep, err := strconv.ParseUint(values[0], 10, 64)
 				if err != nil {
-					f.log.Fatalf("WARN: not a unit64 prepended to meta: %s", values[0])
+					panic(fmt.Sprintf("WARN: not a unit64 prepended to meta: %s", values[0]))
 				}
-				if ep != f.epoch {
-					continue
+				f.metaChan <- &metaChange{
+					from:  taskID,
+					who:   who,
+					epoch: ep,
+					meta:  values[1],
 				}
-				taskCallback(taskID, values[1])
 			}
 		}(receiver, taskID)
 	}
