@@ -34,7 +34,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 
 	d, ok := <-dataChan
 	if !ok {
-		// now it assumes that only epoch check will close the channel
+		// it assumes that only epoch mismatch will close the channel
 		return nil, fmt.Errorf("epoch mismatch")
 	}
 	return d, nil

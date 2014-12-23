@@ -14,10 +14,18 @@ type dataRequest struct {
 	dataChan chan []byte
 }
 
+func (dr *dataRequest) EpochMismatch() {
+	close(dr.dataChan)
+}
+
 type dataResponse struct {
 	taskID   uint64
 	epoch    uint64
 	req      string
 	data     []byte
 	dataChan chan []byte
+}
+
+func (dr *dataResponse) EpochMismatch() {
+	close(dr.dataChan)
 }

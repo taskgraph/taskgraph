@@ -124,14 +124,14 @@ func (f *framework) run() {
 		case req := <-f.dataReqChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				close(req.dataChan)
+				req.EpochMismatch()
 				break
 			}
 			go f.handleDataReq(req)
 		case resp := <-f.dataRespToSendChan:
 			if resp.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: response-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				close(resp.dataChan)
+				resp.EpochMismatch()
 				break
 			}
 			go f.sendResponse(resp)
