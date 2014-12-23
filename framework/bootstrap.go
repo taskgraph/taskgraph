@@ -66,7 +66,6 @@ func (f *framework) Start() {
 		return
 	}
 	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
-	f.heartbeat()
 
 	// task builder and topology are defined by applications.
 	// Both should be initialized at this point.
@@ -77,23 +76,25 @@ func (f *framework) Start() {
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
 
+	f.heartbeat()
+	f.setupChannels()
+	f.task.Init(f.taskID, f)
 	f.run()
 	f.releaseResource()
 }
 
-func (f *framework) run() {
+func (f *framework) setupChannels() {
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqChan = make(chan *dataRequest, 100)
 	f.dataRespToSendChan = make(chan *dataRequest, 100)
 	f.dataRespChan = make(chan *dataResponse, 100)
+}
 
-	// from this point the task will start doing work
-	f.task.Init(f.taskID, f)
-	f.setEpochStarted()
-
+func (f *framework) run() {
 	f.log.Printf("framework of task %d starts to run", f.taskID)
 	defer f.log.Printf("framework of task %d stops running.", f.taskID)
+	f.setEpochStarted()
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:
