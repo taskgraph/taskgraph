@@ -23,7 +23,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	f.dataRespChan <- d
 }
 
-func (f *framework) getTaskData(taskID, epoch uint64, req string) ([]byte, error) {
+func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error) {
 	dataChan := make(chan []byte, 1)
 	f.dataReqChan <- &dataRequest{
 		taskID:   taskID,
@@ -47,7 +47,7 @@ func (f *framework) getTaskData(taskID, epoch uint64, req string) ([]byte, error
 func (f *framework) startHTTP() {
 	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
 	// TODO: http server graceful shutdown
-	handler := frameworkhttp.NewDataRequestHandler(f.log, f.getTaskData)
+	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
 	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}

@@ -15,11 +15,13 @@ const (
 	DataRequestEpoch  string = "epoch"
 )
 
-type getDataFunc func(uint64, uint64, string) ([]byte, error)
+type DataGetter interface {
+	GetTaskData(uint64, uint64, string) ([]byte, error)
+}
 
 type dataReqHandler struct {
-	logger  *log.Logger
-	getData getDataFunc
+	logger *log.Logger
+	DataGetter
 }
 
 type DataResponse struct {
@@ -29,10 +31,10 @@ type DataResponse struct {
 	Data   []byte
 }
 
-func NewDataRequestHandler(logger *log.Logger, getData getDataFunc) http.Handler {
+func NewDataRequestHandler(logger *log.Logger, dg DataGetter) http.Handler {
 	return &dataReqHandler{
-		logger:  logger,
-		getData: getData,
+		logger:     logger,
+		DataGetter: dg,
 	}
 }
 
@@ -55,7 +57,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	req := q.Get(DataRequestReq)
 
-	b, err := h.getData(fromID, epoch, req)
+	b, err := h.GetTaskData(fromID, epoch, req)
 	if err != nil {
 		// TODO: epoch discrepancy error. send http response for it.
 		h.logger.Panic("unimplemented")
