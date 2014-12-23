@@ -10,7 +10,6 @@ import (
 	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
-	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
 const exitEpoch = math.MaxUint64
@@ -25,37 +24,25 @@ type framework struct {
 	taskBuilder meritop.TaskBuilder
 	topology    meritop.Topology
 
-	task          meritop.Task
-	taskID        uint64
-	epoch         uint64
-	epochChan     chan uint64
-	epochStop     chan bool // for etcd
+	task       meritop.Task
+	taskID     uint64
+	epoch      uint64
+	etcdClient *etcd.Client
+	ln         net.Listener
+
+	// etcd stops
+	stops     []chan bool
+	epochStop chan bool
+
 	heartbeatStop chan struct{}
-	etcdClient    *etcd.Client
-	stops         []chan bool // for etcd
-	ln            net.Listener
-	dataRespChan  chan *frameworkhttp.DataResponse
-	dataReqStop   chan struct{}
-}
 
-type dataResponse struct {
-	taskID uint64
-	req    string
-	data   []byte
-}
-
-// Framework event loop handles data response for requests sent in DataRequest().
-func (f *framework) dataResponseReceiver() {
-	for dataResp := range f.dataRespChan {
-		switch {
-		case topoutil.IsParent(f.topology, f.epoch, dataResp.TaskID):
-			go f.task.ParentDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
-		case topoutil.IsChild(f.topology, f.epoch, dataResp.TaskID):
-			go f.task.ChildDataReady(dataResp.TaskID, dataResp.Req, dataResp.Data)
-		default:
-			panic("unimplemented")
-		}
-	}
+	// event loop
+	epochChan          chan uint64
+	metaChan           chan *metaChange
+	dataReqtoSendChan  chan *dataRequest
+	dataReqChan        chan *dataRequest
+	dataRespToSendChan chan *dataResponse
+	dataRespChan       chan *frameworkhttp.DataResponse
 }
 
 func (f *framework) FlagMetaToParent(meta string) {
@@ -100,19 +87,15 @@ func (f *framework) getAddress(id uint64) (string, error) {
 }
 
 func (f *framework) DataRequest(toID uint64, req string) {
-	addr, err := f.getAddress(toID)
-	if err != nil {
-		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", toID, err)
-		return
+	// assumption here:
+	// Event driven task will call this in a synchronous way so that
+	// the epoch won't change at the time task sending this request.
+	// Epoch may change, however, before the request is actually being sent.
+	f.dataReqtoSendChan <- &dataRequest{
+		taskID: toID,
+		epoch:  f.epoch,
+		req:    req,
 	}
-	go func() {
-		d := frameworkhttp.RequestData(addr, f.taskID, toID, req)
-		select {
-		case f.dataRespChan <- d:
-		case <-f.dataReqStop:
-		}
-	}()
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }

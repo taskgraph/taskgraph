@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -53,7 +52,6 @@ func (f *framework) Start() {
 			f.log.Fatalf("standby failed: %v", err)
 		}
 	}
-	f.heartbeat()
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
 	f.epochStop = make(chan bool, 1)   // stop etcd watch
@@ -74,23 +72,75 @@ func (f *framework) Start() {
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
-	// task init is put before any other routines.
-	// For example, if a watch of parent meta is triggered but task isn't init-ed
-	// yet, then there will a null pointer access
-	f.task.Init(f.taskID, f)
 
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
-	f.dataReqStop = make(chan struct{})
-	go f.dataResponseReceiver()
 
-	defer f.releaseResource()
+	f.heartbeat()
+	f.setupChannels()
+	f.task.Init(f.taskID, f)
+	f.run()
+	f.releaseResource()
+}
+
+func (f *framework) setupChannels() {
+	f.metaChan = make(chan *metaChange, 100)
+	f.dataReqtoSendChan = make(chan *dataRequest, 100)
+	f.dataReqChan = make(chan *dataRequest, 100)
+	f.dataRespToSendChan = make(chan *dataResponse, 100)
+	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+}
+
+func (f *framework) run() {
+	f.log.Printf("framework of task %d starts to run", f.taskID)
+	defer f.log.Printf("framework of task %d stops running.", f.taskID)
+	f.setEpochStarted()
 	for {
-		f.setEpochStarted()
-		nextEpoch := f.waitEpochFinished()
-		if f.epoch = nextEpoch; f.epoch == exitEpoch {
-			break
+		select {
+		case nextEpoch, ok := <-f.epochChan:
+			f.releaseEpochResource()
+			if !ok { // single task exit
+				nextEpoch = exitEpoch
+				return
+			}
+			f.epoch = nextEpoch
+			if f.epoch == exitEpoch {
+				return
+			}
+			// start the next epoch's work
+			f.setEpochStarted()
+		case meta := <-f.metaChan:
+			if meta.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: meta epoch: %d, current epoch: %d", meta.epoch, f.epoch)
+				break
+			}
+			go f.handleMetaChange(meta.who, meta.from, meta.meta)
+		case req := <-f.dataReqtoSendChan:
+			if req.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				break
+			}
+			go f.sendRequest(req)
+		case req := <-f.dataReqChan:
+			if req.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				req.EpochMismatch()
+				break
+			}
+			go f.handleDataReq(req)
+		case resp := <-f.dataRespToSendChan:
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				resp.EpochMismatch()
+				break
+			}
+			go f.sendResponse(resp)
+		case resp := <-f.dataRespChan:
+			if resp.Epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+				break
+			}
+			go f.handleDataResp(resp)
 		}
 	}
 }
@@ -106,16 +156,6 @@ func (f *framework) setEpochStarted() {
 	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
 }
 
-func (f *framework) waitEpochFinished() uint64 {
-	// TODO: we need to discuss how to end current epoch job.
-	nextEpoch, ok := <-f.epochChan
-	if !ok {
-		nextEpoch = exitEpoch
-	}
-	f.releaseEpochResource()
-	return nextEpoch
-}
-
 func (f *framework) releaseEpochResource() {
 	for _, c := range f.stops {
 		c <- true
@@ -125,25 +165,9 @@ func (f *framework) releaseEpochResource() {
 
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
-	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
-	close(f.dataReqStop) // must be closed before dataRespChan
-	close(f.dataRespChan)
+	f.log.Printf("framework of task %d is releasing resources...\n", f.taskID)
 	f.epochStop <- true
 	close(f.heartbeatStop)
-}
-
-// Framework http server for data request.
-// Each request will be in the format: "/datareq?taskID=XXX&req=XXX".
-// "taskID" indicates the requesting task. "req" is the meta data for this request.
-// On success, it should respond with requested data in http body.
-func (f *framework) startHTTP() {
-	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
-	// TODO: http server graceful shutdown
-	epocher := frameworkhttp.Epocher(f)
-	handler := frameworkhttp.NewDataRequestHandler(f.topology, f.task, epocher)
-	if err := http.Serve(f.ln, handler); err != nil {
-		f.log.Fatalf("http.Serve() returns error: %v\n", err)
-	}
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
@@ -177,18 +201,15 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		stops[i] = stop
 
 		var watchPath string
-		var taskCallback func(uint64, string)
 		switch who {
 		case roleParent:
-			// Watch parent's child.
+			// Watch parent's child-meta.
 			watchPath = etcdutil.ChildMetaPath(f.name, taskID)
-			taskCallback = f.task.ParentMetaReady
 		case roleChild:
-			// Watch child's parent.
+			// Watch child's parent-meta.
 			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
-			taskCallback = f.task.ChildMetaReady
 		default:
-			panic("unimplemented")
+			f.log.Panic("unexpected")
 		}
 
 		// When a node working for a task crashed, a new node will take over
@@ -219,14 +240,24 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 				values := strings.SplitN(resp.Node.Value, "-", 2)
 				ep, err := strconv.ParseUint(values[0], 10, 64)
 				if err != nil {
-					f.log.Fatalf("WARN: not a unit64 prepended to meta: %s", values[0])
+					f.log.Panicf("WARN: not a unit64 prepended to meta: %s", values[0])
 				}
-				if ep != f.epoch {
-					continue
+				f.metaChan <- &metaChange{
+					from:  taskID,
+					who:   who,
+					epoch: ep,
+					meta:  values[1],
 				}
-				taskCallback(taskID, values[1])
 			}
 		}(receiver, taskID)
 	}
 	f.stops = append(f.stops, stops...)
+}
+func (f *framework) handleMetaChange(who taskRole, taskID uint64, meta string) {
+	switch who {
+	case roleParent:
+		f.task.ParentMetaReady(taskID, meta)
+	case roleChild:
+		f.task.ChildMetaReady(taskID, meta)
+	}
 }
