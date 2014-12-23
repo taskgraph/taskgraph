@@ -8,16 +8,16 @@ type metaChange struct {
 }
 
 type dataRequest struct {
-	TaskID    uint64
-	Epoch     uint64
-	Req       string
-	dataChan  chan []byte
-	checkChan chan bool
+	taskID   uint64
+	epoch    uint64
+	req      string
+	dataChan chan []byte
 }
 
 type dataResponse struct {
-	TaskID uint64
-	Epoch  uint64
-	Req    string
-	Data   []byte
+	taskID   uint64
+	epoch    uint64
+	req      string
+	data     []byte
+	dataChan chan []byte
 }

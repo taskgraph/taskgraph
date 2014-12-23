@@ -8,6 +8,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
@@ -40,8 +41,8 @@ type framework struct {
 	metaChan           chan *metaChange
 	dataReqtoSendChan  chan *dataRequest
 	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataRequest
-	dataRespChan       chan *dataResponse
+	dataRespToSendChan chan *dataResponse
+	dataRespChan       chan *frameworkhttp.DataResponse
 }
 
 func (f *framework) FlagMetaToParent(meta string) {
@@ -91,21 +92,10 @@ func (f *framework) DataRequest(toID uint64, req string) {
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
-		TaskID: toID,
-		Epoch:  f.epoch,
-		Req:    req,
+		taskID: toID,
+		epoch:  f.epoch,
+		req:    req,
 	}
-}
-
-func (f *framework) sendRequest(dr *dataRequest) {
-	addr, err := f.getAddress(dr.TaskID)
-	if err != nil {
-		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", dr.TaskID, err)
-		return
-	}
-	d := requestData(addr, dr.Req, f.taskID, dr.TaskID, dr.Epoch, f.log)
-	f.dataRespChan <- d
 }
 
 func (f *framework) GetTopology() meritop.Topology { return f.topology }

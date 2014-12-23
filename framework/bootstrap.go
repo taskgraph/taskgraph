@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop"
+	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
 
@@ -87,8 +87,8 @@ func (f *framework) setupChannels() {
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataRequest, 100)
-	f.dataRespChan = make(chan *dataResponse, 100)
+	f.dataRespToSendChan = make(chan *dataResponse, 100)
+	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
 }
 
 func (f *framework) run() {
@@ -114,32 +114,27 @@ func (f *framework) run() {
 				f.log.Printf("epoch mismatch: meta epoch: %d, current epoch: %d", meta.epoch, f.epoch)
 				break
 			}
-			switch meta.who {
-			case roleParent:
-				go f.task.ParentMetaReady(meta.from, meta.meta)
-			case roleChild:
-				go f.task.ChildMetaReady(meta.from, meta.meta)
-			}
+			go f.handleMetaChange(meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
-			if req.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request to send epoch: %d, current epoch: %d", req.Epoch, f.epoch)
+			if req.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
 				break
 			}
 			go f.sendRequest(req)
 		case req := <-f.dataReqChan:
-			if req.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.Epoch, f.epoch)
+			if req.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
 				close(req.dataChan)
 				break
 			}
 			go f.handleDataReq(req)
-		case check := <-f.dataRespToSendChan:
-			if check.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response to send epoch: %d, current epoch: %d", check.Epoch, f.epoch)
-				check.checkChan <- false
+		case resp := <-f.dataRespToSendChan:
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				close(resp.dataChan)
 				break
 			}
-			check.checkChan <- true
+			go f.SendResponse(resp)
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
 				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
@@ -173,19 +168,6 @@ func (f *framework) releaseResource() {
 	f.log.Printf("framework of task %d is releasing resources...\n", f.taskID)
 	f.epochStop <- true
 	close(f.heartbeatStop)
-}
-
-// Framework http server for data request.
-// Each request will be in the format: "/datareq?taskID=XXX&req=XXX".
-// "taskID" indicates the requesting task. "req" is the meta data for this request.
-// On success, it should respond with requested data in http body.
-func (f *framework) startHTTP() {
-	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
-	// TODO: http server graceful shutdown
-	handler := &dataReqHandler{f.dataReqChan}
-	if err := http.Serve(f.ln, handler); err != nil {
-		f.log.Fatalf("http.Serve() returns error: %v\n", err)
-	}
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
@@ -227,7 +209,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 			// Watch child's parent-meta.
 			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
 		default:
-			panic("unimplemented")
+			f.log.Panic("unexpected")
 		}
 
 		// When a node working for a task crashed, a new node will take over
@@ -258,7 +240,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 				values := strings.SplitN(resp.Node.Value, "-", 2)
 				ep, err := strconv.ParseUint(values[0], 10, 64)
 				if err != nil {
-					panic(fmt.Sprintf("WARN: not a unit64 prepended to meta: %s", values[0]))
+					f.log.Panicf("WARN: not a unit64 prepended to meta: %s", values[0])
 				}
 				f.metaChan <- &metaChange{
 					from:  taskID,
@@ -270,4 +252,12 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 		}(receiver, taskID)
 	}
 	f.stops = append(f.stops, stops...)
+}
+func (f *framework) handleMetaChange(who taskRole, taskID uint64, meta string) {
+	switch who {
+	case roleParent:
+		f.task.ParentMetaReady(taskID, meta)
+	case roleChild:
+		f.task.ChildMetaReady(taskID, meta)
+	}
 }
