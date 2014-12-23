@@ -55,7 +55,7 @@ func (c *Controller) InitEtcdLayout() (err error) {
 		return err
 	}
 
-	if _, err := c.etcdclient.CreateDir(etcdutil.FailedTaskDir(c.name), 0); err != nil {
+	if _, err := c.etcdclient.CreateDir(etcdutil.FreeTaskDir(c.name), 0); err != nil {
 		return err
 	}
 

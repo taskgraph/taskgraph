@@ -13,7 +13,7 @@ func TryOccupyTask(client *etcd.Client, name string, taskID uint64, connection s
 		return false
 	}
 	idStr := strconv.FormatUint(taskID, 10)
-	client.Delete(FailedTaskPath(name, idStr), false)
+	client.Delete(FreeTaskPath(name, idStr), false)
 	_, err = client.Set(TaskMasterPath(name, taskID), connection, 0)
 	if err != nil {
 		log.Fatal(err)
