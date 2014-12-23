@@ -77,11 +77,11 @@ func (f *framework) Start() {
 	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
 
-	f.eventloop()
+	f.run()
 	f.releaseResource()
 }
 
-func (f *framework) eventloop() {
+func (f *framework) run() {
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqChan = make(chan *dataRequest, 100)
@@ -92,8 +92,8 @@ func (f *framework) eventloop() {
 	f.task.Init(f.taskID, f)
 	f.setEpochStarted()
 
-	f.log.Printf("task %d starts event loop", f.taskID)
-	defer f.log.Printf("task %d exits event loop!", f.taskID)
+	f.log.Printf("framework of task %d starts to run", f.taskID)
+	defer f.log.Printf("framework of task %d stops running.", f.taskID)
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:
@@ -102,49 +102,49 @@ func (f *framework) eventloop() {
 				nextEpoch = exitEpoch
 				return
 			}
-			if f.epoch = nextEpoch; f.epoch == exitEpoch {
+			f.epoch = nextEpoch
+			if f.epoch == exitEpoch {
 				return
 			}
 			// start the next epoch's work
 			f.setEpochStarted()
-		case mc := <-f.metaChan:
-			if mc.epoch != f.epoch {
+		case meta := <-f.metaChan:
+			if meta.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: meta epoch: %d, current epoch: %d", meta.epoch, f.epoch)
 				break
 			}
-			switch mc.who {
+			switch meta.who {
 			case roleParent:
-				go f.task.ParentMetaReady(mc.from, mc.meta)
+				go f.task.ParentMetaReady(meta.from, meta.meta)
 			case roleChild:
-				go f.task.ChildMetaReady(mc.from, mc.meta)
-			default:
-				panic("unimplemented")
+				go f.task.ChildMetaReady(meta.from, meta.meta)
 			}
 		case req := <-f.dataReqtoSendChan:
 			if req.Epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request to send epoch: %d, current epoch: %d", req.Epoch, f.epoch)
 				break
 			}
 			go f.sendRequest(req)
 		case req := <-f.dataReqChan:
 			if req.Epoch != f.epoch {
+				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.Epoch, f.epoch)
 				close(req.dataChan)
 				break
 			}
 			go f.handleDataReq(req)
 		case check := <-f.dataRespToSendChan:
 			if check.Epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response to send epoch: %d, current epoch: %d", check.Epoch, f.epoch)
 				check.checkChan <- false
 				break
 			}
 			check.checkChan <- true
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
 				break
 			}
 			go f.handleDataResp(resp)
-		}
-
-		if f.epoch == exitEpoch {
-			break
 		}
 	}
 }
@@ -169,7 +169,7 @@ func (f *framework) releaseEpochResource() {
 
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
-	f.log.Printf("task %d stops running. Releasing resources...\n", f.taskID)
+	f.log.Printf("framework of task %d is releasing resources...\n", f.taskID)
 	f.epochStop <- true
 	close(f.heartbeatStop)
 }
