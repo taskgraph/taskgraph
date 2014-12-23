@@ -63,13 +63,13 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(example.NewTreeTopology(2, 2))
 
-	taskBuilder.setupLatch.Add(1)
+	taskBuilder.setupLatch.Add(2)
 	go f0.Start()
-	// we need to let first framework to take first task (parent)
-	taskBuilder.setupLatch.Wait()
-	taskBuilder.setupLatch.Add(1)
 	go f1.Start()
 	taskBuilder.setupLatch.Wait()
+	if f0.GetTaskID() != 0 {
+		f0, f1 = f1, f0
+	}
 
 	defer f0.ShutdownJob()
 
@@ -153,16 +153,18 @@ func TestFrameworkDataRequest(t *testing.T) {
 		pDataChan:  pDataChan,
 		setupLatch: &wg,
 	}
-	taskBuilder.setupLatch.Add(1)
 	f0.SetTaskBuilder(taskBuilder)
 	f0.SetTopology(example.NewTreeTopology(2, 2))
-	go f0.Start()
-	taskBuilder.setupLatch.Wait()
-	taskBuilder.setupLatch.Add(1)
 	f1.SetTaskBuilder(taskBuilder)
 	f1.SetTopology(example.NewTreeTopology(2, 2))
+
+	taskBuilder.setupLatch.Add(2)
+	go f0.Start()
 	go f1.Start()
 	taskBuilder.setupLatch.Wait()
+	if f0.GetTaskID() != 0 {
+		f0, f1 = f1, f0
+	}
 
 	defer f0.ShutdownJob()
 

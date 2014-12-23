@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -35,7 +36,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 		c.InitEtcdLayout()
 
 		for taskID := uint64(0); taskID < tt.numberOfTasks; taskID++ {
-			key := etcdutil.TaskMasterPath(tt.name, taskID)
+			key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(taskID, 10))
 			_, err := etcdClient.Get(key, false, false)
 			if err != nil {
 				t.Errorf("#%d: etcdClient.Get failed: %v", i, err)
