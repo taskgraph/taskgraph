@@ -106,8 +106,6 @@ func (f *framework) run() {
 			f.setEpochStarted()
 		case meta := <-f.metaChan:
 			if meta.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: task %d, meta epoch: %d, current epoch: %d",
-					f.taskID, meta.epoch, f.epoch)
 				break
 			}
 			go f.handleMetaChange(meta.who, meta.from, meta.meta)
