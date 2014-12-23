@@ -49,8 +49,8 @@ func ReportFailure(client *etcd.Client, name, failedTask string) error {
 	return err
 }
 
-// WaitFailure blocks until it gets a hint of taks failure
-func WaitFailure(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
+// WaitFreeTask blocks until it gets a hint of free task
+func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
 	slots, err := client.Get(FreeTaskDir(name), false, true)
 	if err != nil {
 		return 0, err

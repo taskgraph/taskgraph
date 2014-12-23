@@ -171,17 +171,17 @@ func (f *framework) releaseResource() {
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() error {
 	for {
-		failedTask, err := etcdutil.WaitFailure(f.etcdClient, f.name, f.log)
+		freeTask, err := etcdutil.WaitFreeTask(f.etcdClient, f.name, f.log)
 		if err != nil {
 			return err
 		}
-		f.log.Printf("standby got failure at task %d", failedTask)
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, failedTask, f.ln.Addr().String())
+		f.log.Printf("standby got failure at task %d", freeTask)
+		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
 		if ok {
-			f.taskID = failedTask
+			f.taskID = freeTask
 			return nil
 		}
-		f.log.Printf("standby tried task %d failed. Wait failure again.", failedTask)
+		f.log.Printf("standby tried task %d failed. Wait free task again.", freeTask)
 	}
 }
 
