@@ -53,7 +53,7 @@ func (f *framework) startHTTP() {
 	}
 }
 
-func (f *framework) SendResponse(dr *dataResponse) {
+func (f *framework) sendResponse(dr *dataResponse) {
 	dr.dataChan <- dr.data
 }
 

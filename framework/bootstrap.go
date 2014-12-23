@@ -134,7 +134,7 @@ func (f *framework) run() {
 				close(resp.dataChan)
 				break
 			}
-			go f.SendResponse(resp)
+			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
 				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
