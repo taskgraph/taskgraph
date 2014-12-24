@@ -3,6 +3,7 @@ package controller
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
@@ -49,25 +50,21 @@ func (c *Controller) Stop() error {
 	return nil
 }
 
-func (c *Controller) InitEtcdLayout() (err error) {
+func (c *Controller) InitEtcdLayout() error {
 	// Initilize the job epoch to 0
-	if _, err = c.etcdclient.Create(etcdutil.EpochPath(c.name), "0", 0); err != nil {
-		return err
-	}
-
-	if _, err := c.etcdclient.CreateDir(etcdutil.FailedTaskDir(c.name), 0); err != nil {
-		return err
+	if _, err := c.etcdclient.Create(etcdutil.EpochPath(c.name), "0", 0); err != nil {
+		c.logger.Fatalf("controller create initial epoch failed: %v", err)
 	}
 
 	// initiate etcd data layout
 	// currently it creates as many unassigned tasks as task masters.
 	for i := uint64(0); i < c.numOfTasks; i++ {
-		key := etcdutil.TaskMasterPath(c.name, i)
-		if _, err := c.etcdclient.Create(key, "empty", 0); err != nil {
-			return err
+		key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(i, 10))
+		if _, err := c.etcdclient.Create(key, "", 0); err != nil {
+			c.logger.Fatalf("controller create failed. Key: %s, err: %v", key, err)
 		}
 	}
-	return
+	return nil
 }
 
 func (c *Controller) DestroyEtcdLayout() error {

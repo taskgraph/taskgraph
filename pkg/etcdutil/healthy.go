@@ -43,15 +43,15 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log
 }
 
 // report failure to etcd cluster
-// If a framework detects a failure, it tries to report failure to /failedTasks/{taskID}
+// If a framework detects a failure, it tries to report failure to /FreeTasks/{taskID}
 func ReportFailure(client *etcd.Client, name, failedTask string) error {
-	_, err := client.Set(FailedTaskPath(name, failedTask), "failed", 0)
+	_, err := client.Set(FreeTaskPath(name, failedTask), "failed", 0)
 	return err
 }
 
-// WaitFailure blocks until it gets a hint of taks failure
-func WaitFailure(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
-	slots, err := client.Get(FailedTaskDir(name), false, true)
+// WaitFreeTask blocks until it gets a hint of free task
+func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
+	slots, err := client.Get(FreeTaskDir(name), false, true)
 	if err != nil {
 		return 0, err
 	}
@@ -72,7 +72,7 @@ func WaitFailure(client *etcd.Client, name string, logger *log.Logger) (uint64, 
 	go func() {
 		for {
 			logger.Printf("start to wait failure at index %d", watchIndex)
-			resp, err := client.Watch(FailedTaskDir(name), watchIndex, true, nil, nil)
+			resp, err := client.Watch(FreeTaskDir(name), watchIndex, true, nil, nil)
 			if err != nil {
 				logger.Printf("WARN: WaitFailure watch failed: %v", err)
 				return

@@ -1,11 +1,9 @@
 package framework
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 
@@ -46,11 +44,8 @@ func (f *framework) Start() {
 
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
-	if f.taskID, err = f.occupyTask(); err != nil {
-		f.log.Println("standbying...")
-		if err := f.standby(); err != nil {
-			f.log.Fatalf("standby failed: %v", err)
-		}
+	if err = f.occupyTask(); err != nil {
+		f.log.Fatalf("occupyTask() failed: %v", err)
 	}
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
@@ -111,33 +106,36 @@ func (f *framework) run() {
 			f.setEpochStarted()
 		case meta := <-f.metaChan:
 			if meta.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: meta epoch: %d, current epoch: %d", meta.epoch, f.epoch)
 				break
 			}
 			go f.handleMetaChange(meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: task %d, req-to-send epoch: %d, current epoch: %d",
+					f.taskID, req.epoch, f.epoch)
 				break
 			}
 			go f.sendRequest(req)
 		case req := <-f.dataReqChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: task %d, request epoch: %d, current epoch: %d",
+					f.taskID, req.epoch, f.epoch)
 				req.EpochMismatch()
 				break
 			}
 			go f.handleDataReq(req)
 		case resp := <-f.dataRespToSendChan:
 			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: task %d, resp-to-send epoch: %d, current epoch: %d",
+					f.taskID, resp.epoch, f.epoch)
 				resp.EpochMismatch()
 				break
 			}
 			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+				f.log.Printf("epoch mismatch: task %d, response epoch: %d, current epoch: %d",
+					f.taskID, resp.Epoch, f.epoch)
 				break
 			}
 			go f.handleDataResp(resp)
@@ -171,25 +169,20 @@ func (f *framework) releaseResource() {
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
-func (f *framework) occupyTask() (uint64, error) {
-	// get all nodes under task dir
-	slots, err := f.etcdClient.Get(etcdutil.TaskDirPath(f.name), true, true)
-	if err != nil {
-		return 0, err
-	}
-	for _, s := range slots.Node.Nodes {
-		idstr := path.Base(s.Key)
-		id, err := strconv.ParseUint(idstr, 0, 64)
+func (f *framework) occupyTask() error {
+	for {
+		freeTask, err := etcdutil.WaitFreeTask(f.etcdClient, f.name, f.log)
 		if err != nil {
-			f.log.Fatalf("WARN: taskID isn't integer, registration on etcd has been corrupted!")
-			continue
+			return err
 		}
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, id, f.ln.Addr().String())
+		f.log.Printf("standby got failure at task %d", freeTask)
+		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
 		if ok {
-			return id, nil
+			f.taskID = freeTask
+			return nil
 		}
+		f.log.Printf("standby tried task %d failed. Wait free task again.", freeTask)
 	}
-	return 0, fmt.Errorf("no unassigned task found")
 }
 
 func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
