@@ -22,7 +22,7 @@ const (
 	TasksDir       = "tasks"
 	NodesDir       = "nodes"
 	ConfigDir      = "config"
-	FailedDir      = "FreeTasks"
+	FreeDir        = "FreeTasks"
 	Epoch          = "epoch"
 	TaskMaster     = "0"
 	TaskParentMeta = "ParentMeta"
@@ -44,7 +44,7 @@ func TaskHealthyPath(appName string, taskID uint64) string {
 	return path.Join("/", appName, healthy, strconv.FormatUint(taskID, 10))
 }
 func FreeTaskDir(appName string) string {
-	return path.Join("/", appName, FailedDir)
+	return path.Join("/", appName, FreeDir)
 }
 func FreeTaskPath(appName, idStr string) string {
 	return path.Join(FreeTaskDir(appName), idStr)
