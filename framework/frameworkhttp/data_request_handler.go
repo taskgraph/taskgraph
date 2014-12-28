@@ -1,11 +1,13 @@
 package frameworkhttp
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -59,7 +61,10 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.GetTaskData(fromID, epoch, req)
 	if err != nil {
-		// TODO: epoch discrepancy error. send http response for it.
+		if strings.Contains(err.Error(), "epoch mismatch") {
+			w.WriteHeader(888)
+			return
+		}
 		h.logger.Panic("unimplemented")
 	}
 	if _, err := w.Write(b); err != nil {
@@ -87,7 +92,10 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	}
 	defer resp.Body.Close()
 	// TODO: we need to handle epoch discrepancy response
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == 888 {
+			return nil, fmt.Errorf("epoch mismatch")
+		}
 		logger.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
 	}
 	data, err := ioutil.ReadAll(resp.Body)

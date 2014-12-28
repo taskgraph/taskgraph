@@ -20,3 +20,15 @@ func TryOccupyTask(client *etcd.Client, name string, taskID uint64, connection s
 	}
 	return true
 }
+
+// getAddress will return the host:port address of the service taking care of
+// the task that we want to talk to.
+// Currently we grab the information from etcd every time. Local cache could be used.
+// If it failed, e.g. network failure, it should return error.
+func GetAddress(client *etcd.Client, name string, id uint64) (string, error) {
+	resp, err := client.Get(TaskMasterPath(name, id), false, false)
+	if err != nil {
+		return "", err
+	}
+	return resp.Node.Value, nil
+}
