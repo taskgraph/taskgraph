@@ -47,7 +47,8 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 		t.Fatalf("GetAddress failed: %v", err)
 	}
 	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
-	if err.Error() != "epoch mismatch" {
+	// if err.Error() != "epoch mismatch" {
+	if err != frameworkhttp.EpochMismatchError {
 		t.Fatalf("error want = (epoch mismatch), but get = (%s)", err.Error())
 	}
 }

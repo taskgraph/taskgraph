@@ -1,13 +1,16 @@
 package frameworkhttp
 
 import (
-	"fmt"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
+)
+
+var (
+	EpochMismatchError error = errors.New("data request error: epoch mismatch")
 )
 
 const (
@@ -61,8 +64,8 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.GetTaskData(fromID, epoch, req)
 	if err != nil {
-		if strings.Contains(err.Error(), "epoch mismatch") {
-			w.WriteHeader(888)
+		if err == EpochMismatchError {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		h.logger.Panic("unimplemented")
@@ -91,10 +94,10 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 		logger.Fatalf("http: get failed: %v", err)
 	}
 	defer resp.Body.Close()
-	// TODO: we need to handle epoch discrepancy response
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == 888 {
-			return nil, fmt.Errorf("epoch mismatch")
+		if resp.StatusCode == http.StatusInternalServerError {
+			// Now assuming only epoch mismatch can cause this error.
+			return nil, EpochMismatchError
 		}
 		logger.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
 	}

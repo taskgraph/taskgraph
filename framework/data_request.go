@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-distributed/meritop/framework/frameworkhttp"
@@ -36,7 +35,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 	d, ok := <-dataChan
 	if !ok {
 		// it assumes that only epoch mismatch will close the channel
-		return nil, fmt.Errorf("epoch mismatch")
+		return nil, frameworkhttp.EpochMismatchError
 	}
 	return d, nil
 }
