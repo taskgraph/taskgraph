@@ -17,6 +17,10 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	}
 	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
 	if err != nil {
+		if err != frameworkhttp.EpochMismatchError {
+			f.log.Printf("Epoch mismatch error from server")
+			return
+		}
 		f.log.Printf("RequestData failed: %v", err)
 		return
 	}
