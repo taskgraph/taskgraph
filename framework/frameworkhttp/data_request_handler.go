@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	EpochMismatchError error = errors.New("data request error: epoch mismatch")
+	ErrReqEpochMismatch error = errors.New("data request error: epoch mismatch")
 )
 
 const (
@@ -64,7 +64,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.GetTaskData(fromID, epoch, req)
 	if err != nil {
-		if err == EpochMismatchError {
+		if err == ErrReqEpochMismatch {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -97,7 +97,7 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusInternalServerError {
 			// Now assuming only epoch mismatch can cause this error.
-			return nil, EpochMismatchError
+			return nil, ErrReqEpochMismatch
 		}
 		logger.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
 	}

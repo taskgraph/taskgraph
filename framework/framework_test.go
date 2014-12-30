@@ -48,7 +48,7 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	}
 	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
 	// if err.Error() != "epoch mismatch" {
-	if err != frameworkhttp.EpochMismatchError {
+	if err != frameworkhttp.ErrReqEpochMismatch {
 		t.Fatalf("error want = (epoch mismatch), but get = (%s)", err.Error())
 	}
 }

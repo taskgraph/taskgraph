@@ -17,7 +17,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	}
 	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
 	if err != nil {
-		if err != frameworkhttp.EpochMismatchError {
+		if err == frameworkhttp.ErrReqEpochMismatch {
 			f.log.Printf("Epoch mismatch error from server")
 			return
 		}
@@ -39,7 +39,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 	d, ok := <-dataChan
 	if !ok {
 		// it assumes that only epoch mismatch will close the channel
-		return nil, frameworkhttp.EpochMismatchError
+		return nil, frameworkhttp.ErrReqEpochMismatch
 	}
 	return d, nil
 }
