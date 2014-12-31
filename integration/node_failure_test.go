@@ -112,3 +112,9 @@ func TestSlaveParentDataReadyFailure(t *testing.T) {
 	close(taskBuilder.NodeProducer)
 	<-taskBuilder.FinishChan
 }
+
+// This test tests fault tolerance in slave ChildDataReady() if node fails before/after
+// sending data to parent node
+func TestSlaveChildDataReadyFailure(t *testing.T) {
+
+}

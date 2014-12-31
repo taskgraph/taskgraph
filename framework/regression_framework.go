@@ -254,9 +254,12 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 			t.gradient.Value += g.Value
 		}
 
+		// probably fail here
 		t.framework.FlagMetaToParent("GradientReady")
+		// probably fail here
 	}
 }
+
 func (t *dummySlave) testablyFail(method string, args ...string) bool {
 	if t.config == nil {
 		return false
