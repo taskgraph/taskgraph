@@ -29,7 +29,7 @@ const (
 	TaskChildMeta  = "childMeta"
 	NodeAddr       = "address"
 	NodeTTL        = "ttl"
-	healthy        = "healthy"
+	Healthy        = "healthy"
 )
 
 func EpochPath(appName string) string {
@@ -37,11 +37,11 @@ func EpochPath(appName string) string {
 }
 
 func HealthyPath(appName string) string {
-	return path.Join("/", appName, healthy)
+	return path.Join("/", appName, Healthy)
 }
 
 func TaskHealthyPath(appName string, taskID uint64) string {
-	return path.Join("/", appName, healthy, strconv.FormatUint(taskID, 10))
+	return path.Join(HealthyPath(appName), strconv.FormatUint(taskID, 10))
 }
 func FreeTaskDir(appName string) string {
 	return path.Join("/", appName, FreeDir)

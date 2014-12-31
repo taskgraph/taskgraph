@@ -11,8 +11,47 @@ import (
 	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/controller"
 	"github.com/go-distributed/meritop/example"
+	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 )
+
+// TestRequestDataEpochMismatch creates a scenario where data request happened
+// with two different epochs. In this case, the server should back pressure and
+// request client should get notified and return error.
+func TestRequestDataEpochMismatch(t *testing.T) {
+	job := "TestRequestDataEpochMismatch"
+	m := etcdutil.StartNewEtcdServer(t, job)
+	defer m.Terminate(t)
+	etcdURLs := []string{m.URL()}
+	controller := controller.New(job, etcd.NewClient(etcdURLs), 1)
+	controller.Start()
+	defer controller.Stop()
+
+	fw := &framework{
+		name:     job,
+		etcdURLs: etcdURLs,
+		ln:       createListener(t),
+	}
+	var wg sync.WaitGroup
+	fw.SetTaskBuilder(&testableTaskBuilder{
+		setupLatch: &wg,
+	})
+	fw.SetTopology(example.NewTreeTopology(1, 1))
+	wg.Add(1)
+	go fw.Start()
+	defer fw.ShutdownJob()
+	wg.Wait()
+
+	addr, err := etcdutil.GetAddress(fw.etcdClient, job, fw.GetTaskID())
+	if err != nil {
+		t.Fatalf("GetAddress failed: %v", err)
+	}
+	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
+	// if err.Error() != "epoch mismatch" {
+	if err != frameworkhttp.ErrReqEpochMismatch {
+		t.Fatalf("error want = (epoch mismatch), but get = (%s)", err.Error())
+	}
+}
 
 // TestFrameworkFlagMetaReady and TestFrameworkDataRequest test basic workflows of
 // framework impl. It uses a scenario with two nodes: 0 as parent, 1 as child.
@@ -246,7 +285,9 @@ type testableTask struct {
 func (t *testableTask) Init(taskID uint64, framework meritop.Framework) {
 	t.id = taskID
 	t.framework = framework
-	t.setupLatch.Done()
+	if t.setupLatch != nil {
+		t.setupLatch.Done()
+	}
 }
 func (t *testableTask) Exit()                 {}
 func (t *testableTask) SetEpoch(epoch uint64) {}

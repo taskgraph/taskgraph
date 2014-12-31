@@ -74,18 +74,6 @@ func (f *framework) IncEpoch() {
 	}
 }
 
-// getAddress will return the host:port address of the service taking care of
-// the task that we want to talk to.
-// Currently we grab the information from etcd every time. Local cache could be used.
-// If it failed, e.g. network failure, it should return error.
-func (f *framework) getAddress(id uint64) (string, error) {
-	resp, err := f.etcdClient.Get(etcdutil.TaskMasterPath(f.name, id), false, false)
-	if err != nil {
-		return "", err
-	}
-	return resp.Node.Value, nil
-}
-
 func (f *framework) DataRequest(toID uint64, req string) {
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that

@@ -1,15 +1,15 @@
 package framework
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/go-distributed/meritop/framework/frameworkhttp"
+	"github.com/go-distributed/meritop/pkg/etcdutil"
 	"github.com/go-distributed/meritop/pkg/topoutil"
 )
 
 func (f *framework) sendRequest(dr *dataRequest) {
-	addr, err := f.getAddress(dr.taskID)
+	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
 		f.log.Fatalf("getAddress(%d) failed: %v", dr.taskID, err)
@@ -17,6 +17,10 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	}
 	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
 	if err != nil {
+		if err == frameworkhttp.ErrReqEpochMismatch {
+			f.log.Printf("Epoch mismatch error from server")
+			return
+		}
 		f.log.Printf("RequestData failed: %v", err)
 		return
 	}
@@ -35,7 +39,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 	d, ok := <-dataChan
 	if !ok {
 		// it assumes that only epoch mismatch will close the channel
-		return nil, fmt.Errorf("epoch mismatch")
+		return nil, frameworkhttp.ErrReqEpochMismatch
 	}
 	return d, nil
 }
