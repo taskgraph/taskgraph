@@ -14,7 +14,7 @@ type dataRequest struct {
 	dataChan chan []byte
 }
 
-func (dr *dataRequest) EpochMismatch() {
+func (dr *dataRequest) notifyEpochMismatch() {
 	close(dr.dataChan)
 }
 
@@ -26,6 +26,6 @@ type dataResponse struct {
 	dataChan chan []byte
 }
 
-func (dr *dataResponse) EpochMismatch() {
+func (dr *dataResponse) notifyEpochMismatch() {
 	close(dr.dataChan)
 }

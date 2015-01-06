@@ -68,7 +68,6 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	// TODO(hongchao): I haven't figured out a way to shut server down..
 	go f.startHTTP()
 
 	f.heartbeat()
@@ -79,6 +78,7 @@ func (f *framework) Start() {
 }
 
 func (f *framework) setupChannels() {
+	f.closedSignal = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqChan = make(chan *dataRequest, 100)
@@ -120,7 +120,7 @@ func (f *framework) run() {
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: task %d, request epoch: %d, current epoch: %d",
 					f.taskID, req.epoch, f.epoch)
-				req.EpochMismatch()
+				req.notifyEpochMismatch()
 				break
 			}
 			go f.handleDataReq(req)
@@ -128,7 +128,7 @@ func (f *framework) run() {
 			if resp.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: task %d, resp-to-send epoch: %d, current epoch: %d",
 					f.taskID, resp.epoch, f.epoch)
-				resp.EpochMismatch()
+				resp.notifyEpochMismatch()
 				break
 			}
 			go f.sendResponse(resp)
@@ -155,10 +155,10 @@ func (f *framework) setEpochStarted() {
 }
 
 func (f *framework) releaseEpochResource() {
-	for _, c := range f.stops {
+	for _, c := range f.metaStops {
 		c <- true
 	}
-	f.stops = nil
+	f.metaStops = nil
 }
 
 // release resources: heartbeat, epoch watch.
@@ -166,6 +166,7 @@ func (f *framework) releaseResource() {
 	f.log.Printf("framework of task %d is releasing resources...\n", f.taskID)
 	f.epochStop <- true
 	close(f.heartbeatStop)
+	f.stopHTTP()
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
@@ -244,7 +245,7 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 			}
 		}(receiver, taskID)
 	}
-	f.stops = append(f.stops, stops...)
+	f.metaStops = append(f.metaStops, stops...)
 }
 func (f *framework) handleMetaChange(who taskRole, taskID uint64, meta string) {
 	switch who {

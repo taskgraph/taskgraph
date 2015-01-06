@@ -31,9 +31,10 @@ type framework struct {
 	ln         net.Listener
 
 	// etcd stops
-	stops     []chan bool
+	metaStops []chan bool
 	epochStop chan bool
 
+	closedSignal  chan struct{}
 	heartbeatStop chan struct{}
 
 	// event loop

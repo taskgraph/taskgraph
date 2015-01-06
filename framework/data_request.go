@@ -36,12 +36,21 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 		dataChan: dataChan,
 	}
 
-	d, ok := <-dataChan
-	if !ok {
-		// it assumes that only epoch mismatch will close the channel
-		return nil, frameworkhttp.ErrReqEpochMismatch
+	select {
+	case d, ok := <-dataChan:
+		if !ok {
+			// it assumes that only epoch mismatch will close the channel
+			return nil, frameworkhttp.ErrReqEpochMismatch
+		}
+		return d, nil
+	case <-f.closedSignal:
+		// If a node stopped running and there is remaining requests, we need to
+		// respond error message back. It is used to let clients routine run through.
+		// In some tests it will call framework stop() to simulate failure of nodes.
+		// Notifying HTTP clients will be useful in those cases.
+		<-f.dataReqChan
+		return nil, frameworkhttp.ErrServerClosed
 	}
-	return d, nil
 }
 
 // Framework http server for data request.
@@ -55,6 +64,12 @@ func (f *framework) startHTTP() {
 	if err := http.Serve(f.ln, handler); err != nil {
 		f.log.Fatalf("http.Serve() returns error: %v\n", err)
 	}
+}
+
+// Close listener, stop HTTP server;
+// Write error message back to under-serving responses.
+func (f *framework) stopHTTP() {
+
 }
 
 func (f *framework) sendResponse(dr *dataResponse) {

@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrReqEpochMismatch error = errors.New("data request error: epoch mismatch")
+	ErrServerClosed     error = errors.New("server has been closed")
 )
 
 const (
@@ -64,8 +65,9 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.GetTaskData(fromID, epoch, req)
 	if err != nil {
-		if err == ErrReqEpochMismatch {
+		if err == ErrReqEpochMismatch || err == ErrServerClosed {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
 			return
 		}
 		h.logger.Panic("unimplemented")
@@ -91,7 +93,9 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	// pass the response to the awaiting event loop for data response
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		logger.Fatalf("http: get failed: %v", err)
+		// The error could be caused because: 1. network failure; 2. We might have
+		// sent request to failed server.
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
