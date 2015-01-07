@@ -34,7 +34,7 @@ type framework struct {
 	metaStops []chan bool
 	epochStop chan bool
 
-	closedSignal  chan struct{}
+	httpStop      chan struct{}
 	heartbeatStop chan struct{}
 
 	// event loop

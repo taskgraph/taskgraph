@@ -43,7 +43,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 			return nil, frameworkhttp.ErrReqEpochMismatch
 		}
 		return d, nil
-	case <-f.closedSignal:
+	case <-f.httpStop:
 		// If a node stopped running and there is remaining requests, we need to
 		// respond error message back. It is used to let clients routine run through.
 		// In some tests it will call framework stop() to simulate failure of nodes.
@@ -69,7 +69,7 @@ func (f *framework) startHTTP() {
 // Close listener, stop HTTP server;
 // Write error message back to under-serving responses.
 func (f *framework) stopHTTP() {
-
+	close(f.httpStop)
 }
 
 func (f *framework) sendResponse(dr *dataResponse) {

@@ -78,7 +78,7 @@ func (f *framework) Start() {
 }
 
 func (f *framework) setupChannels() {
-	f.closedSignal = make(chan struct{})
+	f.httpStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
 	f.dataReqChan = make(chan *dataRequest, 100)
