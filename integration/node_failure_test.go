@@ -32,7 +32,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 		GDataChan:    make(chan int32, 10),
 		FinishChan:   make(chan struct{}),
 		NodeProducer: make(chan bool, 1),
-		Config: map[string]string{
+		MasterConfig: map[string]string{
 			"SetEpoch":  "fail",
 			"failepoch": "1",
 			"faillevel": "100",
@@ -42,7 +42,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 	if <-taskBuilder.NodeProducer {
-		taskBuilder.Config = nil
+		taskBuilder.MasterConfig = nil
 		log.Println("Starting a new node")
 		// this time we start a new bootstrap whose task master doesn't fail.
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
@@ -65,6 +65,25 @@ func TestMasterSetEpochFailure(t *testing.T) {
 
 func TestSlaveParentDataReadyFailure(t *testing.T) {
 	job := "TestSlavePDataReadyFailure"
+	slaveConfig := map[string]string{
+		"ParentDataReady": "fail",
+		"faillevel":       "3",
+	}
+	testSlaveFailure(t, job, slaveConfig)
+}
+
+// This test tests fault tolerance in slave ChildDataReady() if node fails before/after
+// sending data to parent node
+func TestSlaveChildDataReadyFailure(t *testing.T) {
+	job := "TestSlaveChildDataReadyFailure"
+	slaveConfig := map[string]string{
+		"ChildDataReady": "fail",
+		"faillevel":      "3",
+	}
+	testSlaveFailure(t, job, slaveConfig)
+}
+
+func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	m := etcdutil.StartNewEtcdServer(t, job)
 	defer m.Terminate(t)
 
@@ -81,14 +100,9 @@ func TestSlaveParentDataReadyFailure(t *testing.T) {
 		GDataChan:    make(chan int32, 10),
 		FinishChan:   make(chan struct{}),
 		NodeProducer: make(chan bool, 1),
-		Config: map[string]string{
-			"ParentDataReady": "fail",
-			"faillevel":       "3",
-		},
+		SlaveConfig:  slaveConfig,
 	}
 	go func() {
-		// The failure is theoretically unlimited. So this won't stop until this test finishes.
-		// Task will signal failure to "NodeProducer" and ask for a new node to start.
 		for _ = range taskBuilder.NodeProducer {
 			log.Println("Starting a new node")
 			go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
@@ -111,10 +125,4 @@ func TestSlaveParentDataReadyFailure(t *testing.T) {
 	}
 	close(taskBuilder.NodeProducer)
 	<-taskBuilder.FinishChan
-}
-
-// This test tests fault tolerance in slave ChildDataReady() if node fails before/after
-// sending data to parent node
-func TestSlaveChildDataReadyFailure(t *testing.T) {
-
 }

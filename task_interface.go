@@ -15,16 +15,16 @@ type Task interface {
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(epoch uint64)
 
-	// Ideally, we should also have the following:
+	// NOTE: the meta/data ready notifications follow at-least-once fault
+	// tolerance semantics
 	ParentMetaReady(parentID uint64, meta string)
 	ChildMetaReady(childID uint64, meta string)
+	ParentDataReady(parentID uint64, req string, resp []byte)
+	ChildDataReady(childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) []byte
 	ServeAsChild(fromID uint64, req string) []byte
-
-	ParentDataReady(parentID uint64, req string, resp []byte)
-	ChildDataReady(childID uint64, req string, resp []byte)
 }
 
 type UpdateLog interface {
