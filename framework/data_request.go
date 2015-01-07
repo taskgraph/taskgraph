@@ -61,8 +61,14 @@ func (f *framework) startHTTP() {
 	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
 	// TODO: http server graceful shutdown
 	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
-	if err := http.Serve(f.ln, handler); err != nil {
-		f.log.Fatalf("http.Serve() returns error: %v\n", err)
+	err := http.Serve(f.ln, handler)
+	select {
+	case <-f.httpStop:
+		f.log.Printf("task %d http stops serving", f.taskID)
+	default:
+		if err != nil {
+			f.log.Fatalf("task %d http.Serve() returns error: %v\n", f.taskID, err)
+		}
 	}
 }
 
@@ -70,6 +76,7 @@ func (f *framework) startHTTP() {
 // Write error message back to under-serving responses.
 func (f *framework) stopHTTP() {
 	close(f.httpStop)
+	f.ln.Close()
 }
 
 func (f *framework) sendResponse(dr *dataResponse) {
