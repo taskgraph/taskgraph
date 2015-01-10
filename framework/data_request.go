@@ -45,9 +45,10 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 		return d, nil
 	case <-f.httpStop:
 		// If a node stopped running and there is remaining requests, we need to
-		// respond error message back. It is used to let clients routine run through.
-		// In some tests it will call framework stop() to simulate failure of nodes.
-		// Notifying HTTP clients will be useful in those cases.
+		// respond error message back. It is used to let client routines stop blocking --
+		// especially helpful in test cases.
+
+		// This is used to drain the channel queue and get the rest notified.
 		<-f.dataReqChan
 		return nil, frameworkhttp.ErrServerClosed
 	}
