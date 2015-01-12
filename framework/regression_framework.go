@@ -106,6 +106,9 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 		t.taskID, t.epoch, childID, len(t.fromChildren))
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
+	if _, ok := t.fromChildren[childID]; ok {
+		return
+	}
 	t.fromChildren[childID] = d
 
 	// This is a weak form of checking. We can also check the task ids.
@@ -242,9 +245,12 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 
 func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
-	t.fromChildren[childID] = new(dummyData)
-	json.Unmarshal(resp, t.fromChildren[childID])
-
+	d := new(dummyData)
+	json.Unmarshal(resp, d)
+	if _, ok := t.fromChildren[childID]; ok {
+		return
+	}
+	t.fromChildren[childID] = d
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
@@ -254,9 +260,26 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 			t.gradient.Value += g.Value
 		}
 
+		// If this failure happens, a new node will redo computing again.
+		if t.testablyFail("ChildDataReady") {
+			return
+		}
+
 		t.framework.FlagMetaToParent("GradientReady")
+
+		// if this failure happens, the parent could
+		// 1. not have the data yet. In such case, the parent could
+		//   1.1 not request the data before a new node restarts. This will cause
+		//       double requests since we provide at-least-once semantics.
+		//   1.2 request the data with a failed host (request should fail or be
+		//       responded with error message).
+		// 2. already get the data.
+		if t.testablyFail("ChildDataReady") {
+			return
+		}
 	}
 }
+
 func (t *dummySlave) testablyFail(method string, args ...string) bool {
 	if t.config == nil {
 		return false
@@ -289,7 +312,8 @@ type SimpleTaskBuilder struct {
 	GDataChan    chan int32
 	FinishChan   chan struct{}
 	NodeProducer chan bool
-	Config       map[string]string
+	MasterConfig map[string]string
+	SlaveConfig  map[string]string
 }
 
 // This method is called once by framework implementation to get the
@@ -301,11 +325,11 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 			dataChan:     tc.GDataChan,
 			finishChan:   tc.FinishChan,
 			NodeProducer: tc.NodeProducer,
-			config:       tc.Config,
+			config:       tc.MasterConfig,
 		}
 	}
 	return &dummySlave{
 		NodeProducer: tc.NodeProducer,
-		config:       tc.Config,
+		config:       tc.SlaveConfig,
 	}
 }
