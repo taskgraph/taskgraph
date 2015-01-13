@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/go-distributed/meritop"
 )
@@ -168,6 +169,7 @@ type dummySlave struct {
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
+	gradientReady   *countDownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -197,6 +199,7 @@ func (t *dummySlave) SetEpoch(epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
+	t.gradientReady = newCountDownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
@@ -225,11 +228,14 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	if t.testablyFail("ParentDataReady") {
 		return
 	}
+	if t.gradientReady.Count() == 0 {
+		return
+	}
 	t.param = new(dummyData)
 	json.Unmarshal(resp, t.param)
-
 	// We need to carry out local compuation.
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
+	t.gradientReady.CountDown()
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
@@ -255,6 +261,9 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+		// If a new node restart and find out both parent and child meta ready, it will
+		// simultaneously request both data. We need to wait until gradient data is there.
+		t.gradientReady.Await()
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
@@ -332,4 +341,46 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 		NodeProducer: tc.NodeProducer,
 		config:       tc.SlaveConfig,
 	}
+}
+
+// I am writing this count down latch because sync.WaitGroup doesn't support
+// decrementing counter when it's 0.
+type countDownLatch struct {
+	sync.Mutex
+	cond    *sync.Cond
+	counter int
+}
+
+func newCountDownLatch(count int) *countDownLatch {
+	c := new(countDownLatch)
+	c.cond = sync.NewCond(c)
+	c.counter = count
+	return c
+}
+
+func (c *countDownLatch) Count() int {
+	c.Lock()
+	defer c.Unlock()
+	return c.counter
+}
+
+func (c *countDownLatch) CountDown() {
+	c.Lock()
+	defer c.Unlock()
+	if c.counter == 0 {
+		return
+	}
+	c.counter--
+	if c.counter == 0 {
+		c.cond.Broadcast()
+	}
+}
+
+func (c *countDownLatch) Await() {
+	c.Lock()
+	defer c.Unlock()
+	if c.counter == 0 {
+		return
+	}
+	c.cond.Wait()
 }
