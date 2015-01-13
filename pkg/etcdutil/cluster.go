@@ -28,12 +28,20 @@ import (
 
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/etcdserver/etcdhttp"
+	"github.com/coreos/etcd/pkg/testutil"
+	"github.com/coreos/etcd/pkg/transport"
 	"github.com/coreos/etcd/pkg/types"
+	"github.com/coreos/etcd/rafthttp"
 )
 
 const (
-	tickDuration = 10 * time.Millisecond
-	clusterName  = "etcd"
+	tickDuration   = 10 * time.Millisecond
+	clusterName    = "etcd"
+	requestTimeout = 2 * time.Second
+)
+
+var (
+	electionTicks = 10
 )
 
 func newLocalListener(t *testing.T) net.Listener {
@@ -44,22 +52,19 @@ func newLocalListener(t *testing.T) net.Listener {
 	return l
 }
 
-type member struct {
-	etcdserver.ServerConfig
-	PeerListeners, ClientListeners []net.Listener
-
-	s   *etcdserver.EtcdServer
-	hss []*httptest.Server
-}
-
 func StartNewEtcdServer(t *testing.T, name string) *member {
 	m := MustNewMember(t, name)
 	m.Launch()
 	return m
 }
 
-func (m *member) URL() string {
-	return fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+type member struct {
+	etcdserver.ServerConfig
+	PeerListeners, ClientListeners []net.Listener
+
+	raftHandler *testutil.PauseableHandler
+	s           *etcdserver.EtcdServer
+	hss         []*httptest.Server
 }
 
 func MustNewMember(t *testing.T, name string) *member {
@@ -92,7 +97,8 @@ func MustNewMember(t *testing.T, name string) *member {
 		t.Fatal(err)
 	}
 	m.NewCluster = true
-	m.Transport = newTransport()
+	m.Transport = mustNewTransport(t)
+	m.ElectionTimeoutTicks = electionTicks
 	return m
 }
 
@@ -107,10 +113,12 @@ func (m *member) Launch() error {
 	m.s.SyncTicker = time.Tick(500 * time.Millisecond)
 	m.s.Start()
 
+	m.raftHandler = &testutil.PauseableHandler{Next: etcdhttp.NewPeerHandler(m.s.Cluster, m.s.RaftHandler())}
+
 	for _, ln := range m.PeerListeners {
 		hs := &httptest.Server{
 			Listener: ln,
-			Config:   &http.Server{Handler: etcdhttp.NewPeerHandler(m.s)},
+			Config:   &http.Server{Handler: m.raftHandler},
 		}
 		hs.Start()
 		m.hss = append(m.hss, hs)
@@ -126,6 +134,8 @@ func (m *member) Launch() error {
 	return nil
 }
 
+func (m *member) URL() string { return m.ClientURLs[0].String() }
+
 // Terminate stops the member and removes the data dir.
 func (m *member) Terminate(t *testing.T) {
 	m.s.Stop()
@@ -137,11 +147,10 @@ func (m *member) Terminate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-func newTransport() *http.Transport {
-	tr := &http.Transport{}
-	// TODO: need the support of graceful stop in Sender to remove this
-	tr.DisableKeepAlives = true
-	tr.Dial = (&net.Dialer{Timeout: 100 * time.Millisecond}).Dial
+func mustNewTransport(t *testing.T) *http.Transport {
+	tr, err := transport.NewTimeoutTransport(transport.TLSInfo{}, rafthttp.ConnReadTimeout, rafthttp.ConnWriteTimeout)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return tr
 }
