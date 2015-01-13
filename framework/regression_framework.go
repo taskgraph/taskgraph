@@ -174,7 +174,6 @@ type dummySlave struct {
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
-	t.gradientReady = newCountDownLatch()
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -200,7 +199,7 @@ func (t *dummySlave) SetEpoch(epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
-	t.gradientReady.ResetCounter(1)
+	t.gradientReady = newCountDownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
@@ -229,14 +228,14 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	if t.testablyFail("ParentDataReady") {
 		return
 	}
-	if t.gradientReady.IsDone() {
+	if t.gradientReady.Count() == 0 {
 		return
 	}
 	t.param = new(dummyData)
 	json.Unmarshal(resp, t.param)
 	// We need to carry out local compuation.
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
-	t.gradientReady.Done()
+	t.gradientReady.CountDown()
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
@@ -264,7 +263,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
 		// If a new node restart and find out both parent and child meta ready, it will
 		// simultaneously request both data. We need to wait until gradient data is there.
-		t.gradientReady.Wait()
+		t.gradientReady.Await()
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
@@ -352,23 +351,20 @@ type countDownLatch struct {
 	counter int
 }
 
-func newCountDownLatch() *countDownLatch {
+func newCountDownLatch(count int) *countDownLatch {
 	c := new(countDownLatch)
 	c.cond = sync.NewCond(c)
+	c.counter = count
 	return c
 }
 
-func (c *countDownLatch) ResetCounter(count int) {
-	c.counter = count
-}
-
-func (c *countDownLatch) IsDone() bool {
+func (c *countDownLatch) Count() int {
 	c.Lock()
 	defer c.Unlock()
-	return c.counter == 0
+	return c.counter
 }
 
-func (c *countDownLatch) Done() {
+func (c *countDownLatch) CountDown() {
 	c.Lock()
 	defer c.Unlock()
 	if c.counter == 0 {
@@ -380,7 +376,7 @@ func (c *countDownLatch) Done() {
 	}
 }
 
-func (c *countDownLatch) Wait() {
+func (c *countDownLatch) Await() {
 	c.Lock()
 	defer c.Unlock()
 	if c.counter == 0 {
