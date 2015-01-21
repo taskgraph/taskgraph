@@ -108,7 +108,7 @@ func (f *framework) run() {
 			if meta.epoch != f.epoch {
 				break
 			}
-			go f.handleMetaChange(meta.who, meta.from, meta.meta)
+			go f.handleMetaChange(f.createCtx(), meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: task %d, req-to-send epoch: %d, current epoch: %d",
@@ -138,13 +138,13 @@ func (f *framework) run() {
 					f.taskID, resp.Epoch, f.epoch)
 				break
 			}
-			go f.handleDataResp(resp)
+			go f.handleDataResp(f.createCtx(), resp)
 		}
 	}
 }
 
 func (f *framework) setEpochStarted() {
-	f.task.SetEpoch(f.epoch)
+	f.task.SetEpoch(f.createCtx(), f.epoch)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag
@@ -247,11 +247,12 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 	}
 	f.metaStops = append(f.metaStops, stops...)
 }
-func (f *framework) handleMetaChange(who taskRole, taskID uint64, meta string) {
+
+func (f *framework) handleMetaChange(ctx meritop.Context, who taskRole, taskID uint64, meta string) {
 	switch who {
 	case roleParent:
-		f.task.ParentMetaReady(taskID, meta)
+		f.task.ParentMetaReady(ctx, taskID, meta)
 	case roleChild:
-		f.task.ChildMetaReady(taskID, meta)
+		f.task.ChildMetaReady(ctx, taskID, meta)
 	}
 }

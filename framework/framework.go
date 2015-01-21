@@ -46,8 +46,8 @@ type framework struct {
 	dataRespChan       chan *frameworkhttp.DataResponse
 }
 
-func (f *framework) FlagMetaToParent(meta string) {
-	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+func (f *framework) flagMetaToParent(meta string, epoch uint64) {
+	value := fmt.Sprintf("%d-%s", epoch, meta)
 	_, err := f.etcdClient.Set(etcdutil.ParentMetaPath(f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
@@ -55,8 +55,8 @@ func (f *framework) FlagMetaToParent(meta string) {
 	}
 }
 
-func (f *framework) FlagMetaToChild(meta string) {
-	value := fmt.Sprintf("%d-%s", f.epoch, meta)
+func (f *framework) flagMetaToChild(meta string, epoch uint64) {
+	value := fmt.Sprintf("%d-%s", epoch, meta)
 	_, err := f.etcdClient.Set(etcdutil.ChildMetaPath(f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
@@ -67,22 +67,22 @@ func (f *framework) FlagMetaToChild(meta string) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch() {
-	err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, f.epoch+1)
+func (f *framework) incEpoch(epoch uint64) {
+	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
-			f.taskID, f.epoch+1, f.epoch, err)
+			f.taskID, f.epoch+1, epoch, err)
 	}
 }
 
-func (f *framework) DataRequest(toID uint64, req string) {
+func (f *framework) dataRequest(toID uint64, req string, epoch uint64) {
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
 		taskID: toID,
-		epoch:  f.epoch,
+		epoch:  epoch,
 		req:    req,
 	}
 }

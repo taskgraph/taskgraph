@@ -3,6 +3,7 @@ package framework
 import (
 	"net/http"
 
+	"github.com/go-distributed/meritop"
 	"github.com/go-distributed/meritop/framework/frameworkhttp"
 	"github.com/go-distributed/meritop/pkg/etcdutil"
 	"github.com/go-distributed/meritop/pkg/topoutil"
@@ -18,10 +19,10 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
 	if err != nil {
 		if err == frameworkhttp.ErrReqEpochMismatch {
-			f.log.Printf("Epoch mismatch error from server")
+			f.log.Printf("task %d got epoch mismatch error from server", f.taskID)
 			return
 		}
-		f.log.Printf("RequestData failed: %v", err)
+		f.log.Printf("task %d RequestData failed: %v", f.taskID, err)
 		return
 	}
 	f.dataRespChan <- d
@@ -105,12 +106,12 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	}
 }
 
-func (f *framework) handleDataResp(resp *frameworkhttp.DataResponse) {
+func (f *framework) handleDataResp(ctx meritop.Context, resp *frameworkhttp.DataResponse) {
 	switch {
 	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ParentDataReady(resp.TaskID, resp.Req, resp.Data)
+		f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
 	case topoutil.IsChild(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ChildDataReady(resp.TaskID, resp.Req, resp.Data)
+		f.task.ChildDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
 	default:
 		f.log.Panic("unexpected")
 	}

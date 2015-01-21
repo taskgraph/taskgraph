@@ -13,14 +13,14 @@ type Task interface {
 
 	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
-	SetEpoch(epoch uint64)
+	SetEpoch(ctx Context, epoch uint64)
 
 	// NOTE: the meta/data ready notifications follow at-least-once fault
 	// tolerance semantics
-	ParentMetaReady(parentID uint64, meta string)
-	ChildMetaReady(childID uint64, meta string)
-	ParentDataReady(parentID uint64, req string, resp []byte)
-	ChildDataReady(childID uint64, req string, resp []byte)
+	ParentMetaReady(ctx Context, parentID uint64, meta string)
+	ChildMetaReady(ctx Context, childID uint64, meta string)
+	ParentDataReady(ctx Context, parentID uint64, req string, resp []byte)
+	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) []byte

@@ -63,15 +63,15 @@ func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummyMaster) ParentMetaReady(parentID uint64, meta string) {}
-func (t *dummyMaster) ChildMetaReady(childID uint64, meta string) {
+func (t *dummyMaster) ParentMetaReady(ctx meritop.Context, parentID uint64, meta string) {}
+func (t *dummyMaster) ChildMetaReady(ctx meritop.Context, childID uint64, meta string) {
 	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	// Get data from child. When all the data is back, starts the next epoch.
-	t.framework.DataRequest(childID, meta)
+	ctx.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummyMaster) SetEpoch(epoch uint64) {
+func (t *dummyMaster) SetEpoch(ctx meritop.Context, epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
@@ -85,7 +85,7 @@ func (t *dummyMaster) SetEpoch(epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	t.framework.FlagMetaToChild("ParamReady")
+	ctx.FlagMetaToChild("ParamReady")
 }
 
 // These are payload rpc for application purpose.
@@ -101,8 +101,8 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 	return nil
 }
 
-func (t *dummyMaster) ParentDataReady(parentID uint64, req string, resp []byte) {}
-func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
+func (t *dummyMaster) ParentDataReady(ctx meritop.Context, parentID uint64, req string, resp []byte) {}
+func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
 	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
 		t.taskID, t.epoch, childID, len(t.fromChildren))
 	d := new(dummyData)
@@ -130,7 +130,7 @@ func (t *dummyMaster) ChildDataReady(childID uint64, req string, resp []byte) {
 			close(t.finishChan)
 		} else {
 			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
-			t.framework.IncEpoch()
+			ctx.IncEpoch()
 		}
 	}
 }
@@ -184,18 +184,18 @@ func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummySlave) ParentMetaReady(parentID uint64, meta string) {
+func (t *dummySlave) ParentMetaReady(ctx meritop.Context, parentID uint64, meta string) {
 	t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	t.framework.DataRequest(parentID, meta)
+	ctx.DataRequest(parentID, meta)
 }
 
-func (t *dummySlave) ChildMetaReady(childID uint64, meta string) {
+func (t *dummySlave) ChildMetaReady(ctx meritop.Context, childID uint64, meta string) {
 	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	t.framework.DataRequest(childID, meta)
+	ctx.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(epoch uint64) {
+func (t *dummySlave) SetEpoch(ctx meritop.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
@@ -223,7 +223,7 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 	return b
 }
 
-func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
+func (t *dummySlave) ParentDataReady(ctx meritop.Context, parentID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
@@ -241,15 +241,15 @@ func (t *dummySlave) ParentDataReady(parentID uint64, req string, resp []byte) {
 	// parameter.
 	children := t.framework.GetTopology().GetChildren(t.epoch)
 	if len(children) != 0 {
-		t.framework.FlagMetaToChild("ParamReady")
+		ctx.FlagMetaToChild("ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		t.framework.FlagMetaToParent("GradientReady")
+		ctx.FlagMetaToParent("GradientReady")
 	}
 }
 
-func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
+func (t *dummySlave) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
@@ -274,7 +274,7 @@ func (t *dummySlave) ChildDataReady(childID uint64, req string, resp []byte) {
 			return
 		}
 
-		t.framework.FlagMetaToParent("GradientReady")
+		ctx.FlagMetaToParent("GradientReady")
 
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could

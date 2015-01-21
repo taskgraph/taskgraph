@@ -26,12 +26,6 @@ type BackedUpFramework interface {
 // Framework hides distributed system complexity and provides users convenience of
 // high level features.
 type Framework interface {
-	// These two are useful for task to inform the framework their status change.
-	// metaData has to be really small, since it might be stored in etcd.
-	// Set meta flag to notify parent/child of the change.
-	FlagMetaToParent(meta string)
-	FlagMetaToChild(meta string)
-
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
 
@@ -39,14 +33,24 @@ type Framework interface {
 	// If successful, all tasks will be gracefully shutdown.
 	ShutdownJob()
 
-	// Some task can inform all participating tasks to new epoch
-	IncEpoch()
-
 	GetLogger() *log.Logger
-
-	// Request data from parent or children.
-	DataRequest(toID uint64, meta string)
 
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
+}
+
+// Context is used in task callbacks. It provides APIs for tasks to ask framework
+// to do work in certain context.
+type Context interface {
+	// These two are useful for task to inform the framework their status change.
+	// metaData has to be really small, since it might be stored in etcd.
+	// Set meta flag to notify parent/child of the change.
+	FlagMetaToParent(meta string)
+	FlagMetaToChild(meta string)
+
+	// Some task can inform all participating tasks to new epoch
+	IncEpoch()
+
+	// Request data from parent or children.
+	DataRequest(toID uint64, meta string)
 }

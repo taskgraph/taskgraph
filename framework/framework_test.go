@@ -122,7 +122,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	for i, tt := range tests {
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
-		f0.FlagMetaToChild(tt.cMeta)
+		f0.flagMetaToChild(tt.cMeta, 0)
 		// from child(1)'s view
 		data := <-pDataChan
 		expected := &tDataBundle{0, tt.cMeta, "", nil}
@@ -131,7 +131,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
-		f1.FlagMetaToParent(tt.pMeta)
+		f1.flagMetaToParent(tt.pMeta, 0)
 		// from parent(0)'s view
 		data = <-cDataChan
 		expected = &tDataBundle{1, tt.pMeta, "", nil}
@@ -209,7 +209,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
-		f0.DataRequest(1, tt.req)
+		f0.dataRequest(1, tt.req, 0)
 		// from child(1)'s view at 1: T#ServeAsChild
 		data := <-pDataChan
 		expected := &tDataBundle{0, "", data.req, nil}
@@ -224,7 +224,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 		}
 
 		// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
-		f1.DataRequest(0, tt.req)
+		f1.dataRequest(0, tt.req, 0)
 		// from parent(0)'s view at 0: T#ServeAsParent
 		data = <-cDataChan
 		expected = &tDataBundle{1, "", data.req, nil}
@@ -289,17 +289,17 @@ func (t *testableTask) Init(taskID uint64, framework meritop.Framework) {
 		t.setupLatch.Done()
 	}
 }
-func (t *testableTask) Exit()                 {}
-func (t *testableTask) SetEpoch(epoch uint64) {}
+func (t *testableTask) Exit()                                      {}
+func (t *testableTask) SetEpoch(ctx meritop.Context, epoch uint64) {}
 
-func (t *testableTask) ParentMetaReady(fromID uint64, meta string) {
+func (t *testableTask) ParentMetaReady(ctx meritop.Context, fromID uint64, meta string) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, meta, "", nil}
 	}
 }
 
-func (t *testableTask) ChildMetaReady(fromID uint64, meta string) {
-	t.ParentMetaReady(fromID, meta)
+func (t *testableTask) ChildMetaReady(ctx meritop.Context, fromID uint64, meta string) {
+	t.ParentMetaReady(ctx, fromID, meta)
 }
 
 func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
@@ -311,14 +311,14 @@ func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
 func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
 	return t.ServeAsParent(fromID, req)
 }
-func (t *testableTask) ParentDataReady(fromID uint64, req string, resp []byte) {
+func (t *testableTask) ParentDataReady(ctx meritop.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, resp}
 	}
 }
 
-func (t *testableTask) ChildDataReady(fromID uint64, req string, resp []byte) {
-	t.ParentDataReady(fromID, req, resp)
+func (t *testableTask) ChildDataReady(ctx meritop.Context, fromID uint64, req string, resp []byte) {
+	t.ParentDataReady(ctx, fromID, req, resp)
 }
 
 func createListener(t *testing.T) net.Listener {
