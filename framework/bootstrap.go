@@ -108,6 +108,10 @@ func (f *framework) run() {
 			if meta.epoch != f.epoch {
 				break
 			}
+			// We need to create a context before handling next event. The context saves
+			// the epoch that was meant for this event. This context will be passed
+			// to user event handler functions and used to ask framework to do work later
+			// with previous information.
 			go f.handleMetaChange(f.createCtx(), meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
