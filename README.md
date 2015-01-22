@@ -4,15 +4,15 @@ TaskGraph
 [![Build Status](https://travis-ci.org/go-distributed/meritop.svg)](https://travis-ci.org/go-distributed/meritop)
 
 
-TaskGraph is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology (hence graph). TaskGraph assume for each task (logical unit of work), there are one primary node, and zero or more backup nodes. TaskGraph then help with two types of node failure: failure happens to nodes from different task, failure happens to the nodes from the same task. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on a standard set of events (parent/children fail/restart, primary/backup switch) to task implementation so that it can do application dependent recovery. 
+TaskGraph is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology (hence graph). TaskGraph assume for each task (logical unit of work), there are one primary node, and zero or more backup nodes. TaskGraph then help with two types of node failure: failure happens to nodes from different task, failure happens to the nodes from the same task. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on a standard set of events (parent/children fail/restart, primary/backup switch) to task implementation so that it can do application dependent recovery.
 
 
-TaskGrpah supports an event driven pull model for communication. When one task want to talk to some other task, it set a flag via framework, and framework will notify recipient, which can decide whether or when to fetch data via Framework. Framework will handle communication failures via automatic retry, reconnect to new task node, etc. In another word, it provides fetch-exactly-once semantic on data request.
+TaskGrpah supports an event driven pull model for communication. When one task want to talk to some other task, it set a flag via framework, and framework will notify recipient, which can decide whether or when to fetch data via Framework. Framework will handle communication failures via automatic retry, reconnect to new task node, etc. In another word, it provides at-least-once semantic on data request.
 
 
-An TaskGraph application usually has three layers. And application implementation need to configure TaskGraph in driver layer and also implement Task/TaskBuilder/Topology based on application logic. 
+An TaskGraph application usually has three layers. And application implementation need to configure TaskGraph in driver layer and also implement Task/TaskBuilder/Topology based on application logic.
 
-1. In driver (main function), applicaiton need to configure the task graph. This include setting up TaskBuilder, which specify what task need to run as each node. One also need to specify the network topology which specify who connect to whom at each iteration. Then FrameWork.Start is called so that every node will get into event loop. 
+1. In driver (main function), applicaiton need to configure the task graph. This include setting up TaskBuilder, which specify what task need to run as each node. One also need to specify the network topology which specify who connect to whom at each iteration. Then FrameWork.Start is called so that every node will get into event loop.
 
 2. TaskGraph framework handles fault tolerency within the framework. It uses etcd and/or kubernetes for this purpose. It should also handle the communication between logic task so that it can hide the communication between master and hot standby.
 
