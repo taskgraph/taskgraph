@@ -112,7 +112,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			go f.handleMetaChange(f.createCtx(), meta.who, meta.from, meta.meta)
+			go f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: task %d, req-to-send epoch: %d, current epoch: %d",
@@ -142,13 +142,13 @@ func (f *framework) run() {
 					f.taskID, resp.Epoch, f.epoch)
 				break
 			}
-			go f.handleDataResp(f.createCtx(), resp)
+			go f.handleDataResp(f.createContext(), resp)
 		}
 	}
 }
 
 func (f *framework) setEpochStarted() {
-	f.task.SetEpoch(f.createCtx(), f.epoch)
+	f.task.SetEpoch(f.createContext(), f.epoch)
 
 	// setup etcd watches
 	// - create self's parent and child meta flag

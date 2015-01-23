@@ -5,7 +5,7 @@ type context struct {
 	f     *framework
 }
 
-func (f *framework) createCtx() *context {
+func (f *framework) createContext() *context {
 	return &context{
 		epoch: f.epoch,
 		f:     f,
