@@ -98,7 +98,8 @@ func MustNewMember(t *testing.T, name string) *member {
 	}
 	m.NewCluster = true
 	m.Transport = mustNewTransport(t)
-	m.ElectionTimeoutTicks = electionTicks
+	m.ElectionTicks = electionTicks
+	m.TickMs = uint(tickDuration / time.Millisecond)
 	return m
 }
 
@@ -109,7 +110,6 @@ func (m *member) Launch() error {
 	if m.s, err = etcdserver.NewServer(&m.ServerConfig); err != nil {
 		return fmt.Errorf("failed to initialize the etcd server: %v", err)
 	}
-	m.s.Ticker = time.Tick(tickDuration)
 	m.s.SyncTicker = time.Tick(500 * time.Millisecond)
 	m.s.Start()
 
@@ -147,6 +147,7 @@ func (m *member) Terminate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func mustNewTransport(t *testing.T) *http.Transport {
 	tr, err := transport.NewTimeoutTransport(transport.TLSInfo{}, rafthttp.ConnReadTimeout, rafthttp.ConnWriteTimeout)
 	if err != nil {
