@@ -63,7 +63,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 		if err != nil {
 			return 0, err
 		}
-		logger.Printf("got failures %v at index %d, randomly choose %d to try...", ListKeys(slots.Node.Nodes), slots.EtcdIndex, ri)
+		logger.Printf("got free task %v at index %d, randomly choose %d to try...", ListKeys(slots.Node.Nodes), slots.EtcdIndex, ri)
 		return id, nil
 	}
 

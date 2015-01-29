@@ -1,17 +1,6 @@
 package etcdutil
 
-import (
-	"strings"
-
-	"github.com/coreos/go-etcd/etcd"
-)
-
-func IsKeyNotFound(err error) bool {
-	if strings.Contains(err.Error(), "Key not found") {
-		return true
-	}
-	return false
-}
+import "github.com/coreos/go-etcd/etcd"
 
 func ListKeys(nodes []*etcd.Node) []string {
 	res := make([]string, len(nodes))

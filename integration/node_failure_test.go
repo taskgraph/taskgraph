@@ -21,6 +21,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 
 	etcdURLs := []string{m.URL()}
 	numOfTasks := uint64(15)
+	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
@@ -37,6 +38,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 			"failepoch": "1",
 			"faillevel": "100",
 		},
+		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
@@ -48,10 +50,9 @@ func TestMasterSetEpochFailure(t *testing.T) {
 		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 
-	// wait for last number to comeback.s
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
-	getData := make([]int32, framework.NumOfIterations+1)
-	for i := uint64(0); i <= framework.NumOfIterations; i++ {
+	getData := make([]int32, numOfIterations+1)
+	for i := uint64(0); i <= numOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
 	}
 
@@ -89,6 +90,7 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 
 	etcdURLs := []string{m.URL()}
 	numOfTasks := uint64(15)
+	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
@@ -97,10 +99,11 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
-		GDataChan:    make(chan int32, 10),
-		FinishChan:   make(chan struct{}),
-		NodeProducer: make(chan bool, 1),
-		SlaveConfig:  slaveConfig,
+		GDataChan:          make(chan int32, 10),
+		FinishChan:         make(chan struct{}),
+		NodeProducer:       make(chan bool, 1),
+		SlaveConfig:        slaveConfig,
+		NumberOfIterations: numOfIterations,
 	}
 	go func() {
 		for _ = range taskBuilder.NodeProducer {
@@ -111,10 +114,10 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	for i := uint64(0); i < numOfTasks; i++ {
 		taskBuilder.NodeProducer <- true
 	}
-	// wait for last number to comeback.s
+
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
-	getData := make([]int32, framework.NumOfIterations+1)
-	for i := uint64(0); i <= framework.NumOfIterations; i++ {
+	getData := make([]int32, numOfIterations+1)
+	for i := uint64(0); i <= numOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
 	}
 

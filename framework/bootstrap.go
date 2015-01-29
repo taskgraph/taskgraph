@@ -154,8 +154,8 @@ func (f *framework) setEpochStarted() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.watchAll(roleParent, f.topology.GetParents(f.epoch))
-	f.watchAll(roleChild, f.topology.GetChildren(f.epoch))
+	f.watchMeta(roleParent, f.topology.GetParents(f.epoch))
+	f.watchMeta(roleChild, f.topology.GetChildren(f.epoch))
 }
 
 func (f *framework) releaseEpochResource() {
@@ -190,11 +190,10 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
+func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
-		receiver := make(chan *etcd.Response, 1)
 		stop := make(chan bool, 1)
 		stops[i] = stop
 
@@ -207,47 +206,38 @@ func (f *framework) watchAll(who taskRole, taskIDs []uint64) {
 			// Watch child's parent-meta.
 			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
 		default:
-			f.log.Panic("unexpected")
+			f.log.Panic("unexpected role")
 		}
 
 		// When a node working for a task crashed, a new node will take over
 		// the task and continue what's left. It assumes that progress is stalled
-		// until the new node comes (no middle stages being dismissed by newcomer).
+		// until the new node comes (i.e. epoch won't change).
 
-		resp, err := f.etcdClient.Get(watchPath, false, false)
-		var watchIndex uint64
-		if err != nil {
-			if !etcdutil.IsKeyNotFound(err) {
-				f.log.Fatalf("etcd get failed (not KeyNotFound): %v", err)
-			} else {
-				watchIndex = 1
+		responseHandler := func(resp *etcd.Response, taskID uint64) {
+			if resp.Action != "set" && resp.Action != "get" {
+				return
 			}
-		} else {
-			watchIndex = resp.EtcdIndex + 1
-			receiver <- resp
+			// epoch is prepended to meta. When a new one starts and replaces
+			// the old one, it doesn't need to handle previous things, whose
+			// epoch is smaller than current one.
+			values := strings.SplitN(resp.Node.Value, "-", 2)
+			ep, err := strconv.ParseUint(values[0], 10, 64)
+			if err != nil {
+				f.log.Panicf("WARN: not a unit64 prepended to meta: %s", values[0])
+			}
+			f.metaChan <- &metaChange{
+				from:  taskID,
+				who:   who,
+				epoch: ep,
+				meta:  values[1],
+			}
 		}
-		go f.etcdClient.Watch(watchPath, watchIndex, false, receiver, stop)
-		go func(receiver <-chan *etcd.Response, taskID uint64) {
-			for resp := range receiver {
-				if resp.Action != "set" && resp.Action != "get" {
-					continue
-				}
-				// epoch is prepended to meta. When a new one starts and replaces
-				// the old one, it doesn't need to handle previous things, whose
-				// epoch is smaller than current one.
-				values := strings.SplitN(resp.Node.Value, "-", 2)
-				ep, err := strconv.ParseUint(values[0], 10, 64)
-				if err != nil {
-					f.log.Panicf("WARN: not a unit64 prepended to meta: %s", values[0])
-				}
-				f.metaChan <- &metaChange{
-					from:  taskID,
-					who:   who,
-					epoch: ep,
-					meta:  values[1],
-				}
-			}
-		}(receiver, taskID)
+
+		// Need to pass in taskID to make it work. Didn't know why.
+		err := etcdutil.WatchMeta(f.etcdClient, taskID, watchPath, stop, responseHandler)
+		if err != nil {
+			f.log.Panicf("WatchMeta failed. path: %s, err: %v", watchPath, err)
+		}
 	}
 	f.metaStops = append(f.metaStops, stops...)
 }
