@@ -52,25 +52,19 @@ func (c *Controller) Stop() error {
 
 func (c *Controller) InitEtcdLayout() error {
 	// Initilize the job epoch to 0
-	etcdMustCreate(c.etcdclient, c.logger, etcdutil.EpochPath(c.name), "0", 0)
+	etcdutil.MustCreate(c.etcdclient, c.logger, etcdutil.EpochPath(c.name), "0", 0)
 
 	// initiate etcd data layout
 	// currently it creates as many unassigned tasks as task masters.
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(i, 10))
-		etcdMustCreate(c.etcdclient, c.logger, key, "", 0)
+		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
 		key = etcdutil.ParentMetaPath(c.name, i)
-		etcdMustCreate(c.etcdclient, c.logger, key, "", 0)
+		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
 		key = etcdutil.ChildMetaPath(c.name, i)
-		etcdMustCreate(c.etcdclient, c.logger, key, "", 0)
+		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
 	}
 	return nil
-}
-
-func etcdMustCreate(c *etcd.Client, logger *log.Logger, key, value string, ttl uint64) {
-	if _, err := c.Create(key, value, ttl); err != nil {
-		logger.Panicf("controller create failed. Key: %s, err: %v", key, err)
-	}
 }
 
 func (c *Controller) DestroyEtcdLayout() error {

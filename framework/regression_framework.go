@@ -2,6 +2,8 @@ package framework
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -122,9 +124,11 @@ func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req st
 		// TODO(xiaoyunwu) We need to do some test here.
 
 		// In real ML, we modify the gradient first. But here it is noop.
-		// Notice that we only
 		if t.epoch == t.numberOfIterations {
-			t.logger.Printf("Finished job. Gradient value: %v", t.gradient.Value)
+			if t.config["writefile"] != "" {
+				data := []byte(fmt.Sprintf("Finished job. Gradient value: %v\n", t.gradient.Value))
+				ioutil.WriteFile(t.config["writefile"], data, 0644)
+			}
 			t.framework.ShutdownJob()
 			close(t.finishChan)
 		} else {

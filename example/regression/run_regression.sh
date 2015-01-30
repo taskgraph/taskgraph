@@ -1,2 +1,2 @@
 #!/bin/sh
-./regression -job="haha" -type=t
+./regression -job="regression test" -type=t

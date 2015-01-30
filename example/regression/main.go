@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"net"
+	"os/exec"
+	"sync"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop/controller"
@@ -27,9 +29,16 @@ func main() {
 		log.Printf("controller")
 		controller := controller.New(*job, etcd.NewClient(etcdURLs), ntask)
 		controller.Start()
-		pause := make(chan struct{})
-		<-pause
-		//currently only manually ctrl+c is supported
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		for i := 0; i < 2; i++ {
+			go func() {
+				exec.Command("./run_regression.sh").Run()
+				wg.Done()
+			}()
+		}
+		wg.Wait()
 	case "t":
 		log.Printf("task")
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
@@ -37,6 +46,7 @@ func main() {
 			GDataChan:          make(chan int32, 11),
 			FinishChan:         make(chan struct{}),
 			NumberOfIterations: 10,
+			MasterConfig:       map[string]string{"writefile": "result.txt"},
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
 		bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
