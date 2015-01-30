@@ -124,7 +124,7 @@ func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req st
 		// In real ML, we modify the gradient first. But here it is noop.
 		// Notice that we only
 		if t.epoch == t.numberOfIterations {
-			t.logger.Printf("Finished job. Shutting down...")
+			t.logger.Printf("Finished job. Gradient value: %v", t.gradient.Value)
 			t.framework.ShutdownJob()
 			close(t.finishChan)
 		} else {

@@ -38,17 +38,9 @@ func main() {
 			FinishChan:         make(chan struct{}),
 			NumberOfIterations: 10,
 		}
-		go func() {
-			bootstrap.SetTaskBuilder(taskBuilder)
-			bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
-			bootstrap.Start()
-		}()
-		data := make([]int32, 11)
-		for i := uint64(0); i <= taskBuilder.NumberOfIterations; i++ {
-			data[i] = <-taskBuilder.GDataChan
-		}
-		<-taskBuilder.FinishChan
-		log.Printf("data: %v", data)
+		bootstrap.SetTaskBuilder(taskBuilder)
+		bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
+		bootstrap.Start()
 	default:
 		log.Fatal("Please choose a type: (c) controller, (t) task")
 	}
