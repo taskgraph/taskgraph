@@ -38,15 +38,15 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 		for taskID := uint64(0); taskID < tt.numberOfTasks; taskID++ {
 			key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(taskID, 10))
 			if _, err := etcdClient.Get(key, false, false); err != nil {
-				t.Errorf("task %d: etcdClient.Get failed: %v", i, err)
+				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
 			key = etcdutil.ParentMetaPath(c.name, taskID)
 			if _, err := etcdClient.Get(key, false, false); err != nil {
-				t.Errorf("task %d: etcdClient.Get failed: %v", i, err)
+				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
 			key = etcdutil.ChildMetaPath(c.name, taskID)
 			if _, err := etcdClient.Get(key, false, false); err != nil {
-				t.Errorf("task %d: etcdClient.Get failed: %v", i, err)
+				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
 		}
 
