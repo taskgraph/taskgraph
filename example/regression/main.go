@@ -39,6 +39,7 @@ func main() {
 			}()
 		}
 		wg.Wait()
+		log.Printf("Result has been written to 'result.txt'")
 	case "t":
 		log.Printf("task")
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)

@@ -24,16 +24,12 @@ The example assumes the default port 4001
 
 ### Start controller
 
+Modify `run_controller.sh` file with the correct `ETCDBIN` setting. Then run
+
 ```
 ./run_controller.sh
 ```
 
-### Start task
-
-```
-./run_regression.sh
-```
-Do it in two terminals. Because by default there are two tasks.
-
 ### Clean up
-No clean up needed.
+A binary: `regression`.
+An output file: `result.txt`.
