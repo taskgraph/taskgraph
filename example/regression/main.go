@@ -4,8 +4,6 @@ import (
 	"flag"
 	"log"
 	"net"
-	"os/exec"
-	"sync"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/go-distributed/meritop/controller"
@@ -29,17 +27,7 @@ func main() {
 		log.Printf("controller")
 		controller := controller.New(*job, etcd.NewClient(etcdURLs), ntask)
 		controller.Start()
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-		for i := 0; i < 2; i++ {
-			go func() {
-				exec.Command("./run_regression.sh").Run()
-				wg.Done()
-			}()
-		}
-		wg.Wait()
-		log.Printf("Result has been written to 'result.txt'")
+		controller.WaitForJobDone()
 	case "t":
 		log.Printf("task")
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)

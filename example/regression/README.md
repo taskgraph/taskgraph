@@ -22,14 +22,14 @@ Unzip, start it by doing
 
 The example assumes the default port 4001
 
-### Start controller
+### Run regression framework
 
-Modify `run_controller.sh` file with the correct `ETCDBIN` setting. Then run
+Modify `run_regression.sh` file with the correct `ETCDBIN` setting. Then run
 
 ```
-./run_controller.sh
+./run_regression.sh
 ```
 
 ### Clean up
-A binary: `regression`.
-An output file: `result.txt`.
+A binary: `regression`;
+An output file: `result.txt`;

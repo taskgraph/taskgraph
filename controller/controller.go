@@ -18,6 +18,7 @@ type Controller struct {
 	numOfTasks     uint64
 	failDetectStop chan bool
 	logger         *log.Logger
+	jobStatusChan  chan string
 }
 
 func New(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
@@ -43,6 +44,11 @@ func (c *Controller) Start() error {
 	return nil
 }
 
+func (c *Controller) WaitForJobDone() error {
+	<-c.jobStatusChan
+	return nil
+}
+
 func (c *Controller) Stop() error {
 	c.DestroyEtcdLayout()
 	c.stopFailureDetection()
@@ -53,8 +59,8 @@ func (c *Controller) Stop() error {
 func (c *Controller) InitEtcdLayout() error {
 	// Initilize the job epoch to 0
 	etcdutil.MustCreate(c.etcdclient, c.logger, etcdutil.EpochPath(c.name), "0", 0)
-
-	// initiate etcd data layout
+	c.setupWatchOnJobStatus()
+	// initiate etcd data layout for tasks
 	// currently it creates as many unassigned tasks as task masters.
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(i, 10))
@@ -75,6 +81,19 @@ func (c *Controller) DestroyEtcdLayout() error {
 func (c *Controller) startFailureDetection() error {
 	c.failDetectStop = make(chan bool, 1)
 	return etcdutil.DetectFailure(c.etcdclient, c.name, c.failDetectStop, c.logger)
+}
+
+func (c *Controller) setupWatchOnJobStatus() {
+	c.jobStatusChan = make(chan string, 1)
+	key := etcdutil.JobStatusPath(c.name)
+	resp := etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
+	go func() {
+		resp, err := c.etcdclient.Watch(key, resp.EtcdIndex+1, false, nil, nil)
+		if err != nil {
+			c.logger.Panicf("Watch on job status (%v) failed: %v", key, err)
+		}
+		c.jobStatusChan <- resp.Node.Value
+	}()
 }
 
 func (c *Controller) stopFailureDetection() error {

@@ -32,3 +32,8 @@ func GetAddress(client *etcd.Client, name string, id uint64) (string, error) {
 	}
 	return resp.Node.Value, nil
 }
+
+func SetJobStatus(client *etcd.Client, name string, status int) error {
+	_, err := client.Set(JobStatusPath(name), "done", 0)
+	return err
+}
