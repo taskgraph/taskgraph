@@ -31,6 +31,7 @@ type Framework interface {
 
 	// Some task can inform all participating tasks to shutdown.
 	// If successful, all tasks will be gracefully shutdown.
+	// TODO: @param status
 	ShutdownJob()
 
 	GetLogger() *log.Logger

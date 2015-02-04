@@ -2,6 +2,8 @@ package framework
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -24,10 +26,6 @@ master will print out the epochID and aggregated vector. After all 10 epoch, it 
 job.
 */
 
-const (
-	NumOfIterations uint64 = uint64(10)
-)
-
 // dummyData is used to carry parameter and gradient;
 type dummyData struct {
 	Value int32
@@ -39,13 +37,14 @@ type dummyData struct {
 // Note: in theory, since there should be no parent of this, so we should
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
-	dataChan      chan int32
-	finishChan    chan struct{}
-	NodeProducer  chan bool
-	framework     meritop.Framework
-	epoch, taskID uint64
-	logger        *log.Logger
-	config        map[string]string
+	dataChan           chan int32
+	finishChan         chan struct{}
+	NodeProducer       chan bool
+	framework          meritop.Framework
+	epoch, taskID      uint64
+	logger             *log.Logger
+	config             map[string]string
+	numberOfIterations uint64
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
@@ -103,14 +102,15 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 
 func (t *dummyMaster) ParentDataReady(ctx meritop.Context, parentID uint64, req string, resp []byte) {}
 func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
-	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
-		t.taskID, t.epoch, childID, len(t.fromChildren))
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
 		return
 	}
 	t.fromChildren[childID] = d
+
+	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+		t.taskID, t.epoch, childID, len(t.fromChildren))
 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
@@ -124,8 +124,11 @@ func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req st
 		// TODO(xiaoyunwu) We need to do some test here.
 
 		// In real ML, we modify the gradient first. But here it is noop.
-		// Notice that we only
-		if t.epoch == NumOfIterations {
+		if t.epoch == t.numberOfIterations {
+			if t.config["writefile"] != "" {
+				data := []byte(fmt.Sprintf("Finished job. Gradient value: %v\n", t.gradient.Value))
+				ioutil.WriteFile(t.config["writefile"], data, 0644)
+			}
 			t.framework.ShutdownJob()
 			close(t.finishChan)
 		} else {
@@ -250,13 +253,16 @@ func (t *dummySlave) ParentDataReady(ctx meritop.Context, parentID uint64, req s
 }
 
 func (t *dummySlave) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
-	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
 		return
 	}
 	t.fromChildren[childID] = d
+
+	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+		t.taskID, t.epoch, childID, len(t.fromChildren))
+
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
@@ -318,11 +324,12 @@ func probablyFail(levelStr string) bool {
 
 // used for testing
 type SimpleTaskBuilder struct {
-	GDataChan    chan int32
-	FinishChan   chan struct{}
-	NodeProducer chan bool
-	MasterConfig map[string]string
-	SlaveConfig  map[string]string
+	GDataChan          chan int32
+	FinishChan         chan struct{}
+	NumberOfIterations uint64
+	NodeProducer       chan bool
+	MasterConfig       map[string]string
+	SlaveConfig        map[string]string
 }
 
 // This method is called once by framework implementation to get the
@@ -331,10 +338,11 @@ type SimpleTaskBuilder struct {
 func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
 	if taskID == 0 {
 		return &dummyMaster{
-			dataChan:     tc.GDataChan,
-			finishChan:   tc.FinishChan,
-			NodeProducer: tc.NodeProducer,
-			config:       tc.MasterConfig,
+			dataChan:           tc.GDataChan,
+			finishChan:         tc.FinishChan,
+			NodeProducer:       tc.NodeProducer,
+			config:             tc.MasterConfig,
+			numberOfIterations: tc.NumberOfIterations,
 		}
 	}
 	return &dummySlave{

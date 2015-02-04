@@ -1,17 +1,10 @@
 package etcdutil
 
 import (
-	"strings"
+	"log"
 
 	"github.com/coreos/go-etcd/etcd"
 )
-
-func IsKeyNotFound(err error) bool {
-	if strings.Contains(err.Error(), "Key not found") {
-		return true
-	}
-	return false
-}
 
 func ListKeys(nodes []*etcd.Node) []string {
 	res := make([]string, len(nodes))
@@ -19,4 +12,12 @@ func ListKeys(nodes []*etcd.Node) []string {
 		res[i] = n.Key
 	}
 	return res
+}
+
+func MustCreate(c *etcd.Client, logger *log.Logger, key, value string, ttl uint64) *etcd.Response {
+	resp, err := c.Create(key, value, ttl)
+	if err != nil {
+		logger.Panicf("controller create failed. Key: %s, err: %v", key, err)
+	}
+	return resp
 }

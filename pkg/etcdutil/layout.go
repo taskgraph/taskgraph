@@ -24,6 +24,7 @@ const (
 	ConfigDir      = "config"
 	FreeDir        = "freeTasks"
 	Epoch          = "epoch"
+	Status         = "status"
 	TaskMaster     = "0"
 	TaskParentMeta = "parentMeta"
 	TaskChildMeta  = "childMeta"
@@ -34,6 +35,10 @@ const (
 
 func EpochPath(appName string) string {
 	return path.Join("/", appName, Epoch)
+}
+
+func JobStatusPath(appName string) string {
+	return path.Join("/", appName, Status)
 }
 
 func HealthyPath(appName string) string {

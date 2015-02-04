@@ -97,7 +97,12 @@ func (f *framework) stop() {
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) ShutdownJob() {
-	etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch)
+	if err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch); err != nil {
+		panic("TODO: we should do a set instead of CAS here.")
+	}
+	if err := etcdutil.SetJobStatus(f.etcdClient, f.name, 0); err != nil {
+		panic("SetJobStatus")
+	}
 }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }

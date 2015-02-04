@@ -22,6 +22,7 @@ func TestRegressionFramework(t *testing.T) {
 	job := "framework_regression_test"
 	etcds := []string{url}
 	numOfTasks := uint64(15)
+	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient([]string{url}), numOfTasks)
@@ -30,17 +31,17 @@ func TestRegressionFramework(t *testing.T) {
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
-		GDataChan:  make(chan int32, 11),
-		FinishChan: make(chan struct{}),
+		GDataChan:          make(chan int32, 11),
+		FinishChan:         make(chan struct{}),
+		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcds, numOfTasks, taskBuilder)
 	}
 
-	// wait for last number to comeback.
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
-	getData := make([]int32, framework.NumOfIterations+1)
-	for i := uint64(0); i <= framework.NumOfIterations; i++ {
+	getData := make([]int32, numOfIterations+1)
+	for i := uint64(0); i <= numOfIterations; i++ {
 		getData[i] = <-taskBuilder.GDataChan
 	}
 	for i := range wantData {
