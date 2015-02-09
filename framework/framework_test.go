@@ -23,9 +23,9 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	m := etcdutil.StartNewEtcdServer(t, job)
 	defer m.Terminate(t)
 	etcdURLs := []string{m.URL()}
-	controller := controller.New(job, etcd.NewClient(etcdURLs), 1)
-	controller.Start()
-	defer controller.Stop()
+	ctl := controller.New(job, etcd.NewClient(etcdURLs), 1)
+	ctl.InitEtcdLayout()
+	defer ctl.DestroyEtcdLayout()
 
 	fw := &framework{
 		name:     job,
@@ -39,17 +39,16 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	fw.SetTopology(example.NewTreeTopology(1, 1))
 	wg.Add(1)
 	go fw.Start()
-	defer fw.ShutdownJob()
 	wg.Wait()
+	defer fw.ShutdownJob()
 
 	addr, err := etcdutil.GetAddress(fw.etcdClient, job, fw.GetTaskID())
 	if err != nil {
 		t.Fatalf("GetAddress failed: %v", err)
 	}
 	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
-	// if err.Error() != "epoch mismatch" {
 	if err != frameworkhttp.ErrReqEpochMismatch {
-		t.Fatalf("error want = (epoch mismatch), but get = (%s)", err.Error())
+		t.Fatalf("error want = %v, but get = (%)", frameworkhttp.ErrReqEpochMismatch, err.Error())
 	}
 }
 
