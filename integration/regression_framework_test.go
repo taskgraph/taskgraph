@@ -26,13 +26,11 @@ func TestRegressionFramework(t *testing.T) {
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient([]string{url}), numOfTasks)
-	controller.InitEtcdLayout()
-	defer controller.DestroyEtcdLayout()
+	controller.Start()
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:          make(chan int32, 11),
-		FinishChan:         make(chan struct{}),
 		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
@@ -50,7 +48,8 @@ func TestRegressionFramework(t *testing.T) {
 		}
 	}
 
-	<-taskBuilder.FinishChan
+	controller.WaitForJobDone()
+	controller.Stop()
 }
 
 func createListener(t *testing.T) net.Listener {

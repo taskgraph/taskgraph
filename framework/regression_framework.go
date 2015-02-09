@@ -38,7 +38,6 @@ type dummyData struct {
 // add error checing in the right places. We will skip these test for now.
 type dummyMaster struct {
 	dataChan           chan int32
-	finishChan         chan struct{}
 	NodeProducer       chan bool
 	framework          taskgraph.Framework
 	epoch, taskID      uint64
@@ -131,7 +130,6 @@ func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 				ioutil.WriteFile(t.config["writefile"], data, 0644)
 			}
 			t.framework.ShutdownJob()
-			close(t.finishChan)
 		} else {
 			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
 			ctx.IncEpoch()
@@ -326,7 +324,6 @@ func probablyFail(levelStr string) bool {
 // used for testing
 type SimpleTaskBuilder struct {
 	GDataChan          chan int32
-	FinishChan         chan struct{}
 	NumberOfIterations uint64
 	NodeProducer       chan bool
 	MasterConfig       map[string]string
@@ -340,7 +337,6 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 	if taskID == 0 {
 		return &dummyMaster{
 			dataChan:           tc.GDataChan,
-			finishChan:         tc.FinishChan,
 			NodeProducer:       tc.NodeProducer,
 			config:             tc.MasterConfig,
 			numberOfIterations: tc.NumberOfIterations,

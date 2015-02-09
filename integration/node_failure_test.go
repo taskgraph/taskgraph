@@ -26,12 +26,10 @@ func TestMasterSetEpochFailure(t *testing.T) {
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
 	controller.Start()
-	defer controller.Stop()
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:    make(chan int32, 10),
-		FinishChan:   make(chan struct{}),
 		NodeProducer: make(chan bool, 1),
 		MasterConfig: map[string]string{
 			"SetEpoch":  "fail",
@@ -61,7 +59,8 @@ func TestMasterSetEpochFailure(t *testing.T) {
 			t.Errorf("#%d: data want = %d, get = %d", i, wantData[i], getData[i])
 		}
 	}
-	<-taskBuilder.FinishChan
+	controller.WaitForJobDone()
+	controller.Stop()
 }
 
 func TestSlaveParentDataReadyFailure(t *testing.T) {
@@ -100,7 +99,6 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:          make(chan int32, 10),
-		FinishChan:         make(chan struct{}),
 		NodeProducer:       make(chan bool, 1),
 		SlaveConfig:        slaveConfig,
 		NumberOfIterations: numOfIterations,
@@ -126,6 +124,7 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 			t.Errorf("#%d: data want = %d, get = %d", i, wantData[i], getData[i])
 		}
 	}
+	controller.WaitForJobDone()
+	controller.Stop()
 	close(taskBuilder.NodeProducer)
-	<-taskBuilder.FinishChan
 }

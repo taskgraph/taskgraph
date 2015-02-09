@@ -33,7 +33,6 @@ func main() {
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
 		taskBuilder := &framework.SimpleTaskBuilder{
 			GDataChan:          make(chan int32, 11),
-			FinishChan:         make(chan struct{}),
 			NumberOfIterations: 10,
 			MasterConfig:       map[string]string{"writefile": "result.txt"},
 		}
