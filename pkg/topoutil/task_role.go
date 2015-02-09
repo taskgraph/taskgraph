@@ -1,8 +1,8 @@
 package topoutil
 
-import "github.com/go-distributed/meritop"
+import "github.com/taskgraph/taskgraph"
 
-func IsParent(t meritop.Topology, epoch, taskID uint64) bool {
+func IsParent(t taskgraph.Topology, epoch, taskID uint64) bool {
 	for _, id := range t.GetParents(epoch) {
 		if taskID == id {
 			return true
@@ -11,7 +11,7 @@ func IsParent(t meritop.Topology, epoch, taskID uint64) bool {
 	return false
 }
 
-func IsChild(t meritop.Topology, epoch, taskID uint64) bool {
+func IsChild(t taskgraph.Topology, epoch, taskID uint64) bool {
 	for _, id := range t.GetChildren(epoch) {
 		if taskID == id {
 			return true

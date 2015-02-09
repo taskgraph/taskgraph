@@ -1,4 +1,4 @@
-package meritop
+package taskgraph
 
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.

@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop/controller"
-	"github.com/go-distributed/meritop/framework"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/framework"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 // TestMasterSetEpochFailure checks if a master task failed at SetEpoch,

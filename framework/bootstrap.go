@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 type taskRole int
@@ -22,7 +22,7 @@ const (
 )
 
 // One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) meritop.Bootstrap {
+func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
 	return &framework{
 		name:     jobName,
 		etcdURLs: etcdURLs,
@@ -31,9 +31,9 @@ func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *lo
 	}
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder meritop.TaskBuilder) { f.taskBuilder = taskBuilder }
+func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) { f.taskBuilder = taskBuilder }
 
-func (f *framework) SetTopology(topology meritop.Topology) { f.topology = topology }
+func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
 func (f *framework) Start() {
 	var err error
@@ -242,7 +242,7 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx meritop.Context, who taskRole, taskID uint64, meta string) {
+func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID uint64, meta string) {
 	switch who {
 	case roleParent:
 		f.task.ParentMetaReady(ctx, taskID, meta)

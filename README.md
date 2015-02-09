@@ -1,8 +1,7 @@
 TaskGraph
 =========
 
-[![Build Status](https://travis-ci.org/go-distributed/meritop.svg)](https://travis-ci.org/go-distributed/meritop)
-
+[![Build Status](https://travis-ci.org/taskgraph/taskgraph.svg)](https://travis-ci.org/taskgraph/taskgraph)
 
 TaskGraph is a framework for writing fault tolerent distributed applications. It assumes that application consists of a network of tasks, which are inter-connected based on certain topology (hence graph). TaskGraph assume for each task (logical unit of work), there are one primary node, and zero or more backup nodes. TaskGraph then help with two types of node failure: failure happens to nodes from different task, failure happens to the nodes from the same task. Framework monitors the task/node's health, and take care of restarting the failed tasks, and also pass on a standard set of events (parent/children fail/restart, primary/backup switch) to task implementation so that it can do application dependent recovery.
 

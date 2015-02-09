@@ -3,7 +3,7 @@ package framework
 import (
 	"time"
 
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 var (
