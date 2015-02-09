@@ -6,9 +6,9 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop/controller"
-	"github.com/go-distributed/meritop/example"
-	"github.com/go-distributed/meritop/framework"
+	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/framework"
 )
 
 func main() {

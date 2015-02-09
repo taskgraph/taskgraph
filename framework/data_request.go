@@ -3,10 +3,10 @@ package framework
 import (
 	"net/http"
 
-	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
-	"github.com/go-distributed/meritop/pkg/topoutil"
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/pkg/topoutil"
 )
 
 func (f *framework) sendRequest(dr *dataRequest) {
@@ -106,7 +106,7 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	}
 }
 
-func (f *framework) handleDataResp(ctx meritop.Context, resp *frameworkhttp.DataResponse) {
+func (f *framework) handleDataResp(ctx taskgraph.Context, resp *frameworkhttp.DataResponse) {
 	switch {
 	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
 		f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)

@@ -7,9 +7,9 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 const exitEpoch = math.MaxUint64
@@ -21,10 +21,10 @@ type framework struct {
 	log      *log.Logger
 
 	// user defined interfaces
-	taskBuilder meritop.TaskBuilder
-	topology    meritop.Topology
+	taskBuilder taskgraph.TaskBuilder
+	topology    taskgraph.Topology
 
-	task       meritop.Task
+	task       taskgraph.Task
 	taskID     uint64
 	epoch      uint64
 	etcdClient *etcd.Client
@@ -87,7 +87,7 @@ func (f *framework) dataRequest(toID uint64, req string, epoch uint64) {
 	}
 }
 
-func (f *framework) GetTopology() meritop.Topology { return f.topology }
+func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
 
 // this will shutdown local node instead of global job.
 func (f *framework) stop() {

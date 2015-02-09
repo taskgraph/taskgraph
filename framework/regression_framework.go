@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/go-distributed/meritop"
+	"github.com/taskgraph/taskgraph"
 )
 
 /*
-The dummy task is designed for regresion test of meritop framework.
+The dummy task is designed for regresion test of taskgraph framework.
 This works with tree topology.
 The main idea behind the regression test is following:
 There will be two kinds of dummyTasks: master and slaves. We will have one master
@@ -40,7 +40,7 @@ type dummyMaster struct {
 	dataChan           chan int32
 	finishChan         chan struct{}
 	NodeProducer       chan bool
-	framework          meritop.Framework
+	framework          taskgraph.Framework
 	epoch, taskID      uint64
 	logger             *log.Logger
 	config             map[string]string
@@ -51,7 +51,7 @@ type dummyMaster struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
+func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -62,15 +62,15 @@ func (t *dummyMaster) Init(taskID uint64, framework meritop.Framework) {
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummyMaster) ParentMetaReady(ctx meritop.Context, parentID uint64, meta string) {}
-func (t *dummyMaster) ChildMetaReady(ctx meritop.Context, childID uint64, meta string) {
+func (t *dummyMaster) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
+func (t *dummyMaster) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
 	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
 	// Get data from child. When all the data is back, starts the next epoch.
 	ctx.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummyMaster) SetEpoch(ctx meritop.Context, epoch uint64) {
+func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
@@ -100,8 +100,9 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
 	return nil
 }
 
-func (t *dummyMaster) ParentDataReady(ctx meritop.Context, parentID uint64, req string, resp []byte) {}
-func (t *dummyMaster) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
+func (t *dummyMaster) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
+}
+func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
@@ -164,7 +165,7 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 // It mainly does to things, pass on parameters to its children, and collect
 // gradient back then add them together before make it available to its parent.
 type dummySlave struct {
-	framework     meritop.Framework
+	framework     taskgraph.Framework
 	epoch, taskID uint64
 	logger        *log.Logger
 	NodeProducer  chan bool
@@ -176,7 +177,7 @@ type dummySlave struct {
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
-func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
+func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -187,18 +188,18 @@ func (t *dummySlave) Init(taskID uint64, framework meritop.Framework) {
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummySlave) ParentMetaReady(ctx meritop.Context, parentID uint64, meta string) {
+func (t *dummySlave) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
 	t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 	ctx.DataRequest(parentID, meta)
 }
 
-func (t *dummySlave) ChildMetaReady(ctx meritop.Context, childID uint64, meta string) {
+func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
 	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 	ctx.DataRequest(childID, meta)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(ctx meritop.Context, epoch uint64) {
+func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
@@ -226,7 +227,7 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
 	return b
 }
 
-func (t *dummySlave) ParentDataReady(ctx meritop.Context, parentID uint64, req string, resp []byte) {
+func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
@@ -252,7 +253,7 @@ func (t *dummySlave) ParentDataReady(ctx meritop.Context, parentID uint64, req s
 	}
 }
 
-func (t *dummySlave) ChildDataReady(ctx meritop.Context, childID uint64, req string, resp []byte) {
+func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
@@ -335,7 +336,7 @@ type SimpleTaskBuilder struct {
 // This method is called once by framework implementation to get the
 // right task implementation for the node/task. It requires the taskID
 // for current node, and also a global array of tasks.
-func (tc SimpleTaskBuilder) GetTask(taskID uint64) meritop.Task {
+func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 	if taskID == 0 {
 		return &dummyMaster{
 			dataChan:           tc.GDataChan,
