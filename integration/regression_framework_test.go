@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/controller"
-	"github.com/go-distributed/meritop/example"
-	"github.com/go-distributed/meritop/framework"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/framework"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 func TestRegressionFramework(t *testing.T) {
@@ -26,13 +26,11 @@ func TestRegressionFramework(t *testing.T) {
 
 	// controller start first to setup task directories in etcd
 	controller := controller.New(job, etcd.NewClient([]string{url}), numOfTasks)
-	controller.InitEtcdLayout()
-	defer controller.DestroyEtcdLayout()
+	controller.Start()
 
 	// We need to set etcd so that nodes know what to do.
 	taskBuilder := &framework.SimpleTaskBuilder{
 		GDataChan:          make(chan int32, 11),
-		FinishChan:         make(chan struct{}),
 		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
@@ -50,7 +48,8 @@ func TestRegressionFramework(t *testing.T) {
 		}
 	}
 
-	<-taskBuilder.FinishChan
+	controller.WaitForJobDone()
+	controller.Stop()
 }
 
 func createListener(t *testing.T) net.Listener {
@@ -62,7 +61,7 @@ func createListener(t *testing.T) net.Listener {
 }
 
 // This is used to show how to drive the network.
-func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder meritop.TaskBuilder) {
+func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder taskgraph.TaskBuilder) {
 	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil)
 	bootstrap.SetTaskBuilder(taskBuilder)
 	bootstrap.SetTopology(example.NewTreeTopology(2, ntask))

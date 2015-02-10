@@ -1,4 +1,4 @@
-package meritop
+package taskgraph
 
 type Node interface {
 	// return the ID of this node

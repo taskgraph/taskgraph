@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop"
-	"github.com/go-distributed/meritop/controller"
-	"github.com/go-distributed/meritop/example"
-	"github.com/go-distributed/meritop/framework/frameworkhttp"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 // TestRequestDataEpochMismatch creates a scenario where data request happened
@@ -23,9 +23,9 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	m := etcdutil.StartNewEtcdServer(t, job)
 	defer m.Terminate(t)
 	etcdURLs := []string{m.URL()}
-	controller := controller.New(job, etcd.NewClient(etcdURLs), 1)
-	controller.Start()
-	defer controller.Stop()
+	ctl := controller.New(job, etcd.NewClient(etcdURLs), 1)
+	ctl.InitEtcdLayout()
+	defer ctl.DestroyEtcdLayout()
 
 	fw := &framework{
 		name:     job,
@@ -39,17 +39,16 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	fw.SetTopology(example.NewTreeTopology(1, 1))
 	wg.Add(1)
 	go fw.Start()
-	defer fw.ShutdownJob()
 	wg.Wait()
+	defer fw.ShutdownJob()
 
 	addr, err := etcdutil.GetAddress(fw.etcdClient, job, fw.GetTaskID())
 	if err != nil {
 		t.Fatalf("GetAddress failed: %v", err)
 	}
 	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
-	// if err.Error() != "epoch mismatch" {
 	if err != frameworkhttp.ErrReqEpochMismatch {
-		t.Fatalf("error want = (epoch mismatch), but get = (%s)", err.Error())
+		t.Fatalf("error want = %v, but get = (%)", frameworkhttp.ErrReqEpochMismatch, err.Error())
 	}
 }
 
@@ -254,7 +253,7 @@ type testableTaskBuilder struct {
 	setupLatch *sync.WaitGroup
 }
 
-func (b *testableTaskBuilder) GetTask(taskID uint64) meritop.Task {
+func (b *testableTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 	switch taskID {
 	case 0:
 		return &testableTask{dataMap: b.dataMap, dataChan: b.cDataChan,
@@ -269,7 +268,7 @@ func (b *testableTaskBuilder) GetTask(taskID uint64) meritop.Task {
 
 type testableTask struct {
 	id         uint64
-	framework  meritop.Framework
+	framework  taskgraph.Framework
 	setupLatch *sync.WaitGroup
 	// dataMap will be used to serve data according to request
 	dataMap map[string][]byte
@@ -282,23 +281,23 @@ type testableTask struct {
 	dataChan chan *tDataBundle
 }
 
-func (t *testableTask) Init(taskID uint64, framework meritop.Framework) {
+func (t *testableTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.id = taskID
 	t.framework = framework
 	if t.setupLatch != nil {
 		t.setupLatch.Done()
 	}
 }
-func (t *testableTask) Exit()                                      {}
-func (t *testableTask) SetEpoch(ctx meritop.Context, epoch uint64) {}
+func (t *testableTask) Exit()                                        {}
+func (t *testableTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {}
 
-func (t *testableTask) ParentMetaReady(ctx meritop.Context, fromID uint64, meta string) {
+func (t *testableTask) ParentMetaReady(ctx taskgraph.Context, fromID uint64, meta string) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, meta, "", nil}
 	}
 }
 
-func (t *testableTask) ChildMetaReady(ctx meritop.Context, fromID uint64, meta string) {
+func (t *testableTask) ChildMetaReady(ctx taskgraph.Context, fromID uint64, meta string) {
 	t.ParentMetaReady(ctx, fromID, meta)
 }
 
@@ -311,13 +310,13 @@ func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
 func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
 	return t.ServeAsParent(fromID, req)
 }
-func (t *testableTask) ParentDataReady(ctx meritop.Context, fromID uint64, req string, resp []byte) {
+func (t *testableTask) ParentDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, resp}
 	}
 }
 
-func (t *testableTask) ChildDataReady(ctx meritop.Context, fromID uint64, req string, resp []byte) {
+func (t *testableTask) ChildDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
 	t.ParentDataReady(ctx, fromID, req, resp)
 }
 

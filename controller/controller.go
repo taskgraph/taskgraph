@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 // This is the controller of a job.

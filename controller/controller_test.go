@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 // etcd needs to be initialized beforehand

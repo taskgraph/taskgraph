@@ -6,9 +6,9 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/go-distributed/meritop/controller"
-	"github.com/go-distributed/meritop/example"
-	"github.com/go-distributed/meritop/framework"
+	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/framework"
 )
 
 func main() {
@@ -33,7 +33,6 @@ func main() {
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
 		taskBuilder := &framework.SimpleTaskBuilder{
 			GDataChan:          make(chan int32, 11),
-			FinishChan:         make(chan struct{}),
 			NumberOfIterations: 10,
 			MasterConfig:       map[string]string{"writefile": "result.txt"},
 		}
