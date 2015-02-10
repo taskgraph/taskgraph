@@ -71,7 +71,7 @@ func (f *framework) incEpoch(epoch uint64) {
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
-			f.taskID, f.epoch+1, epoch, err)
+			f.taskID, epoch+1, epoch, err)
 	}
 }
 
