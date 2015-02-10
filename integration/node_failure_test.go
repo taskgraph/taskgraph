@@ -7,7 +7,6 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/framework"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 // TestMasterSetEpochFailure checks if a master task failed at SetEpoch,
@@ -16,10 +15,7 @@ import (
 // 3. finish the job with the same result.
 func TestMasterSetEpochFailure(t *testing.T) {
 	job := "TestMasterSetEpochFailure"
-	m := etcdutil.StartNewEtcdServer(t, job)
-	defer m.Terminate(t)
-
-	etcdURLs := []string{m.URL()}
+	etcdURLs := []string{"http://localhost:4001"}
 	numOfTasks := uint64(15)
 	numOfIterations := uint64(10)
 
@@ -84,10 +80,7 @@ func TestSlaveChildDataReadyFailure(t *testing.T) {
 }
 
 func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
-	m := etcdutil.StartNewEtcdServer(t, job)
-	defer m.Terminate(t)
-
-	etcdURLs := []string{m.URL()}
+	etcdURLs := []string{"http://localhost:4001"}
 	numOfTasks := uint64(15)
 	numOfIterations := uint64(10)
 

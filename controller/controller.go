@@ -80,7 +80,12 @@ func (c *Controller) DestroyEtcdLayout() error {
 
 func (c *Controller) startFailureDetection() error {
 	c.failDetectStop = make(chan bool, 1)
-	return etcdutil.DetectFailure(c.etcdclient, c.name, c.failDetectStop, c.logger)
+	err := etcdutil.DetectFailure(c.etcdclient, c.name, c.failDetectStop)
+	if err != nil {
+		// We currently didn't handle outside. So we do some logging at least.
+		c.logger.Printf("DetectFailure returns error: %v", err)
+	}
+	return err
 }
 
 func (c *Controller) setupWatchOnJobStatus() {

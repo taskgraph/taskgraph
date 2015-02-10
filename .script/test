@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+if ! pgrep etcd >/dev/null 2>&1; then
+    echo "etcd not running!!!"
+    exit 1
+fi
+
 go test -v ./controller
 go test -v ./example
 go test -v ./framework

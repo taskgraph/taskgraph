@@ -33,8 +33,6 @@ func (t *TreeTopology) GetParents(epoch uint64) []uint64 { return t.parents }
 
 func (t *TreeTopology) GetChildren(epoch uint64) []uint64 { return t.children }
 
-func (t *TreeTopology) SetNumberOfTasks(nt uint64) { t.numOfTasks = nt }
-
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
 func NewTreeTopology(fanout, nTasks uint64) *TreeTopology {

@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -20,9 +19,7 @@ import (
 // request client should get notified and return error.
 func TestRequestDataEpochMismatch(t *testing.T) {
 	job := "TestRequestDataEpochMismatch"
-	m := etcdutil.StartNewEtcdServer(t, job)
-	defer m.Terminate(t)
-	etcdURLs := []string{m.URL()}
+	etcdURLs := []string{"http://localhost:4001"}
 	ctl := controller.New(job, etcd.NewClient(etcdURLs), 1)
 	ctl.InitEtcdLayout()
 	defer ctl.DestroyEtcdLayout()
@@ -60,14 +57,9 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 // it's passed from framework correctly and unmodified.
 func TestFrameworkFlagMetaReady(t *testing.T) {
 	appName := "framework_test_flagmetaready"
-	// launch testing etcd server
-	m := etcdutil.MustNewMember(t, appName)
-	m.Launch()
-	defer m.Terminate(t)
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
-
+	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
-	ctl := controller.New(appName, etcd.NewClient([]string{url}), 2)
+	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2)
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
@@ -80,12 +72,12 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	// 0 is parent, 1 is child
 	f0 := &framework{
 		name:     appName,
-		etcdURLs: []string{url},
+		etcdURLs: etcdURLs,
 		ln:       createListener(t),
 	}
 	f1 := &framework{
 		name:     appName,
-		etcdURLs: []string{url},
+		etcdURLs: etcdURLs,
 		ln:       createListener(t),
 	}
 
@@ -142,14 +134,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 func TestFrameworkDataRequest(t *testing.T) {
 	appName := "framework_test_flagmetaready"
-	// launch testing etcd server
-	m := etcdutil.MustNewMember(t, appName)
-	m.Launch()
-	defer m.Terminate(t)
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
-
+	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
-	ctl := controller.New(appName, etcd.NewClient([]string{url}), 2)
+	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2)
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
@@ -175,12 +162,12 @@ func TestFrameworkDataRequest(t *testing.T) {
 	// 0 is parent, 1 is child
 	f0 := &framework{
 		name:     appName,
-		etcdURLs: []string{url},
+		etcdURLs: etcdURLs,
 		ln:       createListener(t),
 	}
 	f1 := &framework{
 		name:     appName,
-		etcdURLs: []string{url},
+		etcdURLs: etcdURLs,
 		ln:       createListener(t),
 	}
 

@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"fmt"
 	"net"
 	"testing"
 
@@ -10,22 +9,17 @@ import (
 	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example"
 	"github.com/taskgraph/taskgraph/framework"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
 func TestRegressionFramework(t *testing.T) {
-	m := etcdutil.MustNewMember(t, "framework_regression_test")
-	m.Launch()
-	defer m.Terminate(t)
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
+	etcdURLs := []string{"http://localhost:4001"}
 
 	job := "framework_regression_test"
-	etcds := []string{url}
 	numOfTasks := uint64(15)
 	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
-	controller := controller.New(job, etcd.NewClient([]string{url}), numOfTasks)
+	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
 	controller.Start()
 
 	// We need to set etcd so that nodes know what to do.
@@ -34,7 +28,7 @@ func TestRegressionFramework(t *testing.T) {
 		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcds, numOfTasks, taskBuilder)
+		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
