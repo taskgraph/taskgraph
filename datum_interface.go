@@ -1,4 +1,4 @@
-package meritop
+package taskgraph
 
 // Datum is the interface for basic loading and transformation.
 type Datum interface{}

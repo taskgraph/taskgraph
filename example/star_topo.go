@@ -15,14 +15,14 @@ func (t *StarTopology) SetTaskID(taskID uint64) {
 	// Not the most efficient way to create parents and children, but
 	// since this is not on critical path, we are ok.
 	if taskID == 0 {
-		t.parents = nil
+		t.parents = make([]uint64, 0, 0)
 		t.children = make([]uint64, 0, t.numOfTasks)
 		for index := uint64(1); index < t.numOfTasks; index++ {
 			t.children = append(t.children, index)
 		}
 	} else {
 		t.parents = make([]uint64, 0, 1)
-		t.children = nil
+		t.children = make([]uint64, 0, 0)
 	}
 
 }
