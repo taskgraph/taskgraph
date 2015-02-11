@@ -7,11 +7,23 @@ if [ ! -d ".tmp" ]; then
 fi
 
 cleanup() {
-  kill $(jobs -p)
+  kill $(jobs -p) 2>/dev/null
   rm -r $ETCDTESTDIR
 }
 # cleanup on any kind of exit
 trap "cleanup" SIGINT SIGTERM EXIT
+
+is_etcd_up_on_4001() {
+  if curl -fs "http://localhost:4001/v2/machines" 2>/dev/null; then
+      return 0
+  fi
+  return 1
+}
+
+if is_etcd_up_on_4001 ; then
+  echo "existing etcd on localhost:4001"
+  exit 1
+fi
 
 if [ -d "$ETCDTESTDIR" ]; then
   rm -r $ETCDTESTDIR
@@ -25,15 +37,16 @@ fi
 
 for i in $(seq 10); do
   sleep 1
-  if out=$(curl "http://localhost:4001/v2/machines" 2>/dev/null); then
-    echo "etcd:" $out
+  if is_etcd_up_on_4001; then
     break
   fi
 done
 
-if ! pgrep etcd >/dev/null 2>&1; then
-    echo "etcd not running!!!"
-    exit 1
+if is_etcd_up_on_4001 ; then
+  echo "etcd is running on localhost:4001"
+else
+  echo "etcd failed to run on localhost:4001"
+  exit 1
 fi
 
 # testing
