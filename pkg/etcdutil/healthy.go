@@ -27,16 +27,15 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 }
 
 // detect failure of the given taskID
-func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log.Logger) error {
+func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 	receiver := make(chan *etcd.Response, 1)
 	go client.Watch(HealthyPath(name), 0, true, receiver, stop)
 	for resp := range receiver {
 		if resp.Action != "expire" && resp.Action != "delete" {
 			continue
 		}
-		err := ReportFailure(client, name, path.Base(resp.Node.Key))
-		if err != nil {
-			logger.Printf("ReportFailure returns error: %v", err)
+		if err := ReportFailure(client, name, path.Base(resp.Node.Key)); err != nil {
+			return err
 		}
 	}
 	return nil

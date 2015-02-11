@@ -17,7 +17,7 @@ func ListKeys(nodes []*etcd.Node) []string {
 func MustCreate(c *etcd.Client, logger *log.Logger, key, value string, ttl uint64) *etcd.Response {
 	resp, err := c.Create(key, value, ttl)
 	if err != nil {
-		logger.Panicf("controller create failed. Key: %s, err: %v", key, err)
+		logger.Panicf("Create failed. Key: %s, err: %v", key, err)
 	}
 	return resp
 }

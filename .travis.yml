@@ -5,7 +5,9 @@ go:
 
 install:
   - go get github.com/coreos/go-etcd/etcd
-  - go get github.com/coreos/etcd
+
+before_script:
+  - mkdir .tmp
 
 script:
- - .script/test
+  - .script/test

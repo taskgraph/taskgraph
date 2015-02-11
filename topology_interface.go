@@ -26,7 +26,4 @@ type Topology interface {
 	// GetChlidren returns the children's IDs of this task at the
 	// given epoch.
 	GetChildren(epoch uint64) []uint64
-
-	// Inform the new NumberOfTasks, this allow the number of tasks to change.
-	SetNumberOfTasks(numOfTasks uint64)
 }
