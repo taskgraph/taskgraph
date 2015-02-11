@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"sync"
 
 	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/pkg/common"
 )
 
 /*
@@ -51,7 +51,7 @@ type bwmfTask struct {
 	dShard, tShard *bwmfData
 	d, t           *bwmfData
 
-	dtReady *countDownLatch // We need to get all d or t ready before we start the local fitting.
+	dtReady *common.CountDownLatch // We need to get all d or t ready before we start the local fitting.
 }
 
 // These two function carry out actual optimization.
@@ -68,7 +68,7 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	// a. Read both rowShards and columnShards from disk.
 	// b. Random initialization of both dShard and tShard.
 }
-func (t *bwmfTask) Exit()
+func (t *bwmfTask) Exit() {}
 
 // Ideally, we should also have the following:
 func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
@@ -88,7 +88,7 @@ func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta st
 func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 
-	t.dtReady = newCountDownLatch(1)
+	t.dtReady = common.NewCountDownLatch(1)
 
 	t.epoch = epoch
 
@@ -161,46 +161,4 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		NodeProducer: tc.NodeProducer,
 		config:       tc.SlaveConfig,
 	}
-}
-
-// I am writing this count down latch because sync.WaitGroup doesn't support
-// decrementing counter when it's 0.
-type countDownLatch struct {
-	sync.Mutex
-	cond    *sync.Cond
-	counter int
-}
-
-func newCountDownLatch(count int) *countDownLatch {
-	c := new(countDownLatch)
-	c.cond = sync.NewCond(c)
-	c.counter = count
-	return c
-}
-
-func (c *countDownLatch) Count() int {
-	c.Lock()
-	defer c.Unlock()
-	return c.counter
-}
-
-func (c *countDownLatch) CountDown() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.counter--
-	if c.counter == 0 {
-		c.cond.Broadcast()
-	}
-}
-
-func (c *countDownLatch) Await() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.cond.Wait()
 }

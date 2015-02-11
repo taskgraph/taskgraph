@@ -8,9 +8,9 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"sync"
 
 	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/pkg/common"
 )
 
 /*
@@ -169,7 +169,7 @@ type dummySlave struct {
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
-	gradientReady   *countDownLatch
+	gradientReady   *common.CountDownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -197,7 +197,7 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
-	t.gradientReady = newCountDownLatch(1)
+	t.gradientReady = common.NewCountDownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
@@ -342,46 +342,4 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		NodeProducer: tc.NodeProducer,
 		config:       tc.SlaveConfig,
 	}
-}
-
-// I am writing this count down latch because sync.WaitGroup doesn't support
-// decrementing counter when it's 0.
-type countDownLatch struct {
-	sync.Mutex
-	cond    *sync.Cond
-	counter int
-}
-
-func newCountDownLatch(count int) *countDownLatch {
-	c := new(countDownLatch)
-	c.cond = sync.NewCond(c)
-	c.counter = count
-	return c
-}
-
-func (c *countDownLatch) Count() int {
-	c.Lock()
-	defer c.Unlock()
-	return c.counter
-}
-
-func (c *countDownLatch) CountDown() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.counter--
-	if c.counter == 0 {
-		c.cond.Broadcast()
-	}
-}
-
-func (c *countDownLatch) Await() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.cond.Wait()
 }
