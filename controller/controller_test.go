@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -11,13 +10,7 @@ import (
 
 // etcd needs to be initialized beforehand
 func TestControllerInitEtcdLayout(t *testing.T) {
-	m := etcdutil.MustNewMember(t, "controller_test")
-	m.Launch()
-	defer m.Terminate(t)
-
-	url := fmt.Sprintf("http://%s", m.ClientListeners[0].Addr().String())
-
-	etcdClient := etcd.NewClient([]string{url})
+	etcdClient := etcd.NewClient([]string{"http://localhost:4001"})
 
 	tests := []struct {
 		name          string
