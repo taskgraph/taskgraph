@@ -94,6 +94,10 @@ func (f *framework) stop() {
 	close(f.epochChan)
 }
 
+func (f *framework) Kill() {
+	f.stop()
+}
+
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
 func (f *framework) ShutdownJob() {

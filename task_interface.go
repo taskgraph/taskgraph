@@ -8,7 +8,7 @@ type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(taskID uint64, framework Framework)
 
-	// Task need to finish up for exit, last chance to save work?
+	// Task is finished up for exit. Last chance to save some task specific work.
 	Exit()
 
 	// Framework tells user task what current epoch is.

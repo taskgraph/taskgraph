@@ -56,8 +56,6 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
-
-// Task need to finish up for exit, last chance to save work?
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
@@ -181,8 +179,6 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
-
-// Task need to finish up for exit, last chance to save work?
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:

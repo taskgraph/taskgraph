@@ -16,18 +16,15 @@ type Bootstrap interface {
 	Start()
 }
 
-// Note that framework can decide how update can be done, and how to serve the updatelog.
-type BackedUpFramework interface {
-	// Ask framework to do update on this update on this task, which consists
-	// of one primary and some backup copies.
-	Update(taskID uint64, log UpdateLog)
-}
-
 // Framework hides distributed system complexity and provides users convenience of
 // high level features.
 type Framework interface {
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
+
+	// Kill the framework itself.
+	// As epoch changes, some nodes isn't needed anymore
+	Kill()
 
 	// Some task can inform all participating tasks to shutdown.
 	// If successful, all tasks will be gracefully shutdown.
@@ -54,4 +51,11 @@ type Context interface {
 
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
+}
+
+// Note that framework can decide how update can be done, and how to serve the updatelog.
+type BackedUpFramework interface {
+	// Ask framework to do update on this update on this task, which consists
+	// of one primary and some backup copies.
+	Update(taskID uint64, log UpdateLog)
 }

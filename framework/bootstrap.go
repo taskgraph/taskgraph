@@ -75,6 +75,7 @@ func (f *framework) Start() {
 	f.task.Init(f.taskID, f)
 	f.run()
 	f.releaseResource()
+	f.task.Exit()
 }
 
 func (f *framework) setupChannels() {

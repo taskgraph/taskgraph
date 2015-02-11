@@ -275,7 +275,7 @@ func (t *testableTask) Init(taskID uint64, framework taskgraph.Framework) {
 		t.setupLatch.Done()
 	}
 }
-func (t *testableTask) Exit()                                        {}
+func (t *testableTask) Exit()
 func (t *testableTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {}
 
 func (t *testableTask) ParentMetaReady(ctx taskgraph.Context, fromID uint64, meta string) {

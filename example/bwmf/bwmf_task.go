@@ -17,11 +17,11 @@ The main idea behind the bwmf is following:
 We will have K bwmfTasks that handles both row task and column task in alternation. Each bwmfTask will read
 two copies of the data (one sharded by row, another sharded by column), it also host one shard of D and one
 shard of T. Depending on which iteration it is in, it also have to potentially have a full copy of T or D
-which it drains from all other slaves before it start its local interation.
+which it drains from all other slaves before it start its local interaction.
 */
 
 // bwmfData is used to carry indexes and values associated with each index. Index here
-// can be row ro column id, and value can be K wide, one for each topic;
+// can be row or column id, and value can be K wide, one for each topic;
 type bwmfData struct {
 	Indexes []int32
 	Values  []float32
@@ -32,8 +32,8 @@ type sparseVec struct {
 	Value []float32
 }
 
-// bwmfTasks holds two shards of original matrixes (row and column shards), one shard of D, and one shard
-// of T. It does thing different for odd epoach and even epoch. During odd epoch, it fetch all T from all
+// bwmfTasks holds two shards of original matrices (row and column shards), one shard of D, and one shard
+// of T. It works differently for odd epoch and even epoch. During odd epoch, it fetch all T from all
 // other slaves, and finding better value for local shard of D, after it is done, it let every one knows.
 // Task 0 will monitor the progress and call framework.SetEpoch to start the new epoch.
 // During even epoch, it fetch all D from all other slaves, and finding better value for local shard of T.
@@ -63,22 +63,12 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// Things need to be done here:
 	// a. Read both rowShards and columnShards from disk.
-	// b. Random initialized both dShard tShard.
-
-	// These two are all we need to bootstrap the entire process.
-
-	// finally task 0 start the job.
-	if t.taskID == 0 {
-		// t.framework.SetEpoch(0)
-	}
+	// b. Random initialization of both dShard and tShard.
 }
-
-// Task need to finish up for exit, last chance to save work?
-func (t *bwmfTask) Exit() {}
+func (t *bwmfTask) Exit()
 
 // Ideally, we should also have the following:
 func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
