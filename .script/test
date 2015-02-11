@@ -1,11 +1,44 @@
 #!/bin/bash -e
 
+ETCDTESTDIR=".tmp/etcd-testdir"
+
+if [ ! -d ".tmp" ]; then
+    mkdir .tmp
+fi
+
+cleanup() {
+  kill $(jobs -p)
+  rm -r $ETCDTESTDIR
+}
+# cleanup on any kind of exit
+trap "cleanup" SIGINT SIGTERM EXIT
+
+if [ -d "$ETCDTESTDIR" ]; then
+  rm -r $ETCDTESTDIR
+fi
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    .script/bin/etcd --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
+else
+    .script/bin/etcd-v2.0.0-linux-amd64/etcd --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
+fi
+
+for i in $(seq 10); do
+  if out=$(curl "http://localhost:4001/v2/machines" 2>/dev/null); then
+    echo "etcd:" $out
+    break
+  fi
+  sleep 1
+done
+
 if ! pgrep etcd >/dev/null 2>&1; then
     echo "etcd not running!!!"
     exit 1
 fi
 
+# testing
 go test -v ./controller
 go test -v ./example
 go test -v ./framework
 go test -v ./integration
+

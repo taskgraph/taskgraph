@@ -8,7 +8,6 @@ install:
 
 before_script:
   - mkdir .tmp
-  - .script/start-etcd.sh
 
 script:
   - .script/test
