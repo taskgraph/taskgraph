@@ -24,11 +24,11 @@ else
 fi
 
 for i in $(seq 10); do
+  sleep 1
   if out=$(curl "http://localhost:4001/v2/machines" 2>/dev/null); then
     echo "etcd:" $out
     break
   fi
-  sleep 1
 done
 
 if ! pgrep etcd >/dev/null 2>&1; then

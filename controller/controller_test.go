@@ -21,11 +21,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		c := &Controller{
-			name:       tt.name,
-			etcdclient: etcdClient,
-			numOfTasks: tt.numberOfTasks,
-		}
+		c := New(tt.name, etcdClient, tt.numberOfTasks)
 		c.InitEtcdLayout()
 
 		for taskID := uint64(0); taskID < tt.numberOfTasks; taskID++ {
