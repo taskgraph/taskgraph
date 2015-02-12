@@ -1,4 +1,4 @@
-package example
+package regression
 
 //The tree structure is basically assume that all the task forms a tree.
 //Also the tree structure stays the same between epochs.

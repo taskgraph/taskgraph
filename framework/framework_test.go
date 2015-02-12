@@ -9,7 +9,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/example/regression"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
@@ -33,7 +33,7 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	fw.SetTaskBuilder(&testableTaskBuilder{
 		setupLatch: &wg,
 	})
-	fw.SetTopology(example.NewTreeTopology(1, 1))
+	fw.SetTopology(regression.NewTreeTopology(1, 1))
 	wg.Add(1)
 	go fw.Start()
 	wg.Wait()
@@ -89,9 +89,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(example.NewTreeTopology(2, 2))
+	f0.SetTopology(regression.NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(example.NewTreeTopology(2, 2))
+	f1.SetTopology(regression.NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()
@@ -179,9 +179,9 @@ func TestFrameworkDataRequest(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(example.NewTreeTopology(2, 2))
+	f0.SetTopology(regression.NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(example.NewTreeTopology(2, 2))
+	f1.SetTopology(regression.NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()

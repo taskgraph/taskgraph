@@ -51,7 +51,7 @@ fi
 
 # testing
 go test -v ./controller
-go test -v ./example
+go test -v ./example/regression
 go test -v ./framework
 go test -v ./integration
 

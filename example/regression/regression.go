@@ -1,4 +1,4 @@
-package framework
+package regression
 
 import (
 	"encoding/json"
@@ -152,7 +152,7 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("master task %d testably fail, method: %s\n", t.taskID, method)
-	t.framework.(*framework).stop()
+	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
 }
@@ -301,7 +301,7 @@ func (t *dummySlave) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("slave task %d testably fail, method: %s\n", t.taskID, method)
-	t.framework.(*framework).stop()
+	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
 }
