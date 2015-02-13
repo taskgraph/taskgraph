@@ -10,33 +10,34 @@ import (
 )
 
 /*
-The block wise matrix factorization task is designed for carry out block wise matrix factorization
-for a variety of criteria (loss function) and constraints (nonnegativity for example).
+The block wise matrix factorization task is designed for carry out block wise matrix
+factorization for a variety of criteria (loss function) and constraints (nonnegativity
+for example).
 
 The main idea behind the bwmf is following:
-We will have K bwmfTasks that handles both row task and column task in alternation. Each bwmfTask will read
-two copies of the data (one sharded by row, another sharded by column), it also host one shard of D and one
-shard of T. Depending on which iteration it is in, it also have to potentially have a full copy of T or D
-which it drains from all other slaves before it start its local interaction.
+We will have K tasks that handle both row task and column task in alternation. Each task
+will read two copies of the data: one row shard and one column shard of A. It either hosts
+one shard of D and a full copy of T, or one shard of T and a full copy of D, depending on
+the epoch of iteration. "A full copy" consists of computation results from all slaves.
 */
 
 // bwmfData is used to carry indexes and values associated with each index. Index here
 // can be row or column id, and value can be K wide, one for each topic;
 type bwmfData struct {
-	Indexes []int32
-	Values  []float32
+	Index  int
+	Values []float64
 }
 
 type sparseVec struct {
-	Index []int32
-	Value []float32
+	Indexes []int
+	Values  []float64
 }
 
-// bwmfTasks holds two shards of original matrices (row and column shards), one shard of D, and one shard
-// of T. It works differently for odd epoch and even epoch. During odd epoch, it fetch all T from all
-// other slaves, and finding better value for local shard of D, after it is done, it let every one knows.
-// Task 0 will monitor the progress and call framework.SetEpoch to start the new epoch.
-// During even epoch, it fetch all D from all other slaves, and finding better value for local shard of T.
+// bwmfTasks holds two shards of original matrices (row and column), one shard of D,
+// and one shard of T. It works differently for odd and even epoch:
+// During odd epoch, 1. it fetch all T from other slaves, and finding better value for
+// local shard of D; 2. after it is done, it let every one knows. Vice versa for even epoch.
+// Task 0 will monitor the progress and responsible for starting the work of new epoch.
 type bwmfTask struct {
 	framework     taskgraph.Framework
 	epoch, taskID uint64
@@ -72,7 +73,10 @@ func (t *bwmfTask) Exit() {}
 
 // Ideally, we should also have the following:
 func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
-	t.logger.Fatal("We should not receive parent meta for master")
+	if t.taskID == 0 {
+		t.framework.ShutdownJob()
+		t.logger.Fatal("We should not receive parent meta for master")
+	}
 }
 
 func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
@@ -144,21 +148,9 @@ func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req str
 	t.logger.Fatal("We should not receive child meta for master")
 }
 
-// used for testing
-type SimpleTaskBuilder struct {
-	GDataChan          chan int32
-	NumberOfIterations uint64
-	NodeProducer       chan bool
-	MasterConfig       map[string]string
-	SlaveConfig        map[string]string
+type BWMFTaskBuilder struct {
 }
 
-// This method is called once by framework implementation to get the
-// right task implementation for the node/task. It requires the taskID
-// for current node, and also a global array of tasks.
-func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
-	return &bwmfTask{
-		NodeProducer: tc.NodeProducer,
-		config:       tc.SlaveConfig,
-	}
+func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
+	return &bwmfTask{}
 }

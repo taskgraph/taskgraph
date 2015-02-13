@@ -8,6 +8,7 @@ import (
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/regression"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 
@@ -58,6 +59,6 @@ func createListener(t *testing.T) net.Listener {
 func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder taskgraph.TaskBuilder) {
 	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil)
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(regression.NewTreeTopology(2, ntask))
+	bootstrap.SetTopology(topo.NewTreeTopology(2, ntask))
 	bootstrap.Start()
 }
