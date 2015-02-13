@@ -70,14 +70,21 @@ func (t *bwmfTask) Exit() {}
 func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
 
 func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	ctx.DataRequest(childID, meta)
+	if t.taskID != 0 {
+		panic("")
+	}
+
+	// we need a map?
+	t.dtReady.CountDown()
+	// if we have all data, start next iteration.
+	ctx.IncEpoch()
 }
 
 func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.epoch = epoch
 
-	// At epoch 0:
+	// At epoch 0 (initialization):
 	//   a. Read both rowShards and columnShards from disk.
 	//   b. Random initialization of both dShard and tShard.
 	// Then Task 0 will start the iterations -- we use epoch 1 here.
@@ -142,16 +149,7 @@ func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req s
 	// Step C: we notify master that we are done.
 }
 
-func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
-	if t.taskID != 0 {
-		panic("")
-	}
-
-	// we need a map?
-	t.dtReady.CountDown()
-	// if we have all data, start next iteration.
-	ctx.IncEpoch()
-}
+func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {}
 
 type BWMFTaskBuilder struct {
 }
