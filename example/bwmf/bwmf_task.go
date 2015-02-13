@@ -64,40 +64,36 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-
-	// Things need to be done here:
-	// a. Read both rowShards and columnShards from disk.
-	// b. Random initialization of both dShard and tShard.
 }
 func (t *bwmfTask) Exit() {}
 
-// Ideally, we should also have the following:
-func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
-	if t.taskID == 0 {
-		t.framework.ShutdownJob()
-		t.logger.Fatal("We should not receive parent meta for master")
-	}
-}
+func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
 
 func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	// Task zero should maintain the barrier here so that when it has ChildMeta from all the children,
-	// it will call framework.SetEpoch to increment the epoch.
-	if t.taskID == 0 {
-
-	}
+	ctx.DataRequest(childID, meta)
 }
 
-// This give the task an opportunity to cleanup and regroup.
-//
 func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
-
-	t.dtReady = common.NewCountDownLatch(1)
-
 	t.epoch = epoch
 
+	// At epoch 0:
+	//   a. Read both rowShards and columnShards from disk.
+	//   b. Random initialization of both dShard and tShard.
+	// Then Task 0 will start the iterations -- we use epoch 1 here.
+	//
+	// After epoch 0:
 	// We need to get all D/T from last epoch so that we can carry out local
 	// update on T/D.
+
+	if epoch == 0 {
+		return
+	}
+
+	if t.taskID == 0 {
+		t.dtReady = common.NewCountDownLatch(1)
+	}
+
 	if t.epoch%2 == 0 {
 		for index := uint64(1); index < t.numOfTasks; index++ {
 			if index != t.taskID {
@@ -135,6 +131,8 @@ func (t *bwmfTask) ServeAsChild(fromID uint64, req string) []byte {
 }
 
 func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
+	// Task zero should maintain the barrier here to get child from all the children,
+
 	// This is the main body for the bwmf
 	// There are three steps we need to handle:
 	// Step A: we keep on collect all the D (or T) depending on which epoch we are on.
@@ -145,7 +143,14 @@ func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req s
 }
 
 func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
-	t.logger.Fatal("We should not receive child meta for master")
+	if t.taskID != 0 {
+		panic("")
+	}
+
+	// we need a map?
+	t.dtReady.CountDown()
+	// if we have all data, start next iteration.
+	ctx.IncEpoch()
 }
 
 type BWMFTaskBuilder struct {
