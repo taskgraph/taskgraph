@@ -4,6 +4,7 @@ package taskgraph
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
 
+// Except ServerAsX(), all others are event handling functions and should be non-blocking.
 type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(taskID uint64, framework Framework)
@@ -15,8 +16,8 @@ type Task interface {
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(ctx Context, epoch uint64)
 
-	// NOTE: the meta/data ready notifications follow at-least-once fault
-	// tolerance semantics
+	// The meta/data notifications obey exactly-once semantics. Note that the same
+	// meta string will be notified only once even if you flag the meta more than once.
 	ParentMetaReady(ctx Context, parentID uint64, meta string)
 	ChildMetaReady(ctx Context, childID uint64, meta string)
 	ParentDataReady(ctx Context, parentID uint64, req string, resp []byte)

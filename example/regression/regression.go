@@ -280,7 +280,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could
 		//   1.1 not request the data before a new node restarts. This will cause
-		//       double requests since we provide at-least-once semantics.
+		//       double requests since we provide at-least-once semantics (!outdated).
 		//   1.2 request the data with a failed host (request should fail or be
 		//       responded with error message).
 		// 2. already get the data.

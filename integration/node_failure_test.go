@@ -24,7 +24,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 	controller.Start()
 
 	taskBuilder := &regression.SimpleTaskBuilder{
-		GDataChan:    make(chan int32, 10),
+		GDataChan:    make(chan int32, 11),
 		NodeProducer: make(chan bool, 1),
 		MasterConfig: map[string]string{
 			"SetEpoch":  "fail",
@@ -89,7 +89,7 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	defer controller.Stop()
 
 	taskBuilder := &regression.SimpleTaskBuilder{
-		GDataChan:          make(chan int32, 10),
+		GDataChan:          make(chan int32, 11),
 		NodeProducer:       make(chan bool, 1),
 		SlaveConfig:        slaveConfig,
 		NumberOfIterations: numOfIterations,

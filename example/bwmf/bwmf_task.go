@@ -71,7 +71,7 @@ func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta 
 
 func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
 	if t.taskID != 0 {
-		panic("")
+		panic("only task 0 can have children")
 	}
 
 	// we need a map?
@@ -94,6 +94,7 @@ func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	// update on T/D.
 
 	if epoch == 0 {
+		// initialization
 		return
 	}
 
@@ -116,6 +117,20 @@ func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	}
 }
 
+func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
+	// Task zero should maintain the barrier here to get child from all the children,
+
+	// This is the main body for the bwmf
+	// There are three steps we need to handle:
+	// Step A: we keep on collect all the D (or T) depending on which epoch we are on.
+
+	// Step B: When we have all the data needed, we compute the local update for D (or T).
+
+	// Step C: we notify master that we are done.
+}
+
+func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {}
+
 // These are payload rpc for application purpose.
 func (t *bwmfTask) ServeAsParent(fromID uint64, req string) []byte {
 	if t.epoch%2 == 0 {
@@ -136,20 +151,6 @@ func (t *bwmfTask) ServeAsParent(fromID uint64, req string) []byte {
 func (t *bwmfTask) ServeAsChild(fromID uint64, req string) []byte {
 	return nil
 }
-
-func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
-	// Task zero should maintain the barrier here to get child from all the children,
-
-	// This is the main body for the bwmf
-	// There are three steps we need to handle:
-	// Step A: we keep on collect all the D (or T) depending on which epoch we are on.
-
-	// Step B: When we have all the data needed, we compute the local update for D (or T).
-
-	// Step C: we notify master that we are done.
-}
-
-func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {}
 
 type BWMFTaskBuilder struct {
 }

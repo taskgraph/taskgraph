@@ -91,6 +91,7 @@ func (f *framework) run() {
 	f.log.Printf("framework of task %d starts to run", f.taskID)
 	defer f.log.Printf("framework of task %d stops running.", f.taskID)
 	f.setEpochStarted()
+	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:
@@ -113,7 +114,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			go f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
+			f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: task %d, req-to-send epoch: %d, current epoch: %d",
@@ -143,7 +144,7 @@ func (f *framework) run() {
 					f.taskID, resp.Epoch, f.epoch)
 				break
 			}
-			go f.handleDataResp(f.createContext(), resp)
+			f.handleDataResp(f.createContext(), resp)
 		}
 	}
 }
