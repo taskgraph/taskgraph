@@ -189,7 +189,12 @@ func (t *dummySlave) ParentMetaReady(ctx taskgraph.Context, parentID uint64, met
 
 func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
 	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	ctx.DataRequest(childID, meta)
+	go func() {
+		// If a new node restart and find out both parent and child meta ready, it will
+		// simultaneously request both data. We need to wait until gradient data is there.
+		t.gradientReady.Await()
+		ctx.DataRequest(childID, meta)
+	}()
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -262,9 +267,6 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
-		// If a new node restart and find out both parent and child meta ready, it will
-		// simultaneously request both data. We need to wait until gradient data is there.
-		t.gradientReady.Await()
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
