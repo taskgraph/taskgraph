@@ -98,16 +98,22 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusInternalServerError {
-			// Now assuming only epoch mismatch can cause this error.
-			return nil, ErrReqEpochMismatch
-		}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusInternalServerError {
 		logger.Fatalf("http: response code = %d, expect = %d", resp.StatusCode, 200)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Fatalf("http: ioutil.ReadAll(%v) returns error: %v", resp.Body, err)
+	}
+	if resp.StatusCode == http.StatusInternalServerError {
+		logger.Printf("http error bytes: %s", string(data))
+		if string(data) == ErrReqEpochMismatch.Error() {
+			return nil, ErrReqEpochMismatch
+		}
+		if string(data) == ErrServerClosed.Error() {
+			return nil, ErrServerClosed
+		}
+		logger.Fatalf("Unknown error: %v", data)
 	}
 	return &DataResponse{
 		TaskID: to,

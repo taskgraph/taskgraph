@@ -11,6 +11,7 @@ type dataRequest struct {
 	taskID   uint64
 	epoch    uint64
 	req      string
+	retry    bool
 	dataChan chan []byte
 }
 
