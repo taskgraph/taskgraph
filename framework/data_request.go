@@ -104,14 +104,6 @@ func (f *framework) sendResponse(dr *dataResponse) {
 }
 
 func (f *framework) handleDataReq(dr *dataRequest) {
-	// Note:
-	// There are two improvement that I want to do:
-	// 1. Make ServeAsX non-blocking API. This will require us to pass in
-	//    a data channel.
-	// 2. We can't leave a go-routine to wait for the data channel forever.
-	//    Users might forget to close the channel if they didn't want to do anything.
-	//	  I think we can clean it up in releaseEpochResource() as the epoch moves on.
-	//    Because we won't be interested even though the data would come later.
 	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
@@ -136,6 +128,11 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 				data:     data,
 				dataChan: dr.dataChan,
 			}
+		case <-f.epochPassed:
+			// We can't leave a go-routine to wait for the data channel forever.
+			// Users might forget to close the channel if they didn't want to do anything.
+			// We can clean it up in releaseEpochResource() as the epoch moves on.
+			// Because we won't be interested even though the data would come later.
 		}
 	}()
 }

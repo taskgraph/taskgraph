@@ -149,10 +149,11 @@ func (f *framework) run() {
 }
 
 func (f *framework) setEpochStarted() {
-	f.task.SetEpoch(f.createContext(), f.epoch)
+	f.epochPassed = make(chan struct{})
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
+	f.task.SetEpoch(f.createContext(), f.epoch)
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
@@ -162,6 +163,7 @@ func (f *framework) setEpochStarted() {
 }
 
 func (f *framework) releaseEpochResource() {
+	close(f.epochPassed)
 	for _, c := range f.metaStops {
 		c <- true
 	}

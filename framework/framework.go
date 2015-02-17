@@ -42,6 +42,8 @@ type framework struct {
 	httpStop      chan struct{}
 	heartbeatStop chan struct{}
 
+	epochPassed chan struct{}
+
 	// event loop
 	epochChan          chan uint64
 	metaChan           chan *metaChange
