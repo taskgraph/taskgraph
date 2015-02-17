@@ -18,7 +18,10 @@ The main idea behind the bwmf is following:
 We will have K tasks that handle both row task and column task in alternation. Each task
 will read two copies of the data: one row shard and one column shard of A. It either hosts
 one shard of D and a full copy of T, or one shard of T and a full copy of D, depending on
-the epoch of iteration. "A full copy" consists of computation results from all slaves.
+the epoch of iteration. "A full copy" consists of computation results from itself and
+all "children".
+Topology: the topology is different from task to task. Each task will consider itself parent
+and all others children.
 */
 
 // bwmfData is used to carry indexes and values associated with each index. Index here
@@ -26,6 +29,10 @@ the epoch of iteration. "A full copy" consists of computation results from all s
 type bwmfData struct {
 	Index  int
 	Values []float64
+}
+
+func (d *bwmfData) randomFillValue() {
+
 }
 
 type sparseVec struct {
@@ -39,118 +46,143 @@ type sparseVec struct {
 // local shard of D; 2. after it is done, it let every one knows. Vice versa for even epoch.
 // Task 0 will monitor the progress and responsible for starting the work of new epoch.
 type bwmfTask struct {
-	framework     taskgraph.Framework
-	epoch, taskID uint64
-	logger        *log.Logger
-	numOfTasks    uint64
-	NodeProducer  chan bool
-	config        map[string]string
+	framework  taskgraph.Framework
+	epoch      uint64
+	taskID     uint64
+	logger     *log.Logger
+	numOfTasks uint64
 
 	// The original data.
 	rowShard, columnShard []sparseVec
 
-	dShard, tShard *bwmfData
-	d, t           *bwmfData
+	dtReady        *common.CountdownLatch
+	localCompleted *common.CountdownLatch
+	childrenReady  map[uint64]bool
 
-	dtReady *common.CountDownLatch // We need to get all d or t ready before we start the local fitting.
+	dShard, tShard *bwmfData
+	d, t           []*bwmfData
 }
 
 // These two function carry out actual optimization.
 func (t *bwmfTask) updateDShard() {}
 func (t *bwmfTask) updateTShard() {}
 
+// Initialization: We need to read row and column shards of A.
+func (t *bwmfTask) readShardsFromDisk() {}
+
+// Read dShard and tShard from last checkpoint if any.
+func (t *bwmfTask) readLastCheckpoint() {}
+
+// Task have all the data, compute local optimization of D/T.
+func (t *bwmfTask) localCompute() {}
+
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	t.readShardsFromDisk()
+	// How to set Index for d/tShard?
+	t.readLastCheckpoint()
 }
 func (t *bwmfTask) Exit() {}
-
-func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
-
-func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	if t.taskID != 0 {
-		panic("only task 0 can have children")
-	}
-
-	// we need a map?
-	t.dtReady.CountDown()
-	// if we have all data, start next iteration.
-	ctx.IncEpoch()
-}
 
 func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.epoch = epoch
+	t.childrenReady = make(map[uint64]bool)
+	t.dtReady = common.NewCountdownLatch(int(t.numOfTasks - 1))
+	t.localCompleted = common.NewCountdownLatch(1)
 
 	// At epoch 0 (initialization):
-	//   a. Read both rowShards and columnShards from disk.
-	//   b. Random initialization of both dShard and tShard.
+	// Random initialization of both dShard and tShard.
 	// Then Task 0 will start the iterations -- we use epoch 1 here.
 	//
 	// After epoch 0:
 	// We need to get all D/T from last epoch so that we can carry out local
 	// update on T/D.
+	// Even epochs: Fix D, calculate T;
+	// Odd epochs: Fix T, calculate D;
 
 	if epoch == 0 {
-		// initialization
+		t.dShard.randomFillValue()
+		t.tShard.randomFillValue()
+
+		if t.taskID == 0 {
+			ctx.IncEpoch()
+		}
 		return
 	}
 
-	if t.taskID == 0 {
-		t.dtReady = common.NewCountDownLatch(1)
-	}
-
 	if t.epoch%2 == 0 {
-		for index := uint64(1); index < t.numOfTasks; index++ {
+		for index := uint64(0); index < t.numOfTasks; index++ {
 			if index != t.taskID {
 				ctx.DataRequest(index, "getD")
 			}
 		}
 	} else {
-		for index := uint64(1); index < t.numOfTasks; index++ {
+		for index := uint64(0); index < t.numOfTasks; index++ {
 			if index != t.taskID {
 				ctx.DataRequest(index, "getT")
 			}
 		}
 	}
+
+	go func() {
+		t.dtReady.Await()
+		t.localCompute()
+		if t.taskID != 0 {
+			ctx.FlagMetaToChild("computed")
+		} else {
+			t.localCompleted.CountDown()
+		}
+	}()
 }
 
-func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
-	// Task zero should maintain the barrier here to get child from all the children,
+func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
 
-	// This is the main body for the bwmf
-	// There are three steps we need to handle:
-	// Step A: we keep on collect all the D (or T) depending on which epoch we are on.
+func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {}
 
-	// Step B: When we have all the data needed, we compute the local update for D (or T).
+func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
+	// Task zero should maintain the barrier for iterations.
+	if t.taskID != 0 {
+		return
+	}
 
-	// Step C: we notify master that we are done.
+	t.childrenReady[childID] = true
+	if uint64(len(t.childrenReady)) < t.numOfTasks-1 {
+		return
+	}
+	// if we have all data, start next iteration.
+	go func() {
+		t.localCompleted.Await()
+		ctx.IncEpoch()
+	}()
 }
 
-func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {}
+func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
+	t.dtReady.CountDown()
+}
 
 // These are payload rpc for application purpose.
-func (t *bwmfTask) ServeAsParent(fromID uint64, req string) []byte {
+func (t *bwmfTask) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
+	var b []byte
+	var err error
 	if t.epoch%2 == 0 {
-		b, err := json.Marshal(t.dShard)
+		b, err = json.Marshal(t.dShard)
 		if err != nil {
 			t.logger.Fatalf("Slave can't encode dShard error: %v\n", err)
 		}
-		return b
 	} else {
-		b, err := json.Marshal(t.tShard)
+		b, err = json.Marshal(t.tShard)
 		if err != nil {
 			t.logger.Fatalf("Slave can't encode tShard error: %v\n", err)
 		}
-		return b
 	}
+	dataReceiver <- b
 }
 
-func (t *bwmfTask) ServeAsChild(fromID uint64, req string) []byte {
-	return nil
-}
+func (t *bwmfTask) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {}
 
 type BWMFTaskBuilder struct {
 }

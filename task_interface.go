@@ -4,7 +4,7 @@ package taskgraph
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
 
-// Except ServerAsX(), all others are event handling functions and should be non-blocking.
+// All event handler functions and should be non-blocking.
 type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(taskID uint64, framework Framework)
@@ -24,8 +24,8 @@ type Task interface {
 	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string) []byte
-	ServeAsChild(fromID uint64, req string) []byte
+	ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte)
+	ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte)
 }
 
 type UpdateLog interface {

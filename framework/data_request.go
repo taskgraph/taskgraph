@@ -104,24 +104,40 @@ func (f *framework) sendResponse(dr *dataResponse) {
 }
 
 func (f *framework) handleDataReq(dr *dataRequest) {
-	var data []byte
+	// Note:
+	// There are two improvement that I want to do:
+	// 1. Make ServeAsX non-blocking API. This will require us to pass in
+	//    a data channel.
+	// 2. We can't leave a go-routine to wait for the data channel forever.
+	//    Users might forget to close the channel if they didn't want to do anything.
+	//	  I think we can clean it up in releaseEpochResource() as the epoch moves on.
+	//    Because we won't be interested even though the data would come later.
+	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		data = f.task.ServeAsChild(dr.taskID, dr.req)
+		f.task.ServeAsChild(dr.taskID, dr.req, dataReceiver)
 	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		data = f.task.ServeAsParent(dr.taskID, dr.req)
+		f.task.ServeAsParent(dr.taskID, dr.req, dataReceiver)
 	default:
 		f.log.Panic("unexpected")
 	}
-	// Getting the data from task could take a long time. We need to let
-	// the response-to-send go through event loop to check epoch.
-	f.dataRespToSendChan <- &dataResponse{
-		taskID:   dr.taskID,
-		epoch:    dr.epoch,
-		req:      dr.req,
-		data:     data,
-		dataChan: dr.dataChan,
-	}
+	go func() {
+		select {
+		case data, ok := <-dataReceiver:
+			if !ok || data == nil {
+				return
+			}
+			// Getting the data from task could take a long time. We need to let
+			// the response-to-send go through event loop to check epoch.
+			f.dataRespToSendChan <- &dataResponse{
+				taskID:   dr.taskID,
+				epoch:    dr.epoch,
+				req:      dr.req,
+				data:     data,
+				dataChan: dr.dataChan,
+			}
+		}
+	}()
 }
 
 func (f *framework) handleDataResp(ctx taskgraph.Context, resp *frameworkhttp.DataResponse) {
