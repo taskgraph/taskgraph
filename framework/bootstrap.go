@@ -130,7 +130,7 @@ func (f *framework) run() {
 				req.notifyEpochMismatch()
 				break
 			}
-			go f.handleDataReq(req)
+			f.handleDataReq(req)
 		case resp := <-f.dataRespToSendChan:
 			if resp.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
