@@ -1,4 +1,4 @@
-package framework
+package regression
 
 import (
 	"encoding/json"
@@ -8,9 +8,9 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"sync"
 
 	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/pkg/common"
 )
 
 /*
@@ -56,8 +56,6 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
-
-// Task need to finish up for exit, last chance to save work?
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
@@ -87,17 +85,15 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(fromID uint64, req string) []byte {
+func (t *dummyMaster) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
 	b, err := json.Marshal(t.param)
 	if err != nil {
 		t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
 	}
-	return b
+	dataReceiver <- b
 }
 
-func (t *dummyMaster) ServeAsChild(fromID uint64, req string) []byte {
-	return nil
-}
+func (t *dummyMaster) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {}
 
 func (t *dummyMaster) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
 }
@@ -154,7 +150,7 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("master task %d testably fail, method: %s\n", t.taskID, method)
-	t.framework.(*framework).stop()
+	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
 }
@@ -171,7 +167,7 @@ type dummySlave struct {
 
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
-	gradientReady   *countDownLatch
+	gradientReady   *common.CountdownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -181,8 +177,6 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
-
-// Task need to finish up for exit, last chance to save work?
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
@@ -193,7 +187,12 @@ func (t *dummySlave) ParentMetaReady(ctx taskgraph.Context, parentID uint64, met
 
 func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
 	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	ctx.DataRequest(childID, meta)
+	go func() {
+		// If a new node restart and find out both parent and child meta ready, it will
+		// simultaneously request both data. We need to wait until gradient data is there.
+		t.gradientReady.Await()
+		ctx.DataRequest(childID, meta)
+	}()
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -201,7 +200,7 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
-	t.gradientReady = newCountDownLatch(1)
+	t.gradientReady = common.NewCountdownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
@@ -209,20 +208,20 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(fromID uint64, req string) []byte {
+func (t *dummySlave) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
 	b, err := json.Marshal(t.param)
 	if err != nil {
 		t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
 	}
-	return b
+	dataReceiver <- b
 }
 
-func (t *dummySlave) ServeAsChild(fromID uint64, req string) []byte {
+func (t *dummySlave) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {
 	b, err := json.Marshal(t.gradient)
 	if err != nil {
 		t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
 	}
-	return b
+	dataReceiver <- b
 }
 
 func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
@@ -266,9 +265,6 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
 	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
-		// If a new node restart and find out both parent and child meta ready, it will
-		// simultaneously request both data. We need to wait until gradient data is there.
-		t.gradientReady.Await()
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
@@ -284,7 +280,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could
 		//   1.1 not request the data before a new node restarts. This will cause
-		//       double requests since we provide at-least-once semantics.
+		//       double requests since we provide at-least-once semantics (!outdated).
 		//   1.2 request the data with a failed host (request should fail or be
 		//       responded with error message).
 		// 2. already get the data.
@@ -305,7 +301,7 @@ func (t *dummySlave) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("slave task %d testably fail, method: %s\n", t.taskID, method)
-	t.framework.(*framework).stop()
+	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
 }
@@ -346,46 +342,4 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		NodeProducer: tc.NodeProducer,
 		config:       tc.SlaveConfig,
 	}
-}
-
-// I am writing this count down latch because sync.WaitGroup doesn't support
-// decrementing counter when it's 0.
-type countDownLatch struct {
-	sync.Mutex
-	cond    *sync.Cond
-	counter int
-}
-
-func newCountDownLatch(count int) *countDownLatch {
-	c := new(countDownLatch)
-	c.cond = sync.NewCond(c)
-	c.counter = count
-	return c
-}
-
-func (c *countDownLatch) Count() int {
-	c.Lock()
-	defer c.Unlock()
-	return c.counter
-}
-
-func (c *countDownLatch) CountDown() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.counter--
-	if c.counter == 0 {
-		c.cond.Broadcast()
-	}
-}
-
-func (c *countDownLatch) Await() {
-	c.Lock()
-	defer c.Unlock()
-	if c.counter == 0 {
-		return
-	}
-	c.cond.Wait()
 }

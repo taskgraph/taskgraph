@@ -6,7 +6,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/framework"
+	"github.com/taskgraph/taskgraph/example/regression"
 )
 
 // TestMasterSetEpochFailure checks if a master task failed at SetEpoch,
@@ -23,9 +23,8 @@ func TestMasterSetEpochFailure(t *testing.T) {
 	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
 	controller.Start()
 
-	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &framework.SimpleTaskBuilder{
-		GDataChan:    make(chan int32, 10),
+	taskBuilder := &regression.SimpleTaskBuilder{
+		GDataChan:    make(chan int32, 11),
 		NodeProducer: make(chan bool, 1),
 		MasterConfig: map[string]string{
 			"SetEpoch":  "fail",
@@ -89,9 +88,8 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	controller.Start()
 	defer controller.Stop()
 
-	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &framework.SimpleTaskBuilder{
-		GDataChan:          make(chan int32, 10),
+	taskBuilder := &regression.SimpleTaskBuilder{
+		GDataChan:          make(chan int32, 11),
 		NodeProducer:       make(chan bool, 1),
 		SlaveConfig:        slaveConfig,
 		NumberOfIterations: numOfIterations,

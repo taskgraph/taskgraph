@@ -2,6 +2,7 @@ package framework
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
@@ -16,18 +17,35 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		f.log.Fatalf("getAddress(%d) failed: %v", dr.taskID, err)
 		return
 	}
+
+	if dr.retry {
+		f.log.Printf("retry request data from task %d, addr %s", dr.taskID, addr)
+	} else {
+		f.log.Printf("request data from task %d, addr %s", dr.taskID, addr)
+	}
+
 	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
+	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
+		f.log.Printf("RequestData from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
 		if err == frameworkhttp.ErrReqEpochMismatch {
-			f.log.Printf("task %d got epoch mismatch error from server", f.taskID)
+			// It's out of date. Should wait for new epoch to set up.
 			return
 		}
-		f.log.Printf("task %d RequestData failed: %v", f.taskID, err)
+		// Should retry for other errors.
+		go func() {
+			// we try again after the previous task key expires and hopefully another task
+			// gets up and running.
+			time.Sleep(2 * heartbeatInterval)
+			dr.retry = true
+			f.dataReqtoSendChan <- dr
+		}()
 		return
 	}
 	f.dataRespChan <- d
 }
 
+// This is used by the server side to handle data requests coming from remote.
 func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error) {
 	dataChan := make(chan []byte, 1)
 	f.dataReqChan <- &dataRequest{
@@ -60,16 +78,16 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
-	f.log.Printf("task %d serving http on %s\n", f.taskID, f.ln.Addr())
+	f.log.Printf("serving http on %s\n", f.ln.Addr())
 	// TODO: http server graceful shutdown
 	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
 	err := http.Serve(f.ln, handler)
 	select {
 	case <-f.httpStop:
-		f.log.Printf("task %d http stops serving", f.taskID)
+		f.log.Printf("http stops serving")
 	default:
 		if err != nil {
-			f.log.Fatalf("task %d http.Serve() returns error: %v\n", f.taskID, err)
+			f.log.Fatalf("http.Serve() returns error: %v\n", err)
 		}
 	}
 }
@@ -86,24 +104,37 @@ func (f *framework) sendResponse(dr *dataResponse) {
 }
 
 func (f *framework) handleDataReq(dr *dataRequest) {
-	var data []byte
+	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		data = f.task.ServeAsChild(dr.taskID, dr.req)
+		f.task.ServeAsChild(dr.taskID, dr.req, dataReceiver)
 	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		data = f.task.ServeAsParent(dr.taskID, dr.req)
+		f.task.ServeAsParent(dr.taskID, dr.req, dataReceiver)
 	default:
 		f.log.Panic("unexpected")
 	}
-	// Getting the data from task could take a long time. We need to let
-	// the response-to-send go through event loop to check epoch.
-	f.dataRespToSendChan <- &dataResponse{
-		taskID:   dr.taskID,
-		epoch:    dr.epoch,
-		req:      dr.req,
-		data:     data,
-		dataChan: dr.dataChan,
-	}
+	go func() {
+		select {
+		case data, ok := <-dataReceiver:
+			if !ok || data == nil {
+				return
+			}
+			// Getting the data from task could take a long time. We need to let
+			// the response-to-send go through event loop to check epoch.
+			f.dataRespToSendChan <- &dataResponse{
+				taskID:   dr.taskID,
+				epoch:    dr.epoch,
+				req:      dr.req,
+				data:     data,
+				dataChan: dr.dataChan,
+			}
+		case <-f.epochPassed:
+			// We can't leave a go-routine to wait for the data channel forever.
+			// Users might forget to close the channel if they didn't want to do anything.
+			// We can clean it up in releaseEpochResource() as the epoch moves on.
+			// Because we won't be interested even though the data would come later.
+		}
+	}()
 }
 
 func (f *framework) handleDataResp(ctx taskgraph.Context, resp *frameworkhttp.DataResponse) {

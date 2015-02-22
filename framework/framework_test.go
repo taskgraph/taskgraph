@@ -9,7 +9,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
@@ -33,7 +33,7 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	fw.SetTaskBuilder(&testableTaskBuilder{
 		setupLatch: &wg,
 	})
-	fw.SetTopology(example.NewTreeTopology(1, 1))
+	fw.SetTopology(topo.NewTreeTopology(1, 1))
 	wg.Add(1)
 	go fw.Start()
 	wg.Wait()
@@ -89,9 +89,9 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(example.NewTreeTopology(2, 2))
+	f0.SetTopology(topo.NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(example.NewTreeTopology(2, 2))
+	f1.SetTopology(topo.NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()
@@ -179,9 +179,9 @@ func TestFrameworkDataRequest(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(example.NewTreeTopology(2, 2))
+	f0.SetTopology(topo.NewTreeTopology(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(example.NewTreeTopology(2, 2))
+	f1.SetTopology(topo.NewTreeTopology(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()
@@ -288,14 +288,14 @@ func (t *testableTask) ChildMetaReady(ctx taskgraph.Context, fromID uint64, meta
 	t.ParentMetaReady(ctx, fromID, meta)
 }
 
-func (t *testableTask) ServeAsParent(fromID uint64, req string) []byte {
+func (t *testableTask) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, nil}
 	}
-	return t.dataMap[req]
+	dataReceiver <- t.dataMap[req]
 }
-func (t *testableTask) ServeAsChild(fromID uint64, req string) []byte {
-	return t.ServeAsParent(fromID, req)
+func (t *testableTask) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {
+	t.ServeAsParent(fromID, req, dataReceiver)
 }
 func (t *testableTask) ParentDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {

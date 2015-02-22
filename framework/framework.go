@@ -30,12 +30,19 @@ type framework struct {
 	etcdClient *etcd.Client
 	ln         net.Listener
 
+	// A meta is a signal for specific epoch some task has some data.
+	// However, our fault tolerance mechanism will start another task if it failed
+	// and flag the same meta again. Therefore, we keep track of  notified meta.
+	metaNotified map[string]bool
+
 	// etcd stops
 	metaStops []chan bool
 	epochStop chan bool
 
 	httpStop      chan struct{}
 	heartbeatStop chan struct{}
+
+	epochPassed chan struct{}
 
 	// event loop
 	epochChan          chan uint64
@@ -92,6 +99,10 @@ func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
 // this will shutdown local node instead of global job.
 func (f *framework) stop() {
 	close(f.epochChan)
+}
+
+func (f *framework) Kill() {
+	f.stop()
 }
 
 // When node call this on framework, it simply set epoch to exitEpoch,

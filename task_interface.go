@@ -4,27 +4,28 @@ package taskgraph
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
 
+// All event handler functions and should be non-blocking.
 type Task interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
 	Init(taskID uint64, framework Framework)
 
-	// Task need to finish up for exit, last chance to save work?
+	// Task is finished up for exit. Last chance to save some task specific work.
 	Exit()
 
 	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
 	SetEpoch(ctx Context, epoch uint64)
 
-	// NOTE: the meta/data ready notifications follow at-least-once fault
-	// tolerance semantics
+	// The meta/data notifications obey exactly-once semantics. Note that the same
+	// meta string will be notified only once even if you flag the meta more than once.
 	ParentMetaReady(ctx Context, parentID uint64, meta string)
 	ChildMetaReady(ctx Context, childID uint64, meta string)
 	ParentDataReady(ctx Context, parentID uint64, req string, resp []byte)
 	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string) []byte
-	ServeAsChild(fromID uint64, req string) []byte
+	ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte)
+	ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte)
 }
 
 type UpdateLog interface {

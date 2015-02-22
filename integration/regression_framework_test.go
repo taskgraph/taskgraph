@@ -7,7 +7,8 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/example/regression"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 
@@ -23,7 +24,7 @@ func TestRegressionFramework(t *testing.T) {
 	controller.Start()
 
 	// We need to set etcd so that nodes know what to do.
-	taskBuilder := &framework.SimpleTaskBuilder{
+	taskBuilder := &regression.SimpleTaskBuilder{
 		GDataChan:          make(chan int32, 11),
 		NumberOfIterations: numOfIterations,
 	}
@@ -58,6 +59,6 @@ func createListener(t *testing.T) net.Listener {
 func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder taskgraph.TaskBuilder) {
 	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil)
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
+	bootstrap.SetTopology(topo.NewTreeTopology(2, ntask))
 	bootstrap.Start()
 }

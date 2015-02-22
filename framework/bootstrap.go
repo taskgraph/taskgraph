@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -45,8 +46,10 @@ func (f *framework) Start() {
 	f.etcdClient = etcd.NewClient(f.etcdURLs)
 
 	if err = f.occupyTask(); err != nil {
-		f.log.Fatalf("occupyTask() failed: %v", err)
+		f.log.Panicf("occupyTask() failed: %v", err)
 	}
+
+	f.log.SetPrefix(fmt.Sprintf("task %d: ", f.taskID))
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
 	f.epochStop = make(chan bool, 1)   // stop etcd watch
@@ -56,11 +59,11 @@ func (f *framework) Start() {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
 	if f.epoch == exitEpoch {
-		f.log.Printf("task %d found that job has finished\n", f.taskID)
+		f.log.Printf("found that job has finished\n")
 		f.epochStop <- true
 		return
 	}
-	f.log.Printf("task %d starting at epoch %d\n", f.taskID, f.epoch)
+	f.log.Printf("starting at epoch %d\n", f.epoch)
 
 	// task builder and topology are defined by applications.
 	// Both should be initialized at this point.
@@ -75,6 +78,7 @@ func (f *framework) Start() {
 	f.task.Init(f.taskID, f)
 	f.run()
 	f.releaseResource()
+	f.task.Exit()
 }
 
 func (f *framework) setupChannels() {
@@ -87,9 +91,10 @@ func (f *framework) setupChannels() {
 }
 
 func (f *framework) run() {
-	f.log.Printf("framework of task %d starts to run", f.taskID)
-	defer f.log.Printf("framework of task %d stops running.", f.taskID)
+	f.log.Printf("framework starts to run")
+	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
+	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:
@@ -112,44 +117,43 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			go f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
+			f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: task %d, req-to-send epoch: %d, current epoch: %d",
-					f.taskID, req.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
 				break
 			}
 			go f.sendRequest(req)
 		case req := <-f.dataReqChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: task %d, request epoch: %d, current epoch: %d",
-					f.taskID, req.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
 				req.notifyEpochMismatch()
 				break
 			}
-			go f.handleDataReq(req)
+			f.handleDataReq(req)
 		case resp := <-f.dataRespToSendChan:
 			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: task %d, resp-to-send epoch: %d, current epoch: %d",
-					f.taskID, resp.epoch, f.epoch)
+				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
 				resp.notifyEpochMismatch()
 				break
 			}
 			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
 			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: task %d, response epoch: %d, current epoch: %d",
-					f.taskID, resp.Epoch, f.epoch)
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
 				break
 			}
-			go f.handleDataResp(f.createContext(), resp)
+			f.handleDataResp(f.createContext(), resp)
 		}
 	}
 }
 
 func (f *framework) setEpochStarted() {
-	f.task.SetEpoch(f.createContext(), f.epoch)
+	f.epochPassed = make(chan struct{})
+	// Each epoch have a new meta map
+	f.metaNotified = make(map[string]bool)
 
+	f.task.SetEpoch(f.createContext(), f.epoch)
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
@@ -159,6 +163,7 @@ func (f *framework) setEpochStarted() {
 }
 
 func (f *framework) releaseEpochResource() {
+	close(f.epochPassed)
 	for _, c := range f.metaStops {
 		c <- true
 	}
@@ -167,7 +172,7 @@ func (f *framework) releaseEpochResource() {
 
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
-	f.log.Printf("framework of task %d is releasing resources...\n", f.taskID)
+	f.log.Printf("framework is releasing resources...\n")
 	f.epochStop <- true
 	close(f.heartbeatStop)
 	f.stopHTTP()
@@ -180,7 +185,7 @@ func (f *framework) occupyTask() error {
 		if err != nil {
 			return err
 		}
-		f.log.Printf("standby got failure at task %d", freeTask)
+		f.log.Printf("standby grabbed free task %d", freeTask)
 		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
 		if ok {
 			f.taskID = freeTask
@@ -243,10 +248,21 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 }
 
 func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID uint64, meta string) {
+	// check if meta is handled before.
+	tm := taskMeta(taskID, meta)
+	if _, ok := f.metaNotified[tm]; ok {
+		return
+	}
+	f.metaNotified[tm] = true
+
 	switch who {
 	case roleParent:
 		f.task.ParentMetaReady(ctx, taskID, meta)
 	case roleChild:
 		f.task.ChildMetaReady(ctx, taskID, meta)
 	}
+}
+
+func taskMeta(taskID uint64, meta string) string {
+	return fmt.Sprintf("%s-%s", strconv.FormatUint(taskID, 10), meta)
 }

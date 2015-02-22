@@ -7,7 +7,8 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example"
+	"github.com/taskgraph/taskgraph/example/regression"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 
@@ -31,13 +32,13 @@ func main() {
 	case "t":
 		log.Printf("task")
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
-		taskBuilder := &framework.SimpleTaskBuilder{
+		taskBuilder := &regression.SimpleTaskBuilder{
 			GDataChan:          make(chan int32, 11),
 			NumberOfIterations: 10,
 			MasterConfig:       map[string]string{"writefile": "result.txt"},
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(example.NewTreeTopology(2, ntask))
+		bootstrap.SetTopology(topo.NewTreeTopology(2, ntask))
 		bootstrap.Start()
 	default:
 		log.Fatal("Please choose a type: (c) controller, (t) task")
