@@ -74,12 +74,150 @@ type bwmfTask struct {
 	childrenReady map[uint64]bool
 
 	dShard, tShard Shard
-	d, t           []*bwmfData
+	d, t           Shard
+
+	// parameters for projected gradient methods
+	sigma, alpha, beta    float64
+	maxIterInSubProblem   int
+	maxIterInFindingAlpha int
 }
 
 // These two function carry out actual optimization.
-func (t *bwmfTask) updateDShard() {}
-func (t *bwmfTask) updateTShard() {}
+func (t *bwmfTask) updateDShard() {
+	var newDShard Shard = t.dShard
+	var ok bool
+	for iter := 0; iter < t.maxIterInSubProblem; iter++ {
+		newDShard, ok = t.solveSubproblem(&t.rowShard, &newDShard, &t.t)
+		// TODO(baigang): dealing with ok==false
+		// TODO(baigang): logging
+	}
+	t.dShard = newDShard
+}
+func (t *bwmfTask) updateTShard() {
+	var newTShard Shard = t.tShard
+	var ok bool
+	for iter := 0; iter < t.maxIterInSubProblem; iter++ {
+		newTShard, ok = t.solveSubproblem(&t.columnShard, &t.tShard, &t.d)
+		// TODO(baigang): dealing with ok==false
+		// TODO(baigang): logging
+	}
+	t.tShard = newTShard
+}
+
+// calculates $matrix^T * matrix$
+func matrixSelfTransMult(matrix *Shard) Shard {
+	var result Shard
+	// TODO(baigang): implementation
+	// length := len(matrix[0])
+	return result
+}
+
+// calculates $a * b$ where $b$ is a sparseVec
+func matrixSparseMult(a *Shard, b *[]sparseVec) Shard {
+	var result Shard
+	// TODO(baigang): implementation
+	return result
+}
+
+// caculates $a * b$
+func matrixMult(a, b *Shard) Shard {
+	var result Shard
+	// TODO(baigang): implementation
+	return result
+}
+
+// caculates $a - b$
+func matrixSub(a, b *Shard) Shard {
+	var result Shard
+	// TODO(baigang): implementation
+	return result
+}
+
+// returns true is a equals b, as \|a - \|b_F^2 < epsilon
+func matrixEqual(a, b *Shard) bool {
+	// TODO(baigang): implementation
+	return true
+}
+
+// calculates the sum of the component-wise product of matrx $\mathbf{a}$ and $\mathbf{b}$
+func calcInProduct(a, b *Shard) float64 {
+	// TODO(baigang): implementation
+	return 1.0
+}
+
+// for each element in matrix $\mathbf{t} - alpha * \mathbf{g}$, do
+//    elem = elem if elem > l && elem < u,
+//           l  if elem <= l,
+//           u  if elem >= u
+func doProjection(t, g *Shard, alpha, l, u float64) Shard {
+	result := make([]*bwmfData, len(*t))
+	length := len((*t)[0].Values)
+	for i, row := range *t {
+		result[i].Values = make([]float64, length)
+		for j, tValue := range (*t)[i].Values {
+			gValue := alpha * (*g)[i].Values[j]
+			value := tValue - gValue
+			if value <= l {
+				result[i].Values[j] = l
+			} else if value >= u {
+				result[i].Values[j] = u
+			}
+		}
+	}
+	return result
+}
+
+// Solve the problem: $argmin_t \| a - D*t \|_F^2$
+// where $a$ is a column shard of $A$, $D$ is a full copy of factor D, and
+// $t$ is a shard of factor T corresponding to $a$.
+//
+// XXX(baigang): This is currently an awkward translation of Matlab code listed in Appendix B.2 in ``Projected
+// Gradient Methods for Non-negative Matrix Factorization'' with a renaming convention that V is A, W is D and
+// H is tShard. Note this deals only the inner iter.
+// TODO(baigang): stopping criteria of the outer iterations. Maybe also return norm of the gradient, i.e
+// `projgrad` in B.2.
+// TODO(baigang): Fine abstraction of shard data and matrix operations.
+//
+// A is an l-sized shard of the full matrix A, so its size is m*l, D is m*k, t is k*l.
+func (t *bwmfTask) solveSubproblem(A *[]sparseVec, D, tShard *Shard) (Shard, bool) {
+	DTD := matrixSelfTransMult(D)
+	DTDt := matrixMult(&DTD, tShard)
+	DTa := matrixSparseMult(D, A)
+
+	gradient := matrixSub(&DTDt, &DTa)
+	alpha := t.alpha
+	decreaseAlpha := false
+	// Step 2 in Algorithm 4, section 3.
+	for iter := 0; iter <= t.maxIterInFindingAlpha; iter++ {
+		tShardNew := doProjection(tShard, &gradient, t.alpha, 0.0, 1e20)
+		tDiff := matrixSub(&tShardNew, tShard)
+		DTDd := matrixMult(&DTD, &tDiff)
+
+		// formula (17)
+		conditionValue := (1.0-t.sigma)*calcInProduct(&gradient, &tDiff) + 0.5*calcInProduct(&tDiff, &DTDd)
+
+		sufficientDecrese := conditionValue <= 0.0
+		if iter == 0 {
+			decreaseAlpha = !sufficientDecrese
+		}
+		// basically substep (b) in step 2, algorithm 4
+		if decreaseAlpha {
+			if sufficientDecrese {
+				return tShardNew, true
+			} else {
+				alpha = alpha * t.beta
+			}
+		} else {
+			if !sufficientDecrese || matrixEqual(&tShardNew, tShard) {
+				return tShardNew, false
+			} else {
+				alpha = alpha / t.beta
+				*tShard = tShardNew
+			}
+		}
+	}
+	return *tShard, false
+}
 
 // Initialization: We need to read row and column shards of A.
 func (t *bwmfTask) readShardsFromDisk() {}
