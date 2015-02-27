@@ -13,10 +13,15 @@ type Gradient interface {
 	SetGradient(index uint64, grad float32)
 }
 
+// There are many different ways one can optimize a function, but the
+// most effective ones need gradient.
 type Function interface {
 	Evaluate(param Parameter) Gradient
 }
 
+// High level interface for minimization. This assume that we start
+// with one point in the parameter space, and end with an optimal
+// point. Return true if we find optimal point.
 type Minimizer interface {
 	Minimize(func Function, param Parameter) bool
 }
