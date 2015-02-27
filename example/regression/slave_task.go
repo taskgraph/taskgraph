@@ -26,6 +26,9 @@ func (tk *slaveTask) setupGradientProcessor() {
 	for _, from := range tk.treeTopo.GetParents() {
 		inChan := CreateInChannel(from, "parameter")
 		cp.AttachInboundChannel(inChan)
+
+		outChan := CreateOutChannel(from, "gradient")
+		cp.AttachOutboundChannel(outChan)
 	}
 
 	cp.Compose()
