@@ -22,9 +22,5 @@ type Task interface {
 
 // user-implemented data processing/computing unit.
 type Processor interface {
-}
-
-type InboundChannel interface {
-}
-type OutboundChannel interface {
+	Compute(ins []InboundChannel, outs []OutboundChannel)
 }

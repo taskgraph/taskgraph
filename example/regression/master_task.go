@@ -20,12 +20,12 @@ func (tk *masterTask) SetEpoch(epoch uint64) {
 }
 
 func (tk *masterTask) setupParameterProcessor() {
+	// It's a source point because it doesn't have any inbound chan.
 	cp := factory.CreateComposer()
 	cp.SetProcessor(&parameterProcessor{})
 
 	for _, to := range tk.treeTopo.GetChildren() {
-		outChan := CreateOutChannel(to, "parameter")
-		cp.AttachOutboundChannel(outChan)
+		cp.CreateOutboundChannel(to, "parameter")
 	}
 
 	cp.Compose()
@@ -37,8 +37,7 @@ func (tk *masterTask) setupGradientProcessor() {
 	cp.SetProcessor(&gradientProcessor{})
 
 	for _, from := range tk.treeTopo.GetChildren() {
-		inChan := CreateInChannel(from, "gradient")
-		cp.AttachInboundChannel(inChan)
+		cp.CreateInboundChannel(from, "gradient")
 	}
 
 	cp.Compose()
