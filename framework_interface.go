@@ -25,6 +25,21 @@ type Framework interface {
 type Composer interface {
 	Compose()
 	SetProcessor(Processor)
-	AttachInboundChannel(InboundChannel)
-	AttachOutboundChannel(InboundChannel)
+	CreateInboundChannel(taskID uint64, tag string)
+	CreateOutboundChannel(taskID uint64, tag string)
+}
+
+type channelBasics interface {
+	TaskID() uint64
+	Tag() string
+}
+
+type InboundChannel interface {
+	channelBasics
+	Data() []byte
+}
+
+type OutboundChannel interface {
+	channelBasics
+	Send(Serializable)
 }

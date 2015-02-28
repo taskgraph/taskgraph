@@ -22,9 +22,9 @@ type Task interface {
 
 // user-implemented data processing/computing unit.
 type Processor interface {
+	Compute(ins []InboundChannel, outs []OutboundChannel)
 }
 
-type InboundChannel interface {
-}
-type OutboundChannel interface {
+type Serializable interface {
+	Serialize() []byte
 }
