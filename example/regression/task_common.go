@@ -9,10 +9,13 @@ import (
 )
 
 type taskCommon struct {
-	taskID    uint64
-	logger    *log.Logger
-	framework taskgraph.Framework
-	treeTopo  *topo.TreeTopology
+	taskID         uint64
+	logger         *log.Logger
+	framework      taskgraph.Framework
+	treeTopo       *topo.TreeTopology
+	totalIteration uint64
+	exitChan       chan struct{}
+	epochChan      chan uint64
 }
 
 func (tk *taskCommon) Init(framework taskgraph.Framework, numberOfTasks uint64) {
@@ -23,4 +26,10 @@ func (tk *taskCommon) Init(framework taskgraph.Framework, numberOfTasks uint64) 
 	tk.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func (tk *taskCommon) Exit() {}
+func (tk *taskCommon) ExitChan() chan struct{} {
+	return tk.exitChan
+}
+
+func (tk *taskCommon) EpochChan() chan<- uint64 {
+	return tk.epochChan
+}
