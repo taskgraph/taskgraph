@@ -1,10 +1,29 @@
 package regression
 
-import "github.com/taskgraph/taskgraph/factory"
+import (
+	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/factory"
+)
 
 type slaveTask struct {
 	taskCommon
-	totalIteration uint64
+}
+
+func (tk *slaveTask) Run(framework taskgraph.Framework, numberOfTasks uint64) {
+	tk.Init(framework, numberOfTasks)
+	go func() {
+		for {
+			tk.eventHandler()
+		}
+	}()
+}
+
+func (tk *slaveTask) eventHandler() {
+	select {
+	case epoch := <-tk.epochChan:
+		tk.SetEpoch(epoch)
+	case <-tk.exitChan:
+	}
 }
 
 func (tk *slaveTask) SetEpoch(epoch uint64) {

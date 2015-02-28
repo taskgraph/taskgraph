@@ -12,12 +12,13 @@ type TaskBuilder interface {
 type Task interface {
 	// numberOfTasks: how many tasks are created for this job.
 	// User can use this number to make decision on topology.
-	Init(framework Framework, numberOfTasks uint64)
-	Exit()
+	Run(framework Framework, numberOfTasks uint64)
 
 	// Framework tells user task what current epoch is.
 	// User can compose a graph using channels and processors here.
-	SetEpoch(epoch uint64)
+	EpochChan() chan<- uint64
+	// close it to signal exit
+	ExitChan() chan struct{}
 }
 
 // user-implemented data processing/computing unit.
