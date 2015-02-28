@@ -7,6 +7,9 @@ type parameterProcessor struct {
 }
 
 func (proc *parameterProcessor) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
+	if proc.parameter == nil {
+		proc.parameter = deserialzeData(ins[0].Data())
+	}
 	for _, child := range outs {
 		child.Send(proc.parameter)
 	}
