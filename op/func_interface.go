@@ -1,4 +1,4 @@
-package taskgraph.op
+package taskgraph_op
 
 // For more information read: http://ewencp.org/blog/golang-iterators/
 // We need an reasonably efficient way to enumerate all indexes.
@@ -33,16 +33,15 @@ type Parameter interface {
 // The semantics is simply add gradient from this function to corresponding
 // dimensions on the output paramenter gradient.
 type Function interface {
-	Evaluate(param Parameter, gradient *Parameter) float32
+	Evaluate(param Parameter, gradient Parameter) float32
 }
-
 
 // This defines an additive function. One can compose the function this way easily.
 type SumFunction struct {
-	func1,func2 *Function
+	func1, func2 Function
 }
 
-func (rf *SumFunction) Evaluate(param Parameter, gradient *Parameter) float32 {
+func (rf *SumFunction) Evaluate(param Parameter, gradient Parameter) float32 {
 	sum := rf.func1.Evaluate(param, gradient)
 	sum += rf.func2.Evaluate(param, gradient)
 	return sum
@@ -50,28 +49,27 @@ func (rf *SumFunction) Evaluate(param Parameter, gradient *Parameter) float32 {
 
 // This implements l1 l2 regularization.
 type Regularization struct {
-	iter IndexIterator
+	iter         IndexIterator
 	l1reg, l2reg float32
 }
 
-func (r *Regularization) Evaluate(param Parameter, gradient *Parameter) float32 {
+func (r *Regularization) Evaluate(param Parameter, gradient Parameter) float32 {
 	r.iter.Rewind()
 	sum := float64(0)
 	for r.iter.Next() {
 		index := r.iter.Index()
 		value := param.Get(index)
-		sum += l1reg*value
-		sum += 0.5*l2reg*value*value;
-		gradient.Add(index, l1reg)
-		gradient.Add(index, l2reg*value)
+		sum += float64(r.l1reg * value)
+		sum += float64(0.5 * r.l2reg * value * value)
+		gradient.Add(index, r.l1reg)
+		gradient.Add(index, r.l2reg*value)
 	}
 	return float32(sum)
 }
-
 
 // High level interface for minimization. This assume that we start
 // with one point in the parameter space, and end with an optimal
 // point. Return true if we find optimal point.
 type Minimizer interface {
-	Minimize(func Function, param Parameter) bool
+	Minimize(function Function, param Parameter) bool
 }
