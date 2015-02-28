@@ -5,7 +5,7 @@ package taskgraph_op
 // We can have multiple copies of this function, and different scaling too to
 // make it harder to solve.
 type Rosenbrock struct {
-	numOfCopies int
+	numOfCopies int64
 	shouldScale bool
 	count       uint64
 }
@@ -14,14 +14,14 @@ type Rosenbrock struct {
 // range from [0, 2*numOfCopies).
 func (r *Rosenbrock) Evaluate(in, out Parameter) float32 {
 	sum := float64(0)
-	for i := 0; i < r.numOfCopies; i += 1 {
-		scale := 1
+	for i := int64(0); i < r.numOfCopies; i += 1 {
+		scale := float32(1)
 		if r.shouldScale {
-			scale = i + 1
+			scale = float32(i + 1)
 		}
 		t0 := in.Get(2*i+1) - in.Get(2*i)*in.Get(2*i)
 		t1 := 1.0 - in.Get(2*i)
-		sum += scale * (100*t0*t0 + t1*t1)
+		sum += float64(scale * (100.0*t0*t0 + t1*t1))
 		out.Set(2*i+0, scale*(-400*t0*in.Get(2*i)-2*t1))
 		out.Set(2*i+1, scale*200*t0)
 	}

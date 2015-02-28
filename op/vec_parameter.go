@@ -23,6 +23,10 @@ func (s *sizeIndexIterator) Size() int64 {
 	return s.size
 }
 
+func MakeRangeIndexIterator(psize int64) IndexIterator {
+	return &sizeIndexIterator{idx: int64(-1), size: psize}
+}
+
 type sliceParameter struct {
 	param []float32
 }
@@ -41,15 +45,15 @@ func (s *sliceParameter) Add(index int64, value float32) {
 
 // This allow us to generate parameter with same width.
 func (s *sliceParameter) CloneWithoutCopy() Parameter {
-	return sliceParameter{param: make([]float32, len(s.param), len(s.param))}
+	return &sliceParameter{param: make([]float32, len(s.param), len(s.param))}
 }
 
 // This allow one to enumerate through all parameters
 func (s *sliceParameter) IndexIterator() IndexIterator {
-	return sizeIndexIterator{idx: int64(-1), size: int64(len(s.param))}
+	return &sizeIndexIterator{idx: int64(-1), size: int64(len(s.param))}
 }
 
 // This creates a new Vector based parameter
 func NewVecParameter(size int) Parameter {
-	return sliceParameter{param: make([]float32, size, size)}
+	return &sliceParameter{param: make([]float32, size, size)}
 }
