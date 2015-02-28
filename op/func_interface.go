@@ -9,19 +9,19 @@ package taskgraph_op
 //    sum += param.Get(it.Index());
 //}
 type IndexIterator interface {
-	Index() uint64
+	Index() int64
 	Next() bool
 	Rewind()
 }
 
 // We need some interface to define function and how we optimize them.
 type Parameter interface {
-	Get(index uint64) float32
-	Set(index uint64, value float32)
-	Add(index uint64, value float32)
+	Get(index int64) float32
+	Set(index int64, value float32)
+	Add(index int64, value float32)
 
 	// This allow us to generate parameter with same width.
-	Clone() Parameter
+	CloneWithoutCopy() Parameter
 
 	// This allow one to enumerate through all parameters
 	IndexIterator() IndexIterator

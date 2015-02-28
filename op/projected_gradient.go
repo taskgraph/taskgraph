@@ -21,15 +21,15 @@ func (pg ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Param
 	// Remember to clip the point before we do any thing.
 	projector.ClipPoint(stt)
 
-	nxt := &stt.Clone()
+	nxt := &stt.CloneWithoutCopy()
 	Fill(nxt, 0)
 
 	// Evaluate once
-	ovalgrad := &vgpair{value: 0, gradient: stt.Clone()}
+	ovalgrad := &vgpair{value: 0, gradient: stt.CloneWithoutCopy()}
 
 	evaluate(ovalgrad, loss)
 
-	nvalgrad := &vgpair{value: 0, gradient: stt.Clone()}
+	nvalgrad := &vgpair{value: 0, gradient: stt.CloneWithoutCopy()}
 
 	// Take this outside to save function evaluation
 	projector.ClipGradient(stt, ovalgrad.gradient)
