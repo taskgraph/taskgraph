@@ -41,5 +41,5 @@ type InboundChannel interface {
 
 type OutboundChannel interface {
 	channelBasics
-	Send(data []byte)
+	Send(Serializable)
 }

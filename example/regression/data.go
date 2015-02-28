@@ -3,7 +3,7 @@ package regression
 type data struct {
 }
 
-func (d *data) serialize() []byte {
+func (d *data) Serialize() []byte {
 	panic("")
 }
 

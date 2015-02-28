@@ -24,3 +24,7 @@ type Task interface {
 type Processor interface {
 	Compute(ins []InboundChannel, outs []OutboundChannel)
 }
+
+type Serializable interface {
+	Serialize() []byte
+}
