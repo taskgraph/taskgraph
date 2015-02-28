@@ -67,9 +67,15 @@ func (r *Regularization) Evaluate(param Parameter, gradient Parameter) float32 {
 	return float32(sum)
 }
 
+// This is used to figure out where one can stop the optimization. Implementation
+// can be count based, or gradient norm based.
+type StopCriteria interface {
+	Done(param Parameter, value float32, gradient Parameter) bool
+}
+
 // High level interface for minimization. This assume that we start
 // with one point in the parameter space, and end with an optimal
 // point. Return true if we find optimal point.
 type Minimizer interface {
-	Minimize(function Function, param Parameter) bool
+	Minimize(function Function, stopCriteria StopCriteria, param Parameter) bool
 }
