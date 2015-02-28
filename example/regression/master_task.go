@@ -1,7 +1,6 @@
 package regression
 
 import (
-	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/factory"
 	"github.com/taskgraph/taskgraph/job"
 )
@@ -9,23 +8,6 @@ import (
 type masterTask struct {
 	taskCommon
 	parameter *data
-}
-
-func (tk *masterTask) Run(framework taskgraph.Framework, numberOfTasks uint64) {
-	tk.Init(framework, numberOfTasks)
-	go func() {
-		for {
-			tk.eventHandler()
-		}
-	}()
-}
-
-func (tk *masterTask) eventHandler() {
-	select {
-	case epoch := <-tk.epochChan:
-		tk.SetEpoch(epoch)
-	case <-tk.exitChan:
-	}
 }
 
 func (tk *masterTask) SetEpoch(epoch uint64) {
