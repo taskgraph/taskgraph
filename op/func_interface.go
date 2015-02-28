@@ -5,7 +5,7 @@ package taskgraph_op
 //
 // For example, we can do:
 // sum := 0.0
-// for it := param.GetIndexIterator(); it.Next(); {
+// for it := param.IndexIterator(); it.Next(); {
 //    sum += param.Get(it.Index());
 //}
 type IndexIterator interface {
@@ -20,11 +20,18 @@ type Parameter interface {
 	Set(index uint64, value float32)
 	Add(index uint64, value float32)
 
-	// This allow us to generate a same wide parameter for manipulation.
+	// This allow us to generate parameter with same width.
 	Clone() Parameter
 
 	// This allow one to enumerate through all parameters
 	IndexIterator() IndexIterator
+}
+
+// This func is useful to fill the parameter with the same value
+func Fill(param Parameter, value float32) {
+	for it := param.IndexIterator(); it.Next(); {
+		param.Set(it.Index(), value)
+	}
 }
 
 // There are many different ways one can optimize a function, but the
