@@ -12,6 +12,7 @@ type IndexIterator interface {
 	Index() int64
 	Next() bool
 	Rewind()
+	Size() int64
 }
 
 // We need some interface to define function and how we optimize them.

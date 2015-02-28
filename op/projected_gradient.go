@@ -111,7 +111,7 @@ func newPoint(owts, nwts, gradient Parameter, alpha float32, projector *Projecti
 	projector.ClipPoint(nwts)
 }
 
-func evalue(loss Function, ovalgrad *vapair) {
+func evaluate(loss Function, ovalgrad *vapair) {
 	Fill(ovalgrad.gradient, 0)
 	ovalgrad.value = loss.Evaluate(stt, ovalgrad.gradient)
 }

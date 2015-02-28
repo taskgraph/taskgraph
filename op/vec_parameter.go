@@ -19,6 +19,10 @@ func (s *sizeIndexIterator) Rewind() {
 	s.idx = -1
 }
 
+func (s *sizeIndexIterator) Size() int64 {
+	return s.size
+}
+
 type sliceParameter struct {
 	param []float32
 }
