@@ -33,6 +33,21 @@ func (tk *slaveTask) SetEpoch(epoch uint64) {
 	tk.setupGradientProcessor()
 }
 
+func (tk *slaveTask) setupParameterProcessor() {
+	cp := factory.CreateComposer()
+	cp.SetProcessor(&parameterProcessor{})
+
+	for _, from := range tk.treeTopo.GetParents() {
+		cp.CreateInboundChannel(from, "parameter")
+	}
+
+	for _, from := range tk.treeTopo.GetChildren() {
+		cp.CreateOutboundChannel(from, "parameter")
+	}
+
+	cp.Compose()
+}
+
 func (tk *slaveTask) setupGradientProcessor() {
 	cp := factory.CreateComposer()
 	cp.SetProcessor(&gradientProcessor{})
