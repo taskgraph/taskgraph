@@ -1,5 +1,8 @@
 package taskgraph_op
 
+// This file lists common stopping criteria for optimization.
+
+// Criterion as Frobenos norm is smaller than a given tolerance.
 type GradNormTolCriteria struct {
 	tolerance float32
 }
