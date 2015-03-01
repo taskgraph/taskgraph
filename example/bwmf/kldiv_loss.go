@@ -1,7 +1,10 @@
 package bwmf
 
 import (
-	"taskgraph_op"
+	"math"
+	"sync"
+
+	"github.com/taskgraph/taskgraph/op"
 )
 
 // `KLDivLoss` is a `Function` that evaluates Kullback-Leibler Divergence and the corresponding gradient at the given `Parameter`.
@@ -12,9 +15,9 @@ import (
 //  So actually W is W^T, but it saves code when alternatively optimize over H and W.
 //
 type KLDivLoss struct {
-	V       *[]map[int]float32 // write once, read concurrently multiple times
-	WH      *[][]float32       // temporary storage for the intermediate result W*H
-	W       *Parameter
+	V       []map[int]float32 // write once, read concurrently multiple times
+	WH      [][]float32       // temporary storage for the intermediate result W*H
+	W       taskgraph_op.Parameter
 	m, n, k int // dimensions
 }
 
@@ -28,26 +31,25 @@ type KLDivLoss struct {
 //  $$ \divsymb \frac{D_{KL}}{H} = -W*Z^T + W^T*\bar{Z} $$
 //  , where $Z_{ij} = \frac{V_{ij}}{(WH)_{ij}}$
 //
-func (l *LKDivLoss) Evaluate(param Parameter, gradient Parameter) float32 {
+func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op.Parameter) float32 {
 	H := param
 	accum := make(chan float32, 8)
 	for i := 0; i < l.m; i++ {
 		for j := 0; j < l.n; j++ {
 			l.WH[i][j] = 0.0
-			go func(i, j) {
+			go func(i, j int) {
 				for k := 0; k < l.k; k++ {
-					WH[i][j] += H.Get(i*l.k+k) * W.Get(j*l.k+k)
+					l.WH[i][j] += l.W.Get(int64(i*l.k+k)) * H.Get(int64(j*l.k+k))
 				}
 
 				// evaluate element-wise KL-divergence
-				v := V[i][j]
-				wh := WH[i][j]
-				var kl float32
-				if wh > 1e-6 {
-					accum <- v*log(v/wh) - v + wh
+				v, ok := l.V[i][j]
+				wh := l.WH[i][j]
+				if ok {
+					accum <- v*float32(math.Log(float64(v/wh))) - v + wh
 				} else {
-					// XXX: kl for margin case. Should be 0 or very big value?
-					accum <- 0.0
+					// XXX: kl for margin case. Should be 0 or Inf?
+					accum <- wh
 				}
 			}(i, j)
 		}
@@ -55,21 +57,22 @@ func (l *LKDivLoss) Evaluate(param Parameter, gradient Parameter) float32 {
 
 	var value float32
 	for c := 0; c < l.m*l.n; c++ {
-		value += <-accum
+		v := <-accum
+		value += v
 	}
 
 	// now another pass for grad calculation
 	var wg sync.WaitGroup
-	for i := 0; i < l.m; i++ {
-		for j := 0; j < l.k; j++ {
+	for i := 0; i < l.k; i++ {
+		for j := 0; j < l.n; j++ {
 			wg.Add(1)
-			grad_index = i*k + l
-			gradient.set(grad_index, 0.0)
-			go func(grad_index, i, j) {
+			grad_index := int64(j*l.k + i)
+			gradient.Set(grad_index, 0.0)
+			go func(grad_index int64, i, j int) {
 				defer wg.Done()
-				for k := 0; k < l.n; k++ {
-					w_index := k*l.k + j
-					grad_val := l.W.Get(w_index) * (WH[i][k] - V[i][k]) / WH[i][k]
+				for k := 0; k < l.m; k++ {
+					w_index := int64(k*l.k + i)
+					grad_val := l.W.Get(w_index) * (l.WH[k][j] - l.V[k][j]) / l.WH[k][j]
 					gradient.Add(grad_index, grad_val)
 				}
 			}(grad_index, i, j)
