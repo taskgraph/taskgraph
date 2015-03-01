@@ -3,10 +3,10 @@ package taskgraph_op
 // We need to implement a slice based parameter
 
 type sizeIndexIterator struct {
-	idx, size int64
+	idx, size int
 }
 
-func (s *sizeIndexIterator) Index() int64 {
+func (s *sizeIndexIterator) Index() int {
 	return s.idx
 }
 
@@ -19,27 +19,27 @@ func (s *sizeIndexIterator) Rewind() {
 	s.idx = -1
 }
 
-func (s *sizeIndexIterator) Size() int64 {
+func (s *sizeIndexIterator) Size() int {
 	return s.size
 }
 
-func MakeRangeIndexIterator(psize int64) IndexIterator {
-	return &sizeIndexIterator{idx: int64(-1), size: psize}
+func MakeRangeIndexIterator(psize int) IndexIterator {
+	return &sizeIndexIterator{idx: -1, size: psize}
 }
 
 type sliceParameter struct {
 	param []float32
 }
 
-func (s *sliceParameter) Get(index int64) float32 {
+func (s *sliceParameter) Get(index int) float32 {
 	return s.param[index]
 }
 
-func (s *sliceParameter) Set(index int64, value float32) {
+func (s *sliceParameter) Set(index int, value float32) {
 	s.param[index] = value
 }
 
-func (s *sliceParameter) Add(index int64, value float32) {
+func (s *sliceParameter) Add(index int, value float32) {
 	s.param[index] += value
 }
 
@@ -50,7 +50,7 @@ func (s *sliceParameter) CloneWithoutCopy() Parameter {
 
 // This allow one to enumerate through all parameters
 func (s *sliceParameter) IndexIterator() IndexIterator {
-	return &sizeIndexIterator{idx: int64(-1), size: int64(len(s.param))}
+	return &sizeIndexIterator{idx: -1, size: len(s.param)}
 }
 
 // This creates a new Vector based parameter

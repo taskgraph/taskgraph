@@ -3,18 +3,18 @@ package taskgraph_op
 // This implementaton is useful for
 type oneParameter struct {
 	value float32
-	size  int64
+	size  int
 }
 
-func (s *oneParameter) Get(index int64) float32 {
+func (s *oneParameter) Get(index int) float32 {
 	return s.value
 }
 
-func (s *oneParameter) Set(index int64, value float32) {
+func (s *oneParameter) Set(index int, value float32) {
 	panic("can not set value")
 }
 
-func (s *oneParameter) Add(index int64, value float32) {
+func (s *oneParameter) Add(index int, value float32) {
 	panic("can not add value")
 }
 
@@ -28,8 +28,8 @@ func (s *oneParameter) IndexIterator() IndexIterator {
 	return MakeRangeIndexIterator(s.size)
 }
 
-// This creates a new Vector based parameter
-func NewOneParameter(v float32, s int64) Parameter {
+// This creates a parameter that has the same value on all dimensions
+func NewAllTheSameParameter(v float32, s int) Parameter {
 	return &oneParameter{value: v, size: s}
 }
 
