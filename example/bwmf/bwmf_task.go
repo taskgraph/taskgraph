@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/op"
 	"github.com/taskgraph/taskgraph/pkg/common"
 )
 
@@ -73,21 +74,55 @@ type bwmfTask struct {
 	dtReady       *common.CountdownLatch
 	childrenReady map[uint64]bool
 
+	// XXX(baigang): store matrix data directly as `Parameter`?
 	dShard, tShard Shard
 	d, t           Shard
 
+	// dShard is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
+	// full d is size of M*k, full t is size of k*N (dittu, layout N*k)
+	m, n, k, M, N int
+
 	// parameters for projected gradient methods
-	sigma, alpha, beta float64
+	sigma, alpha, beta, tol float64
+
+	// intermidiate data
+	dShardParam, tShardParam, dParam, tParam taskgraph_op.Parameter
 
 	// objective function, parameters and minimizer to solve bwmf
-	// TODO
+	loss         *KLDivLoss
+	optimizer    *taskgraph_op.ProjectedGradient
+	stopCriteria *taskgraph_op.GradNormTolCriteria
 }
 
 // These two function carry out actual optimization.
 func (this *bwmfTask) updateDShard() {
+
+	// TODO
+	// set rowColumn and t to fields in loss
+	//
+
+	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.dShardParam)
+	if !ok {
+		// TODO report error
+	}
+
+	// TODO copy data from dShardParam to dShard
+	// TODO signal finish of the task?
 }
 
 func (this *bwmfTask) updateTShard() {
+	// dittu, almost same to updateDShard
+
+	// TODO
+	// set rowColumn and t to fields in loss
+
+	//
+	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.tShardParam)
+	if !ok {
+		// TODO report error
+	}
+
+	// TODO copy data from tShardParam to tShard
 }
 
 // Initialization: We need to read row and column shards of A.
@@ -100,7 +135,13 @@ func (this *bwmfTask) readLastCheckpoint() bool {
 
 // Task have all the data, compute local optimization of D/T.
 func (this *bwmfTask) localCompute() {
-
+	if this.taskID%2 == 0 {
+		this.updateTShard()
+		// TODO
+	} else {
+		this.updateDShard()
+		// TODO
+	}
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -118,6 +159,20 @@ func (this *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		this.dShard.randomFillValue()
 		this.tShard.randomFillValue()
 	}
+
+	// TODO: load rowShard and columnShard
+
+	this.m = len(this.dShard)
+	this.k = len(this.dShard[0].Values)
+	this.n = len(this.tShard)
+	// to check? len(this.tShard[0].Values) should be equal to this.k
+
+	// TODO() aggregate to get full size M and N?
+
+	this.dShardParam = taskgraph_op.NewVecParameter(this.m * this.k)
+	this.tShardParam = taskgraph_op.NewVecParameter(this.n * this.k)
+	this.dParam = taskgraph_op.NewVecParameter(this.M * this.k)
+	this.tParam = taskgraph_op.NewVecParameter(this.N * this.k)
 
 	// At initialization:
 	// Task 0 will start the iterations.

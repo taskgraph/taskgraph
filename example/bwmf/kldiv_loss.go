@@ -31,6 +31,10 @@ type KLDivLoss struct {
 //  $$ \divsymb \frac{D_{KL}}{H} = -W*Z^T + W^T*\bar{Z} $$
 //  , where $Z_{ij} = \frac{V_{ij}}{(WH)_{ij}}$
 //
+//  This implementation consists of two pass of visiting the full matrix, each of
+//  which goes parallel. One pass is for evaluating W*H and accumulate kl-divergence
+//  value and the other is for evalutating the matrix gradient of kl-div.
+//
 func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op.Parameter) float32 {
 	H := param
 	accum := make(chan float32, 8)
@@ -48,7 +52,6 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 				if ok {
 					accum <- v*float32(math.Log(float64(v/wh))) - v + wh
 				} else {
-					// XXX: kl for margin case. Should be 0 or Inf?
 					accum <- wh
 				}
 			}(i, j)
@@ -57,8 +60,7 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 
 	var value float32
 	for c := 0; c < l.m*l.n; c++ {
-		v := <-accum
-		value += v
+		value += <-accum
 	}
 
 	// now another pass for grad calculation
