@@ -10,13 +10,13 @@ func (tk *slaveTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	if epoch == tk.totalIteration {
 		return
 	}
-	tk.setupParameterProcessor(ctx)
-	tk.setupGradientProcessor(ctx)
+	tk.setupParameterJoint(ctx)
+	tk.setupGradientJoint(ctx)
 }
 
-func (tk *slaveTask) setupParameterProcessor(ctx taskgraph.Context) {
+func (tk *slaveTask) setupParameterJoint(ctx taskgraph.Context) {
 	cp := ctx.CreateComposer()
-	cp.SetProcessor(&parameterProcessor{})
+	cp.SetJoint(&parameterJoint{})
 
 	for _, parent := range tk.treeTopo.GetParents() {
 		cp.CreateInboundChannel(parent, "parameter")
@@ -29,9 +29,9 @@ func (tk *slaveTask) setupParameterProcessor(ctx taskgraph.Context) {
 	cp.Compose()
 }
 
-func (tk *slaveTask) setupGradientProcessor(ctx taskgraph.Context) {
+func (tk *slaveTask) setupGradientJoint(ctx taskgraph.Context) {
 	cp := ctx.CreateComposer()
-	cp.SetProcessor(&gradientProcessor{})
+	cp.SetJoint(&gradientJoint{})
 
 	for _, child := range tk.treeTopo.GetChildren() {
 		cp.CreateInboundChannel(child, "gradient")

@@ -16,12 +16,12 @@ type Task interface {
 	Exit()
 
 	// Framework tells user task what current epoch is.
-	// User can compose a graph using channels and processors here.
+	// User can compose a graph using channels and joints here.
 	SetEpoch(ctx Context, epoch uint64)
 }
 
 // user-implemented data processing/computing unit.
-type Processor interface {
+type Joint interface {
 	Compute(ins []InboundChannel, outs []OutboundChannel)
 }
 

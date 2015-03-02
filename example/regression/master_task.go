@@ -15,14 +15,14 @@ func (tk *masterTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 		tk.framework.ShutdownJob(job.SuccessStatus)
 		return
 	}
-	tk.setupParameterProcessor(ctx)
-	tk.setupGradientProcessor(ctx)
+	tk.setupParameterJoint(ctx)
+	tk.setupGradientJoint(ctx)
 }
 
-func (tk *masterTask) setupParameterProcessor(ctx taskgraph.Context) {
+func (tk *masterTask) setupParameterJoint(ctx taskgraph.Context) {
 	// It's a source point because it doesn't have any inbound chan.
 	cp := ctx.CreateComposer()
-	cp.SetProcessor(&parameterProcessor{
+	cp.SetJoint(&parameterJoint{
 		parameter: tk.parameter,
 	})
 
@@ -33,10 +33,10 @@ func (tk *masterTask) setupParameterProcessor(ctx taskgraph.Context) {
 	cp.Compose()
 }
 
-func (tk *masterTask) setupGradientProcessor(ctx taskgraph.Context) {
+func (tk *masterTask) setupGradientJoint(ctx taskgraph.Context) {
 	// This is a sync point because it doesn't have any outbound chan.
 	cp := ctx.CreateComposer()
-	cp.SetProcessor(&gradientProcessor{
+	cp.SetJoint(&gradientJoint{
 		parameter: tk.parameter,
 	})
 

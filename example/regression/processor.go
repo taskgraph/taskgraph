@@ -2,11 +2,11 @@ package regression
 
 import "github.com/taskgraph/taskgraph"
 
-type parameterProcessor struct {
+type parameterJoint struct {
 	parameter *data
 }
 
-func (proc *parameterProcessor) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
+func (proc *parameterJoint) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
 	if proc.parameter == nil {
 		proc.parameter = deserialzeData(ins[0].Get())
 	}
@@ -15,11 +15,11 @@ func (proc *parameterProcessor) Compute(ins []taskgraph.InboundChannel, outs []t
 	}
 }
 
-type gradientProcessor struct {
+type gradientJoint struct {
 	parameter *data
 }
 
-func (proc *gradientProcessor) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
+func (proc *gradientJoint) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
 	// master task have parameter already. slave task doesn't have, so he needs to
 	// retrieve from others.
 	if proc.parameter == nil {
@@ -33,8 +33,8 @@ func (proc *gradientProcessor) Compute(ins []taskgraph.InboundChannel, outs []ta
 	outs[0].Put(proc.localGradient())
 }
 
-func (proc *gradientProcessor) createLocalGradient(parameter *data) {}
-func (proc *gradientProcessor) updateLocalGradient(childG *data)    {}
-func (proc *gradientProcessor) localGradient() *data {
+func (proc *gradientJoint) createLocalGradient(parameter *data) {}
+func (proc *gradientJoint) updateLocalGradient(childG *data)    {}
+func (proc *gradientJoint) localGradient() *data {
 	panic("")
 }

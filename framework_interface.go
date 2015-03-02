@@ -27,7 +27,7 @@ type Context interface {
 }
 
 type Composer interface {
-	SetProcessor(Processor)
+	SetJoint(Joint)
 	CreateInboundChannel(taskID uint64, tag string)
 	CreateOutboundChannel(taskID uint64, tag string)
 	Compose()
