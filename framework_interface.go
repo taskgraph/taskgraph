@@ -22,11 +22,15 @@ type Framework interface {
 	TaskID() uint64
 }
 
+type Context interface {
+	CreateComposer() Composer
+}
+
 type Composer interface {
-	Compose()
 	SetProcessor(Processor)
 	CreateInboundChannel(taskID uint64, tag string)
 	CreateOutboundChannel(taskID uint64, tag string)
+	Compose()
 }
 
 type channelBasics interface {
@@ -36,10 +40,15 @@ type channelBasics interface {
 
 type InboundChannel interface {
 	channelBasics
-	Data() []byte
+	Get() []byte
 }
 
 type OutboundChannel interface {
 	channelBasics
-	Send(Serializable)
+	Put(Serializable)
 }
+
+// TODO:
+// 1. proto message
+// 2. Channel Implementation
+// 3. Run regression

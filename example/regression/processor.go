@@ -8,10 +8,10 @@ type parameterProcessor struct {
 
 func (proc *parameterProcessor) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
 	if proc.parameter == nil {
-		proc.parameter = deserialzeData(ins[0].Data())
+		proc.parameter = deserialzeData(ins[0].Get())
 	}
 	for _, child := range outs {
-		child.Send(proc.parameter)
+		child.Put(proc.parameter)
 	}
 }
 
@@ -23,14 +23,14 @@ func (proc *gradientProcessor) Compute(ins []taskgraph.InboundChannel, outs []ta
 	// master task have parameter already. slave task doesn't have, so he needs to
 	// retrieve from others.
 	if proc.parameter == nil {
-		proc.parameter = deserialzeData(ins[0].Data())
+		proc.parameter = deserialzeData(ins[0].Get())
 	}
 	proc.createLocalGradient(proc.parameter)
 	for _, in := range ins {
-		childG := deserialzeData(in.Data())
+		childG := deserialzeData(in.Get())
 		proc.updateLocalGradient(childG)
 	}
-	outs[0].Send(proc.localGradient())
+	outs[0].Put(proc.localGradient())
 }
 
 func (proc *gradientProcessor) createLocalGradient(parameter *data) {}

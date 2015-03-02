@@ -23,3 +23,5 @@ func (tk *taskCommon) Init(framework taskgraph.Framework, numberOfTasks uint64) 
 	tk.treeTopo.SetTaskID(numberOfTasks)
 	tk.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
+
+func (tk *taskCommon) Exit() {}

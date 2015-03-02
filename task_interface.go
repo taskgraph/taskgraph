@@ -17,7 +17,7 @@ type Task interface {
 
 	// Framework tells user task what current epoch is.
 	// User can compose a graph using channels and processors here.
-	SetEpoch(epoch uint64)
+	SetEpoch(ctx Context, epoch uint64)
 }
 
 // user-implemented data processing/computing unit.
