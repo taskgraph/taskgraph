@@ -91,7 +91,7 @@ type bwmfTask struct {
 	// objective function, parameters and minimizer to solve bwmf
 	loss         *KLDivLoss
 	optimizer    *taskgraph_op.ProjectedGradient
-	stopCriteria *taskgraph_op.GradNormTolCriteria
+	stopCriteria *taskgraph_op.ComposedCriterion // with gradnorm tolerance and timeout limit
 }
 
 // These two function carry out actual optimization.
