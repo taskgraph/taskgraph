@@ -12,7 +12,7 @@ import (
 //  XXX(baigang): matrix layout
 //    W is vectorized by the mapping W[ I, J ] = W_para[ I * k + J ]
 //    H is vectorized by the mapping H[ I, J ] = H_para[ I * k + J ]
-//  So actually W is W^T, but it saves code when alternatively optimize over H and W.
+//  So actually H is H^T, but it saves code by using identical routine when alternatively optimize over H and W.
 //
 type KLDivLoss struct {
 	V       []map[int]float32 // write once, read concurrently multiple times
