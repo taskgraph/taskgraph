@@ -35,12 +35,13 @@ func TestEvaluation(t *testing.T) {
 	h.Set(1, 0.5)
 
 	kld_loss := KLDivLoss{
-		V:  v,
-		WH: wh,
-		W:  w,
-		m:  3,
-		n:  2,
-		k:  1,
+		V:      v,
+		WH:     wh,
+		W:      w,
+		m:      3,
+		n:      2,
+		k:      1,
+		smooth: 1e-3,
 	}
 
 	loss_val := kld_loss.Evaluate(h, g)
@@ -50,11 +51,11 @@ func TestEvaluation(t *testing.T) {
 	fmt.Println("loss val is ", loss_val)
 	fmt.Println("gradient is ", g)
 
-	if math.Abs(float64(loss_val)-2.68) > 1e-1 {
-		t.Errorf("Loss value incorrect: actual %f, expected 0.5", loss_val)
+	if math.Abs(float64(loss_val)-6.41) > 5e-2 {
+		t.Errorf("Loss value incorrect: actual %f, expected 6.06543", loss_val)
 	}
 
-	if math.Abs(float64(g.Get(0))+2.0) > 1e-1 || math.Abs(float64(g.Get(1))+2.0) > 1e-1 {
-		t.Error("Gradient incorrect: actual {%f, %f}, expected {2.0, 2.0}", g.Get(0), g.Get(1))
+	if math.Abs(float64(g.Get(0))+2.0) > 5e-2 || math.Abs(float64(g.Get(1))+2.0) > 5e-2 {
+		t.Errorf("Gradient incorrect: actual {%f, %f}, expected { 2.0, 2.0 }", g.Get(0), g.Get(1))
 	}
 }

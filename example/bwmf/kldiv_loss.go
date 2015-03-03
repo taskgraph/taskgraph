@@ -1,10 +1,9 @@
 package bwmf
 
 import (
+	"github.com/taskgraph/taskgraph/op"
 	"math"
 	"sync"
-
-	"github.com/taskgraph/taskgraph/op"
 )
 
 // `KLDivLoss` is a `Function` that evaluates Kullback-Leibler Divergence and the corresponding gradient at the given `Parameter`.
@@ -19,12 +18,17 @@ type KLDivLoss struct {
 	WH      [][]float32       // temporary storage for the intermediate result W*H
 	W       taskgraph_op.Parameter
 	m, n, k int // dimensions
+	smooth  float64
 }
 
 // This function evaluates the Kullback-Leibler Divergence given $\mathbf{V} the matrix to fact and $\mathbf{W}$ the fixed factor.
-//  The value is:
+//  The generalized KL div is:
 //
-// $$ D_{KL} = \Sum_{ij} ( V_{ij} log \frac{V_{ij}}{(WH)_{ij}} - V_{ij} + (WH__{ij} )
+//    $$ D_{KL} = \Sum_{ij} ( V_{ij} log \frac{V_{ij}}{(WH)_{ij}} - V_{ij} + (WH_{ij} )
+//
+//  After removing the redundant constant factor, it becomes:
+//
+//    $$ L_{kl} = \Sum{ij} ( -V_{ij} log((WH)_{ij}) + (WH)_{ij} )
 //
 //  The gradient is:
 //
@@ -43,14 +47,14 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 			l.WH[i][j] = 0.0
 			go func(i, j int) {
 				for k := 0; k < l.k; k++ {
-					l.WH[i][j] += l.W.Get(int64(i*l.k+k)) * H.Get(int64(j*l.k+k))
+					l.WH[i][j] += l.W.Get(i*l.k+k) * H.Get(j*l.k+k)
 				}
 
 				// evaluate element-wise KL-divergence
 				v, ok := l.V[i][j]
 				wh := l.WH[i][j]
 				if ok {
-					accum <- v*float32(math.Log(float64(v/wh))) - v + wh
+					accum <- -v*float32(math.Log(l.smooth+float64(wh))) + wh
 				} else {
 					accum <- wh
 				}
@@ -68,12 +72,12 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 	for i := 0; i < l.k; i++ {
 		for j := 0; j < l.n; j++ {
 			wg.Add(1)
-			grad_index := int64(j*l.k + i)
+			grad_index := j*l.k + i
 			gradient.Set(grad_index, 0.0)
-			go func(grad_index int64, i, j int) {
+			go func(grad_index, i, j int) {
 				defer wg.Done()
 				for k := 0; k < l.m; k++ {
-					w_index := int64(k*l.k + i)
+					w_index := k*l.k + i
 					grad_val := l.W.Get(w_index) * (l.WH[k][j] - l.V[k][j]) / l.WH[k][j]
 					gradient.Add(grad_index, grad_val)
 				}
