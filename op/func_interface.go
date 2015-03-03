@@ -9,17 +9,17 @@ package taskgraph_op
 //    sum += param.Get(it.Index());
 //}
 type IndexIterator interface {
-	Index() int64
+	Index() int
 	Next() bool
 	Rewind()
-	Size() int64
+	Size() int
 }
 
 // We need some interface to define function and how we optimize them.
 type Parameter interface {
-	Get(index int64) float32
-	Set(index int64, value float32)
-	Add(index int64, value float32)
+	Get(index int) float32
+	Set(index int, value float32)
+	Add(index int, value float32)
 
 	// This allow us to generate parameter with same width.
 	CloneWithoutCopy() Parameter
@@ -33,6 +33,15 @@ func Fill(param Parameter, value float32) {
 	for it := param.IndexIterator(); it.Next(); {
 		param.Set(it.Index(), value)
 	}
+}
+
+// Compute the sum of the element of parameter after some transformation.
+func Sum(param Parameter, compute func(float32) float32) float32 {
+	sum := float64(0)
+	for it := param.IndexIterator(); it.Next(); {
+		sum += float64(compute(param.Get(it.Index())))
+	}
+	return float32(sum)
 }
 
 // There are many different ways one can optimize a function, but the
@@ -79,6 +88,34 @@ func (r *Regularization) Evaluate(param Parameter, gradient Parameter) float32 {
 // can be count based, or gradient norm based.
 type StopCriteria interface {
 	Done(param Parameter, value float32, gradient Parameter) bool
+}
+
+// This stop criteria stop after some fix iterations.
+type fixCountStopCriteria struct {
+	maxIter, curIter int
+}
+
+func (f *fixCountStopCriteria) Done(param Parameter, value float32, gradient Parameter) bool {
+	f.curIter += 1
+	return f.curIter >= f.maxIter
+}
+
+func MakeFixCountStopCriteria(iter int) StopCriteria {
+	return &fixCountStopCriteria{maxIter: iter, curIter: 0}
+}
+
+// This criteria stop the iteration when the norm of gradient below some predefined threshold
+type gradNormStopCriteria struct {
+	grad_norm_thres float32
+}
+
+func (g *gradNormStopCriteria) Done(param Parameter, value float32, gradient Parameter) bool {
+	norm := Sum(param, func(x float32) float32 { return x * x })
+	return norm < g.grad_norm_thres
+}
+
+func MakeGradientNormStopCriteria(thres float32) StopCriteria {
+	return &gradNormStopCriteria{grad_norm_thres: thres}
 }
 
 // High level interface for minimization. This assume that we start

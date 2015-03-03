@@ -2,7 +2,7 @@ package taskgraph_op
 
 // This defines how we do projected gradient.
 type ProjectedGradient struct {
-	projector          Projection
+	projector          *Projection
 	beta, sigma, alpha float32
 }
 
@@ -38,7 +38,7 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 	for k := 0; !stop.Done(stt, ovalgrad.value, ovalgrad.gradient); k += 1 {
 
 		alpha_moves[k%len(alpha_moves)] = 0
-		newPoint(stt, nxt, ovalgrad.gradient, pg.alpha, &pg.projector)
+		newPoint(stt, nxt, ovalgrad.gradient, pg.alpha, pg.projector)
 
 		evaluate(loss, stt, nvalgrad)
 		if pg.isGoodStep(stt, nxt, ovalgrad, nvalgrad) {
@@ -61,7 +61,7 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 			for pg.isGoodStep(stt, nxt, ovalgrad, nvalgrad) {
 				pg.alpha *= pg.beta
 				dec_count += 1
-				newPoint(stt, nxt, ovalgrad.gradient, pg.alpha, &pg.projector)
+				newPoint(stt, nxt, ovalgrad.gradient, pg.alpha, pg.projector)
 				evaluate(loss, stt, nvalgrad)
 			}
 			alpha_moves[k%len(alpha_moves)] = -dec_count
