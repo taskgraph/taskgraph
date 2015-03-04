@@ -25,6 +25,6 @@ type Joint interface {
 	Compute(ins []InboundChannel, outs []OutboundChannel)
 }
 
-type Serializable interface {
-	Serialize() []byte
+type Marshaler interface {
+	Marshal() ([]byte, error)
 }

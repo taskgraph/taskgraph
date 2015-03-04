@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package proto;
+
+service Channel {
+    rpc GetData (Tag) returns (Data) {}
+}
+
+message Tag {
+    string name = 1;
+}
+
+message Data {
+    bytes payload = 1;
+}

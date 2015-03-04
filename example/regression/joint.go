@@ -8,7 +8,7 @@ type parameterJoint struct {
 
 func (proc *parameterJoint) Compute(ins []taskgraph.InboundChannel, outs []taskgraph.OutboundChannel) {
 	if proc.parameter == nil {
-		proc.parameter = deserialzeData(ins[0].Get())
+		proc.parameter = unmarshalData(ins[0].Get())
 	}
 	for _, child := range outs {
 		child.Put(proc.parameter)
@@ -23,11 +23,11 @@ func (proc *gradientJoint) Compute(ins []taskgraph.InboundChannel, outs []taskgr
 	// master task have parameter already. slave task doesn't have, so he needs to
 	// retrieve from others.
 	if proc.parameter == nil {
-		proc.parameter = deserialzeData(ins[0].Get())
+		proc.parameter = unmarshalData(ins[0].Get())
 	}
 	proc.createLocalGradient(proc.parameter)
 	for _, in := range ins {
-		childG := deserialzeData(in.Get())
+		childG := unmarshalData(in.Get())
 		proc.updateLocalGradient(childG)
 	}
 	outs[0].Put(proc.localGradient())

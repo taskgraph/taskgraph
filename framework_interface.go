@@ -30,7 +30,6 @@ type Composer interface {
 	SetJoint(Joint)
 	CreateInboundChannel(taskID uint64, tag string)
 	CreateOutboundChannel(taskID uint64, tag string)
-	Compose()
 }
 
 type channelBasics interface {
@@ -45,10 +44,13 @@ type InboundChannel interface {
 
 type OutboundChannel interface {
 	channelBasics
-	Put(Serializable)
+	Put(Marshaler)
 }
 
 // TODO:
-// 1. proto message
-// 2. Channel Implementation
+// 1. User proto message (deferred)
+// 2. Channel Implemented in gRPC
+//   - Inbound has a client. Client gets data and then dispatches to all inbound channels
+//     that requested.
+//   - Outbound has a server.
 // 3. Run regression

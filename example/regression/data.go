@@ -3,10 +3,10 @@ package regression
 type data struct {
 }
 
-func (d *data) Serialize() []byte {
+func (d *data) Marshal() ([]byte, error) {
 	panic("")
 }
 
-func deserialzeData(b []byte) *data {
+func unmarshalData(b []byte) *data {
 	panic("")
 }

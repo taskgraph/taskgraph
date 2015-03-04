@@ -29,8 +29,6 @@ func (tk *masterTask) setupParameterJoint(ctx taskgraph.Context) {
 	for _, child := range tk.treeTopo.GetChildren() {
 		cp.CreateOutboundChannel(child, "parameter")
 	}
-
-	cp.Compose()
 }
 
 func (tk *masterTask) setupGradientJoint(ctx taskgraph.Context) {
@@ -43,6 +41,4 @@ func (tk *masterTask) setupGradientJoint(ctx taskgraph.Context) {
 	for _, child := range tk.treeTopo.GetChildren() {
 		cp.CreateInboundChannel(child, "gradient")
 	}
-
-	cp.Compose()
 }
