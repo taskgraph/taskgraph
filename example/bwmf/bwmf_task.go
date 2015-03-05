@@ -3,6 +3,8 @@ package bwmf
 import (
 	"encoding/json"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 
 	"github.com/taskgraph/taskgraph"
@@ -41,14 +43,30 @@ type bwmfData struct {
 
 type Shard []*bwmfData
 
-func newDShard(index uint64) []*bwmfData {
-	panic("")
+func newShard(m, n, startIndex int) *Shard {
+	var res Shard
+	res = make([]*bwmfData, m)
+	for i := 0; i < m; i++ {
+		res[i].Index = startIndex + i
+		res[i].Values = make([]float64, n)
+	}
+	return &res
 }
-func newTShard(index uint64) []*bwmfData {
+
+// TODO: load matrix data
+//
+// Via DFS interface or directly loaded by each task?
+func loadShardedMatrix(path string) (*[]sparseVec, bool) {
 	panic("")
 }
 
 func (shard *Shard) randomFillValue() {
+	for i, _ := range *shard {
+		for j, _ := range (*shard)[i].Values {
+			// Do we need to normalized it?
+			(*shard)[i].Values[j] = rand.Float64()
+		}
+	}
 }
 
 type sparseVec struct {
@@ -69,110 +87,163 @@ type bwmfTask struct {
 	numOfTasks uint64
 
 	// The original data.
-	rowShard, columnShard []sparseVec
+	rowShard, columnShard *[]sparseVec
 
 	dtReady       *common.CountdownLatch
 	childrenReady map[uint64]bool
 
 	// XXX(baigang): store matrix data directly as `Parameter`?
-	dShard, tShard Shard
-	d, t           Shard
+	shardedD, shardedT *Shard
+	fullD, fullT       *Shard
 
-	// dShard is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
-	// full d is size of M*k, full t is size of k*N (dittu, layout N*k)
+	// shardedD is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
+	// fullD is size of M*k, fullT is size of k*N (dittu, layout N*k)
 	m, n, k, M, N int
 
 	// parameters for projected gradient methods
 	sigma, alpha, beta, tol float64
 
 	// intermidiate data
-	dShardParam, tShardParam, dParam, tParam taskgraph_op.Parameter
+	shardedDParam, shardedTParam, dParam, tParam taskgraph_op.Parameter
 
 	// objective function, parameters and minimizer to solve bwmf
 	loss         *KLDivLoss
 	optimizer    *taskgraph_op.ProjectedGradient
-	stopCriteria *taskgraph_op.ComposedCriterion // with gradnorm tolerance and timeout limit
+	stopCriteria taskgraph_op.StopCriteria
 }
 
 // These two function carry out actual optimization.
 func (this *bwmfTask) updateDShard() {
 
-	// TODO
-	// set rowColumn and t to fields in loss
-	//
+	this.loss.W = this.tParam
+	this.loss.m = this.m
+	this.loss.n = this.N
 
-	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.dShardParam)
+	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.shardedDParam)
 	if !ok {
 		// TODO report error
 	}
 
-	// TODO copy data from dShardParam to dShard
+	// TODO copy data from shardedDParam to shardedD
 	// TODO signal finish of the task?
 }
 
 func (this *bwmfTask) updateTShard() {
-	// dittu, almost same to updateDShard
 
-	// TODO
-	// set rowColumn and t to fields in loss
+	this.loss.W = this.dParam
+	this.loss.m = this.n
+	this.loss.n = this.M
 
 	//
-	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.tShardParam)
+	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.shardedTParam)
 	if !ok {
 		// TODO report error
 	}
 
-	// TODO copy data from tShardParam to tShard
+	// TODO copy data from shardedTParam to shardedT
 }
 
 // Initialization: We need to read row and column shards of A.
-func (this *bwmfTask) readShardsFromDisk() {}
+func (this *bwmfTask) readShardsFromDisk() bool {
+	return false
+}
 
-// Read dShard and tShard from last checkpoint if any.
+// Read shardedD and shardedT from last checkpoint if any.
 func (this *bwmfTask) readLastCheckpoint() bool {
-	panic("")
+	return false
 }
 
-// Task have all the data, compute local optimization of D/T.
-func (this *bwmfTask) localCompute() {
-	if this.taskID%2 == 0 {
-		this.updateTShard()
-		// TODO
-	} else {
-		this.updateDShard()
-		// TODO
-	}
-}
+// Compute shardedT/shardedD
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (this *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	this.taskID = taskID
 	this.framework = framework
 	this.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+
 	// Use some unique identifier to set Index "in the future".
 	// We can use taskID now.
-	this.dShard = newDShard(this.taskID)
-	this.tShard = newTShard(this.taskID)
-	this.readShardsFromDisk()
-	ok := this.readLastCheckpoint()
-	if !ok {
-		this.dShard.randomFillValue()
-		this.tShard.randomFillValue()
+	// TODO: We need a DFS interface to load parts for each task. Or we load it directly from paths on local disk.
+	var rowShardedOk, columnShardOk bool
+	this.rowShard, rowShardedOk = loadShardedMatrix("TODO/some/path/for/rowShard")
+	this.columnShard, columnShardOk = loadShardedMatrix("TODO/some/path/for/columnShard")
+
+	if !rowShardedOk || !columnShardOk {
+		this.logger.Printf("Failed load matrix data on task: %d", this.taskID)
+		return
 	}
 
-	// TODO: load rowShard and columnShard
+	this.m = len(*this.rowShard)
+	this.n = len(*this.columnShard)
 
-	this.m = len(this.dShard)
-	this.k = len(this.dShard[0].Values)
-	this.n = len(this.tShard)
-	// to check? len(this.tShard[0].Values) should be equal to this.k
+	// TODO where to get M, N and k?
+	//
+	// Obviously, M, N and k should be specified via some arguments. Are we to use etcd?
+	//
+	// Anyhow, suppose now we set the values of M, N and k. Below are some dummy codes.
+	this.M = this.m * int(this.numOfTasks)
+	this.N = this.n * int(this.numOfTasks)
+	this.k = 5 // dummy
 
-	// TODO() aggregate to get full size M and N?
+	// TODO we also need start indices for sharded D and T.
+	this.shardedD = newShard(this.m, this.k, this.m*int(this.taskID))
+	this.shardedT = newShard(this.n, this.k, this.n*int(this.taskID))
 
-	this.dShardParam = taskgraph_op.NewVecParameter(this.m * this.k)
-	this.tShardParam = taskgraph_op.NewVecParameter(this.n * this.k)
+	readCkpt := this.readLastCheckpoint()
+	if !readCkpt {
+		this.shardedD.randomFillValue()
+		this.shardedT.randomFillValue()
+	} else {
+		// Read from checkpoint
+		if !this.readLastCheckpoint() {
+			this.logger.Printf("Failed loading checkpoint data.")
+			return
+		}
+	}
+
+	this.m = len(*this.shardedD)
+	this.k = len((*this.shardedD)[0].Values)
+	this.n = len(*this.shardedT)
+	// to check? len(this.shardedT[0].Values) should be equal to this.k
+
+	this.M = 10 // XXX TODO
+	this.N = 10 // XXX TODO
+
+	this.shardedDParam = taskgraph_op.NewVecParameter(this.m * this.k)
+	this.shardedTParam = taskgraph_op.NewVecParameter(this.n * this.k)
 	this.dParam = taskgraph_op.NewVecParameter(this.M * this.k)
 	this.tParam = taskgraph_op.NewVecParameter(this.N * this.k)
+
+	this.loss = &KLDivLoss{
+		V:      nil, // will change at each epoch
+		WH:     nil,
+		W:      nil,
+		m:      0,
+		n:      0,
+		k:      this.k, // to be specified via arguments
+		smooth: 1e-3,   // to be specified via arguments
+	}
+
+	// TODO maxIter should be specified via arguments
+	this.stopCriteria = taskgraph_op.MakeFixCountStopCriteria(10)
+	proj_len := 0
+	if this.m > this.n {
+		proj_len = this.m * this.k
+	} else {
+		proj_len = this.n * this.k
+	}
+	projector := &taskgraph_op.Projection{
+		upper_bound: taskgraph_op.NewAllTheSameParameter(1e20, proj_len),
+		lower_bound: taskgraph_op.NewAllTheSameParameter(1e-9, proj_len),
+	}
+	this.optimizer = taskgraph_op.ProjectedGradient{
+		projector: projector,
+		beta:      this.beta,
+		sigma:     this.sigma,
+		alpha:     this.alpha,
+	}
+
+	// Now all has been initalized.
 
 	// At initialization:
 	// Task 0 will start the iterations.
@@ -192,6 +263,7 @@ func (this *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	// Even epochs: Fix D, calculate T;
 	// Odd epochs: Fix T, calculate D;
 
+	// XXX(baigang): This is for requesting sharded D/T from all tasks
 	if this.epoch%2 == 0 {
 		for index := uint64(0); index < this.numOfTasks; index++ {
 			ctx.DataRequest(index, "getD")
@@ -207,6 +279,13 @@ func (this *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 		this.dtReady.Await()
 		// We can compute local shard result from A and D/T.
 		this.localCompute()
+
+		if this.epoch%2 == 0 {
+			updateTShard()
+		} else {
+			updateDShard()
+		}
+
 		// Notify task 0 about the result.
 		ctx.FlagMetaToParent("computed")
 	}()
@@ -231,6 +310,18 @@ func (this *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta
 
 // Other nodes has served with their local shards.
 func (this *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
+
+	// NOTE(baigang): In SetEpoch() we request "getD" on even epochs and "getT" on odd epoches.
+	// Also, we do not reserve a `Shard` of full copy of D/T, instead we directly use the `Parameter`.
+	shard := new(Shard)
+	if this.epoch%2 == 0 {
+		json.Unmarshal(resp, shard)
+		// copy shard to dParam
+	} else {
+		json.Unmarshal(resp, shard)
+		// copy shard to tParam
+	}
+
 	this.dtReady.CountDown()
 }
 
@@ -241,14 +332,14 @@ func (this *bwmfTask) ServeAsParent(fromID uint64, req string, dataReceiver chan
 
 	go func() {
 		if this.epoch%2 == 0 {
-			b, err = json.Marshal(this.dShard)
+			b, err = json.Marshal(this.shardedD)
 			if err != nil {
-				this.logger.Fatalf("Slave can't encode dShard error: %v\n", err)
+				this.logger.Fatalf("Slave can't encode shardedD error: %v\n", err)
 			}
 		} else {
-			b, err = json.Marshal(this.tShard)
+			b, err = json.Marshal(this.shardedT)
 			if err != nil {
-				this.logger.Fatalf("Slave can't encode tShard error: %v\n", err)
+				this.logger.Fatalf("Slave can't encode shardedT error: %v\n", err)
 			}
 		}
 		dataReceiver <- b
