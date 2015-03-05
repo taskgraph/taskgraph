@@ -3,7 +3,6 @@ package bwmf
 import (
 	"encoding/json"
 	"log"
-	"math"
 	"math/rand"
 	"os"
 
@@ -124,12 +123,11 @@ func (this *bwmfTask) updateDShard() {
 		// TODO report error
 	}
 
-	// TODO copy data from shardedDParam to shardedD
-	// TODO signal finish of the task?
 }
 
 func (this *bwmfTask) updateTShard() {
 
+	// TODO initialized the loss
 	this.loss.W = this.dParam
 	this.loss.m = this.n
 	this.loss.n = this.M
@@ -234,7 +232,7 @@ func (this *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	}
 
 	this.optimizer = taskgraph_op.NewProjectedGradient(
-		&taskgraph_op.NewProjection(
+		taskgraph_op.NewProjection(
 			taskgraph_op.NewAllTheSameParameter(1e20, proj_len),
 			taskgraph_op.NewAllTheSameParameter(1e-9, proj_len),
 		),
