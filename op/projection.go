@@ -40,8 +40,8 @@ type Projection struct {
 
 // this creates a Project with specified upper and lower bound.
 // NOTE(baigang): to fix scope visibility of `upper_bound` and `lower_bound` inside `Projection`.
-func NewProjection(ub, lb Parameter) Projection {
-	return Projection{
+func NewProjection(ub, lb Parameter) *Projection {
+	return &Projection{
 		upper_bound: ub,
 		lower_bound: lb,
 	}
