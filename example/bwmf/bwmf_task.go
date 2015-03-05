@@ -101,7 +101,7 @@ type bwmfTask struct {
 	m, n, k, M, N int
 
 	// parameters for projected gradient methods
-	sigma, alpha, beta, tol float64
+	sigma, alpha, beta, tol float32
 
 	// intermidiate data
 	shardedDParam, shardedTParam, dParam, tParam taskgraph_op.Parameter
@@ -232,16 +232,16 @@ func (this *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	} else {
 		proj_len = this.n * this.k
 	}
-	projector := &taskgraph_op.Projection{
-		upper_bound: taskgraph_op.NewAllTheSameParameter(1e20, proj_len),
-		lower_bound: taskgraph_op.NewAllTheSameParameter(1e-9, proj_len),
-	}
-	this.optimizer = taskgraph_op.ProjectedGradient{
-		projector: projector,
-		beta:      this.beta,
-		sigma:     this.sigma,
-		alpha:     this.alpha,
-	}
+
+	this.optimizer = taskgraph_op.NewProjectedGradient(
+		&taskgraph_op.NewProjection(
+			taskgraph_op.NewAllTheSameParameter(1e20, proj_len),
+			taskgraph_op.NewAllTheSameParameter(1e-9, proj_len),
+		),
+		this.beta,
+		this.sigma,
+		this.alpha,
+	)
 
 	// Now all has been initalized.
 
@@ -277,13 +277,12 @@ func (this *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	go func() {
 		// Wait for all shards (either D or T, depending on the epoch) to be ready.
 		this.dtReady.Await()
-		// We can compute local shard result from A and D/T.
-		this.localCompute()
 
+		// We can compute local shard result from A and D/T.
 		if this.epoch%2 == 0 {
-			updateTShard()
+			this.updateTShard()
 		} else {
-			updateDShard()
+			this.updateDShard()
 		}
 
 		// Notify task 0 about the result.
@@ -316,10 +315,10 @@ func (this *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 	shard := new(Shard)
 	if this.epoch%2 == 0 {
 		json.Unmarshal(resp, shard)
-		// copy shard to dParam
+		// TODO copy shard to dParam
 	} else {
 		json.Unmarshal(resp, shard)
-		// copy shard to tParam
+		// TODO copy shard to tParam
 	}
 
 	this.dtReady.CountDown()
