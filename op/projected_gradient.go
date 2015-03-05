@@ -11,6 +11,15 @@ type vgpair struct {
 	gradient Parameter
 }
 
+func NewProjectedGradient(projector *Projection, beta, sigma, alpha float32) *ProjectedGradient {
+	return &ProjectedGradient{
+		projector: projector,
+		beta:      beta,
+		sigma:     sigma,
+		alpha:     alpha,
+	}
+}
+
 // This implementation is based on "Projected Gradient Methods for Non-negative Matrix
 // Factorization" by Chih-Jen Lin. Particularly it is based on the discription of an
 // improved projected gradient method in page 10 of that paper.

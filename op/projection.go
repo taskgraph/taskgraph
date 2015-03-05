@@ -38,6 +38,15 @@ type Projection struct {
 	upper_bound, lower_bound Parameter
 }
 
+// this creates a Project with specified upper and lower bound.
+// NOTE(baigang): to fix scope visibility of `upper_bound` and `lower_bound` inside `Projection`.
+func NewProjection(ub, lb Parameter) Projection {
+	return Projection{
+		upper_bound: ub,
+		lower_bound: lb,
+	}
+}
+
 // We assume the base and gradient are in the same dimensions. In another words,
 // the IndexIterator will return the same from base and gradient.
 func (p *Projection) ClipGradient(base, gradient Parameter) {
