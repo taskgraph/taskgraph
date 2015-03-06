@@ -1,6 +1,6 @@
 package filesystem
 
-type FileSystem interface {
+type Client interface {
 	Open() File
 	Exists() bool
 	GlobPrefix() []string
