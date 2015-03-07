@@ -1,6 +1,10 @@
 package filesystem
 
 import (
+	"bytes"
+	"log"
+	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -65,13 +69,45 @@ func (c *HdfsClient) GlobPrefix(prefix string) ([]string, error) {
 
 type HdfsFile struct {
 	FileReader *hdfs.FileReader
+	logger     *log.Logger
 }
 
 func (f *HdfsFile) Read(b []byte) (int, error) {
 	return f.FileReader.Read(b)
 }
-func (f *HdfsFile) Write(b []byte) (int, error) { panic("") }
-func (f *HdfsFile) Sync() error                 { panic("") }
+
+// REST docs:
+// http://hadoop.apache.org/docs/r2.5.1/hadoop-project-dist/hadoop-hdfs/WebHDFS.html#Append_to_a_File
+func (f *HdfsFile) Write(b []byte) (int, error) {
+	tr := &http.Transport{}
+	urlStr := ""
+	req, err := http.NewRequest("POST", urlStr, nil)
+	if err != nil {
+		f.logger.Fatalf("NewRequest failed: %v", err)
+	}
+	// no redirect
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		f.logger.Fatalf("RoundTrip failed: %v", err)
+	}
+	loc := resp.Header.Get("Location")
+	u, err := url.ParseRequestURI(loc)
+	if err != nil {
+		f.logger.Fatalf("ParseRequestURI failed: %v", err)
+	}
+	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
+	if err != nil {
+		f.logger.Fatalf("Post failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		f.logger.Fatalf("Status code isn't OK")
+	}
+	return len(b), nil
+}
+
+func (f *HdfsFile) Sync() error {
+	return nil
+}
 
 func (f *HdfsFile) Close() error {
 	return f.FileReader.Close()
