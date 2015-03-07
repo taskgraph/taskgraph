@@ -1,14 +1,17 @@
 package filesystem
 
 type Client interface {
-	Open() File
-	Exists() bool
-	GlobPrefix() []string
+	Create(name string) (File, error)
+	Open(name string) (File, error)
+	Exists(name string) (bool, error)
+	Rename(oldpath, newpath string) error
+	GlobPrefix(prefix string) ([]string, error)
 }
 
+// assume no random access.
 type File interface {
-	Read()
-	Write()
-	Sync()
-	Rename()
+	Read(b []byte) (int, error)
+	Write(b []byte) (int, error)
+	Sync() error
+	Close() error
 }
