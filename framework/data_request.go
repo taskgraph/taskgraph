@@ -107,9 +107,11 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		f.task.ServeAsChild(dr.taskID, dr.req, dataReceiver)
+		b, _ := f.task.ServeAsChild(dr.taskID, dr.req)
+		dataReceiver <- b
 	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		f.task.ServeAsParent(dr.taskID, dr.req, dataReceiver)
+		b, _ := f.task.ServeAsParent(dr.taskID, dr.req)
+		dataReceiver <- b
 	default:
 		f.log.Panic("unexpected")
 	}

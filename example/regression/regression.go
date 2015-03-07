@@ -85,15 +85,17 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.param)
-	if err != nil {
-		t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
-	}
-	dataReceiver <- b
+func (t *dummyMaster) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.param)
+	//if err != nil {
+	//	t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
+	//}
+	//dataReceiver <- b
 }
 
-func (t *dummyMaster) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {}
+func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
+	return nil, nil
+}
 
 func (t *dummyMaster) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
 }
@@ -208,20 +210,20 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.param)
-	if err != nil {
-		t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
-	}
-	dataReceiver <- b
+func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.param)
+	//if err != nil {
+	//	t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
+	//}
+	//dataReceiver <- b
 }
 
-func (t *dummySlave) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.gradient)
-	if err != nil {
-		t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
-	}
-	dataReceiver <- b
+func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.gradient)
+	//if err != nil {
+	//	t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
+	//}
+	//dataReceiver <- b
 }
 
 func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {

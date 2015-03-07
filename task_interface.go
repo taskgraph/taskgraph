@@ -24,8 +24,8 @@ type Task interface {
 	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte)
-	ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte)
+	ServeAsParent(fromID uint64, req string) ([]byte, error)
+	ServeAsChild(fromID uint64, req string) ([]byte, error)
 }
 
 type UpdateLog interface {
