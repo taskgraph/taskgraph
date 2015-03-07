@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -29,8 +30,8 @@ func (c *localFSClient) Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
 
-func (c *localFSClient) GlobPrefix(prefix string) ([]string, error) {
-	return filepath.Glob(prefix)
+func (c *localFSClient) Glob(dirname, pattern string) ([]string, error) {
+	return filepath.Glob(path.Join(dirname, pattern))
 }
 
 func existCommon(err error) (bool, error) {

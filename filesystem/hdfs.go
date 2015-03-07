@@ -5,8 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"path"
-	"strings"
+	"regexp"
 
 	"github.com/colinmarc/hdfs"
 )
@@ -51,16 +50,18 @@ func (c *HdfsClient) Rename(oldpath, newpath string) error {
 	return c.client.Rename(oldpath, newpath)
 }
 
-func (c *HdfsClient) GlobPrefix(prefix string) ([]string, error) {
-	dirname := path.Dir(prefix)
-	basename := path.Base(prefix)
+func (c *HdfsClient) Glob(dirname, pattern string) ([]string, error) {
 	fileInfoList, err := c.client.ReadDir(dirname)
 	if err != nil {
 		return nil, err
 	}
 	res := make([]string, 0)
 	for _, fi := range fileInfoList {
-		if strings.HasPrefix(fi.Name(), basename) {
+		matched, err := regexp.MatchString(pattern, fi.Name())
+		if err != nil {
+			return nil, err
+		}
+		if matched {
 			res = append(res, fi.Name())
 		}
 	}

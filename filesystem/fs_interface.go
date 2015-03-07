@@ -5,7 +5,7 @@ type Client interface {
 	Open(name string) (File, error)
 	Exists(name string) (bool, error)
 	Rename(oldpath, newpath string) error
-	GlobPrefix(prefix string) ([]string, error)
+	Glob(dirname, pattern string) ([]string, error)
 }
 
 // assume no random access.
