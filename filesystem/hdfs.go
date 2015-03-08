@@ -23,6 +23,7 @@ import (
 type hdfsConfig struct {
 	namenodeAddr string
 	webHdfsAddr  string
+	user         string
 }
 
 type HdfsClient struct {
@@ -30,8 +31,8 @@ type HdfsClient struct {
 	hdfsConfig
 }
 
-func NewHdfsClient(namenodeAddr, webHdfsAddr string) (Client, error) {
-	client, err := hdfs.New(namenodeAddr)
+func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
+	client, err := hdfs.NewForUser(namenodeAddr, user)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +42,7 @@ func NewHdfsClient(namenodeAddr, webHdfsAddr string) (Client, error) {
 		hdfsConfig: hdfsConfig{
 			namenodeAddr: namenodeAddr,
 			webHdfsAddr:  webHdfsAddr,
+			user:         user,
 		},
 	}, nil
 }
@@ -99,14 +101,13 @@ type HdfsFile struct {
 	logger *log.Logger
 	hdfsConfig
 	// buffer
-	// client
 }
 
 // REST docs:
 // http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/WebHDFS.html#Append_to_a_File
 func (f *HdfsFile) Write(b []byte) (int, error) {
 	tr := &http.Transport{}
-	urlStr := buildNamenodeURL(f.webHdfsAddr, f.path)
+	urlStr := buildNamenodeURL(f.webHdfsAddr, f.path, f.user)
 	f.logger.Printf("url: %s", urlStr)
 
 	req, err := http.NewRequest("POST", urlStr, nil)
@@ -143,7 +144,7 @@ func (f *HdfsFile) Close() error {
 	return nil
 }
 
-func buildNamenodeURL(webHdfsAddr, name string) string {
+func buildNamenodeURL(webHdfsAddr, name, user string) string {
 	u := &url.URL{
 		Scheme: "http",
 		Host:   webHdfsAddr,
@@ -151,7 +152,7 @@ func buildNamenodeURL(webHdfsAddr, name string) string {
 	}
 	q := u.Query()
 	q.Set("op", "APPEND")
-	q.Set("user.name", "hdeng")
+	q.Set("user.name", user)
 	u.RawQuery = q.Encode()
 	return u.String()
 }

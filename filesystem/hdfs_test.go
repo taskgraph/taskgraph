@@ -9,7 +9,7 @@ import (
 var _ *log.Logger
 
 func TestHdfsClient(t *testing.T) {
-	client, err := NewHdfsClient(os.Getenv("namenode_addr"), os.Getenv("webhdfs_addr"))
+	client, err := NewHdfsClient(os.Getenv("namenode_addr"), os.Getenv("webhdfs_addr"), os.Getenv("hdfs_user"))
 	// t.Skip()
 	if err != nil {
 		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
