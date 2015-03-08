@@ -2,10 +2,14 @@ package filesystem
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path"
 	"regexp"
 
 	"github.com/colinmarc/hdfs"
@@ -16,12 +20,29 @@ import (
 //   HDFS version:
 //   REST API version:
 
-type HdfsClient struct {
-	client *hdfs.Client
+type hdfsConfig struct {
+	namenodeAddr string
+	webHdfsAddr  string
 }
 
-func NewHdfsClient() Client {
-	return &HdfsClient{}
+type HdfsClient struct {
+	client *hdfs.Client
+	hdfsConfig
+}
+
+func NewHdfsClient(namenodeAddr, webHdfsAddr string) (Client, error) {
+	client, err := hdfs.New(namenodeAddr)
+	if err != nil {
+		return nil, err
+	}
+	// client.Remove("/tmp/logs/testing")
+	return &HdfsClient{
+		client: client,
+		hdfsConfig: hdfsConfig{
+			namenodeAddr: namenodeAddr,
+			webHdfsAddr:  webHdfsAddr,
+		},
+	}, nil
 }
 
 func (c *HdfsClient) OpenReadCloser(name string) (io.ReadCloser, error) {
@@ -39,7 +60,11 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 			return nil, err
 		}
 	}
-	return &HdfsFile{}, nil
+	return &HdfsFile{
+		path:       name,
+		logger:     log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags),
+		hdfsConfig: c.hdfsConfig,
+	}, nil
 }
 
 func (c *HdfsClient) Exists(name string) (bool, error) {
@@ -70,14 +95,20 @@ func (c *HdfsClient) Glob(dirname, pattern string) ([]string, error) {
 }
 
 type HdfsFile struct {
+	path   string
 	logger *log.Logger
+	hdfsConfig
+	// buffer
+	// client
 }
 
 // REST docs:
-// http://hadoop.apache.org/docs/r2.5.1/hadoop-project-dist/hadoop-hdfs/WebHDFS.html#Append_to_a_File
+// http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/WebHDFS.html#Append_to_a_File
 func (f *HdfsFile) Write(b []byte) (int, error) {
 	tr := &http.Transport{}
-	urlStr := ""
+	urlStr := buildNamenodeURL(f.webHdfsAddr, f.path)
+	f.logger.Printf("url: %s", urlStr)
+
 	req, err := http.NewRequest("POST", urlStr, nil)
 	if err != nil {
 		f.logger.Fatalf("NewRequest failed: %v", err)
@@ -87,21 +118,47 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	if err != nil {
 		f.logger.Fatalf("RoundTrip failed: %v", err)
 	}
+	defer resp.Body.Close()
 	loc := resp.Header.Get("Location")
+	f.logger.Printf("location: %s", loc)
+
 	u, err := url.ParseRequestURI(loc)
 	if err != nil {
 		f.logger.Fatalf("ParseRequestURI failed: %v", err)
 	}
+	f.logger.Printf("data url: %s", u.String())
 	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
 	if err != nil {
 		f.logger.Fatalf("Post failed: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		f.logger.Fatalf("Status code isn't OK")
+
+		f.logger.Fatalf("Status code isn't OK. Response: %v\nReason: %v", resp, explain(resp.Body))
 	}
 	return len(b), nil
 }
 
 func (f *HdfsFile) Close() error {
 	return nil
+}
+
+func buildNamenodeURL(webHdfsAddr, name string) string {
+	u := &url.URL{
+		Scheme: "http",
+		Host:   webHdfsAddr,
+		Path:   path.Join("webhdfs", "v1", name),
+	}
+	q := u.Query()
+	q.Set("op", "APPEND")
+	q.Set("user.name", "hdeng")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func explain(r io.Reader) interface{} {
+	body, _ := ioutil.ReadAll(r)
+	var reason interface{}
+	json.Unmarshal(body, &reason)
+	return reason
 }
