@@ -1,17 +1,11 @@
 package filesystem
 
+import "io"
+
 type Client interface {
-	Create(name string) (File, error)
-	Open(name string) (File, error)
+	OpenReadCloser(name string) (io.ReadCloser, error)
+	OpenWriteCloser(name string) (io.WriteCloser, error)
 	Exists(name string) (bool, error)
 	Rename(oldpath, newpath string) error
 	Glob(dirname, pattern string) ([]string, error)
-}
-
-// assume no random access.
-type File interface {
-	Read(b []byte) (int, error)
-	Write(b []byte) (int, error)
-	Sync() error
-	Close() error
 }

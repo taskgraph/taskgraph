@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,11 +14,22 @@ func NewLocalFSClient() Client {
 	return &localFSClient{}
 }
 
-func (c *localFSClient) Create(name string) (File, error) {
-	return os.Create(name)
+func (c *localFSClient) OpenReadCloser(name string) (io.ReadCloser, error) {
+	return os.Open(name)
 }
 
-func (c *localFSClient) Open(name string) (File, error) {
+func (c *localFSClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
+	exist, err := c.Exists(name)
+	if err != nil {
+		return nil, err
+	}
+	if !exist {
+		f, err := os.Create(name)
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
 	return os.Open(name)
 }
 

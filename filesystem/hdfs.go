@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,22 +24,22 @@ func NewHdfsClient() Client {
 	return &HdfsClient{}
 }
 
-func (c *HdfsClient) Create(name string) (File, error) {
-	err := c.client.CreateEmptyFile(name)
-	if err != nil {
-		return nil, err
-	}
-	return c.Open(name)
+func (c *HdfsClient) OpenReadCloser(name string) (io.ReadCloser, error) {
+	return c.client.Open(name)
 }
 
-func (c *HdfsClient) Open(name string) (File, error) {
-	fileReader, err := c.client.Open(name)
+func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
+	exist, err := c.Exists(name)
 	if err != nil {
 		return nil, err
 	}
-	return &HdfsFile{
-		FileReader: fileReader,
-	}, nil
+	if !exist {
+		err := c.client.CreateEmptyFile(name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &HdfsFile{}, nil
 }
 
 func (c *HdfsClient) Exists(name string) (bool, error) {
@@ -69,12 +70,7 @@ func (c *HdfsClient) Glob(dirname, pattern string) ([]string, error) {
 }
 
 type HdfsFile struct {
-	FileReader *hdfs.FileReader
-	logger     *log.Logger
-}
-
-func (f *HdfsFile) Read(b []byte) (int, error) {
-	return f.FileReader.Read(b)
+	logger *log.Logger
 }
 
 // REST docs:
@@ -106,10 +102,6 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (f *HdfsFile) Sync() error {
-	return nil
-}
-
 func (f *HdfsFile) Close() error {
-	return f.FileReader.Close()
+	return nil
 }
