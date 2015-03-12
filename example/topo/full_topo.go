@@ -32,7 +32,7 @@ func (t *FullTopology) SetTaskID(taskID uint64) {
 
 }
 
-func (t *FullTopology) GetLinkTypes(epoch uint64) []string {
+func (t *FullTopology) GetLinkTypes() []string {
 	return []string{"Parents", "Children"}
 }
 

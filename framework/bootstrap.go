@@ -206,10 +206,10 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 		switch who {
 		case roleParent:
 			// Watch parent's child-meta.
-			watchPath = etcdutil.ChildMetaPath(f.name, taskID)
+			watchPath = etcdutil.MetaPath("Children", f.name, taskID)
 		case roleChild:
 			// Watch child's parent-meta.
-			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
+			watchPath = etcdutil.MetaPath("Parents", f.name, taskID)
 		default:
 			f.log.Panic("unexpected role")
 		}

@@ -20,7 +20,7 @@ func TestMasterSetEpochFailure(t *testing.T) {
 	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
-	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
+	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks, []string{"Parents", "Children"})
 	controller.Start()
 
 	taskBuilder := &regression.SimpleTaskBuilder{
@@ -84,7 +84,7 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
-	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
+	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks, []string{"Parents", "Children"})
 	controller.Start()
 	defer controller.Stop()
 

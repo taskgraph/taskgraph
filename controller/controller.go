@@ -19,14 +19,16 @@ type Controller struct {
 	failDetectStop chan bool
 	logger         *log.Logger
 	jobStatusChan  chan string
+	linkTypes      []string
 }
 
-func New(name string, etcd *etcd.Client, numOfTasks uint64) *Controller {
+func New(name string, etcd *etcd.Client, numOfTasks uint64, pLinkTypes []string) *Controller {
 	return &Controller{
 		name:       name,
 		etcdclient: etcd,
 		numOfTasks: numOfTasks,
 		logger:     log.New(os.Stdout, "", log.Lshortfile|log.Ltime|log.Ldate),
+		linkTypes:  pLinkTypes,
 	}
 }
 
@@ -65,10 +67,10 @@ func (c *Controller) InitEtcdLayout() error {
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(i, 10))
 		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
-		key = etcdutil.ParentMetaPath(c.name, i)
-		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
-		key = etcdutil.ChildMetaPath(c.name, i)
-		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
+		for idx := range c.linkTypes {
+			key = etcdutil.MetaPath(c.linkTypes[idx], c.name, i)
+			etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
+		}
 	}
 	return nil
 }

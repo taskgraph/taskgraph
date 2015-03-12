@@ -19,7 +19,9 @@ type Topology interface {
 	// we can get the local topology for each epoch later.
 	SetTaskID(taskID uint64)
 
-	// New interface now allow for arbitrary link type
-	GetLinkTypes(epoch uint64) []string
+	// This returns the type of links this topology supports
+	GetLinkTypes() []string
+
+	// This returns the neighbors of given link for this node at this epoch.
 	GetNeighbors(linkType string, epoch uint64) []uint64
 }

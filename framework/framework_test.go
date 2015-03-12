@@ -20,7 +20,7 @@ import (
 func TestRequestDataEpochMismatch(t *testing.T) {
 	job := "TestRequestDataEpochMismatch"
 	etcdURLs := []string{"http://localhost:4001"}
-	ctl := controller.New(job, etcd.NewClient(etcdURLs), 1)
+	ctl := controller.New(job, etcd.NewClient(etcdURLs), 1, []string{"Parents", "Children"})
 	ctl.InitEtcdLayout()
 	defer ctl.DestroyEtcdLayout()
 
@@ -59,7 +59,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	appName := "framework_test_flagmetaready"
 	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
-	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2)
+	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2, []string{"Parents", "Children"})
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 	appName := "framework_test_flagmetaready"
 	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
-	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2)
+	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2, []string{"Parents", "Children"})
 	if err := ctl.InitEtcdLayout(); err != nil {
 		t.Fatalf("initEtcdLayout failed: %v", err)
 	}
