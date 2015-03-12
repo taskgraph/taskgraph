@@ -17,7 +17,6 @@ func init() {
 }
 
 func TestHdfsClientWrite(t *testing.T) {
-	t.Skip()
 	checkHdfsConfig(t)
 	client, err := NewHdfsClient(namenodeAddr, webhdfsAddr, hdfsUser)
 	if err != nil {
@@ -33,6 +32,9 @@ func TestHdfsClientWrite(t *testing.T) {
 		t.Fatalf("Write failed: %v", err)
 	}
 	writeCloser.Close()
+
+	c := client.(*HdfsClient)
+	c.client.Remove("/tmp/testing")
 }
 
 func TestHdfsClientGlob(t *testing.T) {
@@ -42,12 +44,20 @@ func TestHdfsClientGlob(t *testing.T) {
 		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
 			namenodeAddr, webhdfsAddr, err)
 	}
-	globPath := "/tmp/*"
+	c := client.(*HdfsClient)
+	c.client.Mkdir("/tmp/testing", 0644)
+	c.client.CreateEmptyFile("/tmp/testing/1")
+	c.client.CreateEmptyFile("/tmp/testing/1.txt")
+	c.client.CreateEmptyFile("/tmp/testing/2.txt")
+
+	globPath := "/tmp/testing/*.txt"
 	names, err := client.Glob(globPath)
 	if err != nil {
 		t.Fatalf("Glob(%s) failed: %v", globPath, err)
 	}
 	fmt.Println(names)
+
+	c.client.Remove("/tmp/testing")
 }
 
 func checkHdfsConfig(t *testing.T) {
