@@ -55,3 +55,4 @@ go test -v ./example/regression
 go test -v ./framework
 go test -v ./integration
 go test -v ./op
+go test -v ./filesystem

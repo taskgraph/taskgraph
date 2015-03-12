@@ -3,7 +3,6 @@ package filesystem
 import (
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 )
 
@@ -42,8 +41,8 @@ func (c *localFSClient) Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
 
-func (c *localFSClient) Glob(dirname, pattern string) ([]string, error) {
-	return filepath.Glob(path.Join(dirname, pattern))
+func (c *localFSClient) Glob(pattern string) (matches []string, err error) {
+	return filepath.Glob(pattern)
 }
 
 func existCommon(err error) (bool, error) {
