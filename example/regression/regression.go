@@ -113,7 +113,7 @@ func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetLinks("Children", t.epoch)) {
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
 		}
@@ -242,7 +242,7 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
-	children := t.framework.GetTopology().GetChildren(t.epoch)
+	children := t.framework.GetTopology().GetLinks("Children", t.epoch)
 	if len(children) != 0 {
 		ctx.FlagMetaToChild("ParamReady")
 	} else {
@@ -266,7 +266,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetLinks("Children", t.epoch)) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
