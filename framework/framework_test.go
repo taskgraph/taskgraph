@@ -278,22 +278,9 @@ func (t *testableTask) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *testableTask) Exit()                                        {}
 func (t *testableTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {}
 
-func (t *testableTask) ParentMetaReady(ctx taskgraph.Context, fromID uint64, meta string) {
+func (t *testableTask) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, meta, "", nil}
-	}
-}
-
-func (t *testableTask) ChildMetaReady(ctx taskgraph.Context, fromID uint64, meta string) {
-	t.ParentMetaReady(ctx, fromID, meta)
-}
-
-func (t *testableTask) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
-	if linkType == "Parents" {
-		t.ParentMetaReady(ctx, fromID, meta)
-	}
-	if linkType == "Children" {
-		t.ChildMetaReady(ctx, fromID, meta)
 	}
 }
 

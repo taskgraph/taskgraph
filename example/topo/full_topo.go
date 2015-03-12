@@ -32,15 +32,11 @@ func (t *FullTopology) SetTaskID(taskID uint64) {
 
 }
 
-func (t *FullTopology) GetParents(epoch uint64) []uint64 { return t.parents }
-
-func (t *FullTopology) GetChildren(epoch uint64) []uint64 { return t.children }
-
 func (t *FullTopology) GetLinkTypes(epoch uint64) []string {
 	return []string{"Parents", "Children"}
 }
 
-func (t *FullTopology) GetLinks(linkType string, epoch uint64) []uint64 {
+func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
 	case linkType == "Parents":

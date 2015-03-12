@@ -3,7 +3,7 @@ package topoutil
 import "github.com/taskgraph/taskgraph"
 
 func IsParent(t taskgraph.Topology, epoch, taskID uint64) bool {
-	for _, id := range t.GetLinks("Parents", epoch) {
+	for _, id := range t.GetNeighbors("Parents", epoch) {
 		if taskID == id {
 			return true
 		}
@@ -12,7 +12,7 @@ func IsParent(t taskgraph.Topology, epoch, taskID uint64) bool {
 }
 
 func IsChild(t taskgraph.Topology, epoch, taskID uint64) bool {
-	for _, id := range t.GetLinks("Children", epoch) {
+	for _, id := range t.GetNeighbors("Children", epoch) {
 		if taskID == id {
 			return true
 		}

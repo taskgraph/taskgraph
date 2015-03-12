@@ -29,15 +29,11 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *TreeTopology) GetParents(epoch uint64) []uint64 { return t.parents }
-
-func (t *TreeTopology) GetChildren(epoch uint64) []uint64 { return t.children }
-
 func (t *TreeTopology) GetLinkTypes(epoch uint64) []string {
 	return []string{"Parents", "Children"}
 }
 
-func (t *TreeTopology) GetLinks(linkType string, epoch uint64) []uint64 {
+func (t *TreeTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
 	case linkType == "Parents":

@@ -21,5 +21,5 @@ type Topology interface {
 
 	// New interface now allow for arbitrary link type
 	GetLinkTypes(epoch uint64) []string
-	GetLinks(linkType string, epoch uint64) []uint64
+	GetNeighbors(linkType string, epoch uint64) []uint64
 }

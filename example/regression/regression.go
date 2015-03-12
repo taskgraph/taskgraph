@@ -59,16 +59,11 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummyMaster) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
-func (t *dummyMaster) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
-	// Get data from child. When all the data is back, starts the next epoch.
-	ctx.DataRequest(childID, meta)
-}
-
-func (t *dummyMaster) MetaReady(ctx taskgraph.Context, parentID uint64, linkType, meta string) {
+func (t *dummyMaster) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Children" {
-		t.ChildMetaReady(ctx, parentID, meta)
+		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
+		// Get data from child. When all the data is back, starts the next epoch.
+		ctx.DataRequest(fromID, meta)
 	}
 }
 
@@ -119,7 +114,7 @@ func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetLinks("Children", t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
 		}
@@ -188,27 +183,19 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummySlave) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
-	t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	ctx.DataRequest(parentID, meta)
-}
-
-func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	go func() {
-		// If a new node restart and find out both parent and child meta ready, it will
-		// simultaneously request both data. We need to wait until gradient data is there.
-		t.gradientReady.Await()
-		ctx.DataRequest(childID, meta)
-	}()
-}
-
-func (t *dummySlave) MetaReady(ctx taskgraph.Context, childID uint64, linkType, meta string) {
+func (t *dummySlave) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
-		t.ParentMetaReady(ctx, childID, meta)
+		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
+		ctx.DataRequest(fromID, meta)
 	}
 	if linkType == "Children" {
-		t.ChildMetaReady(ctx, childID, meta)
+		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
+		go func() {
+			// If a new node restart and find out both parent and child meta ready, it will
+			// simultaneously request both data. We need to wait until gradient data is there.
+			t.gradientReady.Await()
+			ctx.DataRequest(fromID, meta)
+		}()
 	}
 }
 
@@ -257,7 +244,7 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
-	children := t.framework.GetTopology().GetLinks("Children", t.epoch)
+	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
 	if len(children) != 0 {
 		ctx.FlagMeta("Children", "ParamReady")
 	} else {
@@ -281,7 +268,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetLinks("Children", t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value

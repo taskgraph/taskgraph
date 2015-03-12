@@ -12,14 +12,6 @@ func (f *framework) createContext() *context {
 	}
 }
 
-func (c *context) FlagMetaToParent(meta string) {
-	c.f.flagMetaToParent(meta, c.epoch)
-}
-
-func (c *context) FlagMetaToChild(meta string) {
-	c.f.flagMetaToChild(meta, c.epoch)
-}
-
 func (c *context) IncEpoch() {
 	c.f.incEpoch(c.epoch)
 }
