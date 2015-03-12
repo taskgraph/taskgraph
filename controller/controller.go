@@ -67,8 +67,8 @@ func (c *Controller) InitEtcdLayout() error {
 	for i := uint64(0); i < c.numOfTasks; i++ {
 		key := etcdutil.FreeTaskPath(c.name, strconv.FormatUint(i, 10))
 		etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
-		for idx := range c.linkTypes {
-			key = etcdutil.MetaPath(c.linkTypes[idx], c.name, i)
+		for _, linkType := range c.linkTypes {
+			key = etcdutil.MetaPath(linkType, c.name, i)
 			etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
 		}
 	}
