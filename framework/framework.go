@@ -53,21 +53,12 @@ type framework struct {
 	dataRespChan       chan *frameworkhttp.DataResponse
 }
 
-func (f *framework) flagMetaToParent(meta string, epoch uint64) {
+func (f *framework) flagMeta(linkType, meta string, epoch uint64) {
 	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MetaPath("Parents", f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MetaPath("Parents", f.name, f.GetTaskID()), value, err)
-	}
-}
-
-func (f *framework) flagMetaToChild(meta string, epoch uint64) {
-	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MetaPath("Children", f.name, f.GetTaskID()), value, 0)
-	if err != nil {
-		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MetaPath("Children", f.name, f.GetTaskID()), value, err)
+			etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, err)
 	}
 }
 
