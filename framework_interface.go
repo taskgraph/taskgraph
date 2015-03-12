@@ -51,6 +51,10 @@ type Context interface {
 
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
+
+	// Simplified interface so allow for arbitrary link type as opposed to only Parent/Child
+	// FlagMeta(linktype, meta string)
+	// DataRequest(toID uint64, meta string, dataReceiver chan<- []byte)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

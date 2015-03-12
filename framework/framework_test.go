@@ -288,15 +288,17 @@ func (t *testableTask) ChildMetaReady(ctx taskgraph.Context, fromID uint64, meta
 	t.ParentMetaReady(ctx, fromID, meta)
 }
 
-func (t *testableTask) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
+func (t *testableTask) ServeAsParent(fromID uint64, req string) ([]byte, error) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, nil}
 	}
-	dataReceiver <- t.dataMap[req]
+	return t.dataMap[req], nil
 }
-func (t *testableTask) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {
-	t.ServeAsParent(fromID, req, dataReceiver)
+
+func (t *testableTask) ServeAsChild(fromID uint64, req string) ([]byte, error) {
+	return t.ServeAsParent(fromID, req)
 }
+
 func (t *testableTask) ParentDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, resp}

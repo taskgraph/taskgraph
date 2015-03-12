@@ -19,11 +19,7 @@ type Topology interface {
 	// we can get the local topology for each epoch later.
 	SetTaskID(taskID uint64)
 
-	// GetParents returns the parents' IDs of this task at the
-	// given epoch.
-	GetParents(epoch uint64) []uint64
-
-	// GetChlidren returns the children's IDs of this task at the
-	// given epoch.
-	GetChildren(epoch uint64) []uint64
+	// New interface now allow for arbitrary link type
+	GetLinkTypes(epoch uint64) []string
+	GetLinks(linkType string, epoch uint64) []uint64
 }

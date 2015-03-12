@@ -33,6 +33,21 @@ func (t *TreeTopology) GetParents(epoch uint64) []uint64 { return t.parents }
 
 func (t *TreeTopology) GetChildren(epoch uint64) []uint64 { return t.children }
 
+func (t *TreeTopology) GetLinkTypes(epoch uint64) []string {
+	return []string{"Parents", "Children"}
+}
+
+func (t *TreeTopology) GetLinks(linkType string, epoch uint64) []uint64 {
+	res := make([]uint64, 0)
+	switch {
+	case linkType == "Parents":
+		res = t.parents
+	case linkType == "Children":
+		res = t.children
+	}
+	return res
+}
+
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
 func NewTreeTopology(fanout, nTasks uint64) *TreeTopology {

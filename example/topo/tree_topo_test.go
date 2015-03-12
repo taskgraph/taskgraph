@@ -62,7 +62,18 @@ func testTreeTopology(fanout, number uint64, tests []treeTopoTest, t *testing.T)
 		treeTopology := NewTreeTopology(fanout, number)
 		treeTopology.SetTaskID(tt.id)
 
-		parents := treeTopology.GetParents(0)
+		linkTypes := treeTopology.GetLinkTypes(0)
+		if len(linkTypes) != 2 {
+			t.Error()
+		}
+		if linkTypes[0] != "Parents" {
+			t.Error()
+		}
+		if linkTypes[1] != "Children" {
+			t.Error()
+		}
+
+		parents := treeTopology.GetLinks("Parents", 0)
 		if len(parents) != len(tt.parents) {
 			t.Errorf("TreeTopology27 got wrong number of parents for %q", tt.id)
 		}
@@ -72,7 +83,7 @@ func testTreeTopology(fanout, number uint64, tests []treeTopoTest, t *testing.T)
 			}
 		}
 
-		children := treeTopology.GetChildren(0)
+		children := treeTopology.GetLinks("Children", 0)
 		if len(children) != len(tt.children) {
 			t.Errorf("TreeTopology27 got wrong number of children for %q", tt.id)
 		}

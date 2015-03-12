@@ -158,8 +158,8 @@ func (f *framework) setEpochStarted() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.watchMeta(roleParent, f.topology.GetParents(f.epoch))
-	f.watchMeta(roleChild, f.topology.GetChildren(f.epoch))
+	f.watchMeta(roleParent, f.topology.GetLinks("Parents", f.epoch))
+	f.watchMeta(roleChild, f.topology.GetLinks("Children", f.epoch))
 }
 
 func (f *framework) releaseEpochResource() {
