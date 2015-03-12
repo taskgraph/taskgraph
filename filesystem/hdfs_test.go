@@ -1,7 +1,8 @@
 package filesystem
 
 import (
-	"fmt"
+	"bytes"
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -17,6 +18,7 @@ func init() {
 }
 
 func TestHdfsClientWrite(t *testing.T) {
+	data := []byte("some data")
 	checkHdfsConfig(t)
 	client, err := NewHdfsClient(namenodeAddr, webhdfsAddr, hdfsUser)
 	if err != nil {
@@ -27,11 +29,23 @@ func TestHdfsClientWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenWriteCloser failed: %v", err)
 	}
-	_, err = writeCloser.Write([]byte("some data"))
+	_, err = writeCloser.Write(data)
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
 	writeCloser.Close()
+	readCloser, err := client.OpenReadCloser("/tmp/testing")
+	if err != nil {
+		t.Fatalf("OpenReadCloser failed: %v", err)
+	}
+	b, err := ioutil.ReadAll(readCloser)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
+	if bytes.Compare(b, data) != 0 {
+		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
+	}
 
 	c := client.(*HdfsClient)
 	c.client.Remove("/tmp/testing")
@@ -55,9 +69,22 @@ func TestHdfsClientGlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Glob(%s) failed: %v", globPath, err)
 	}
-	fmt.Println(names)
+	nameMap := make(map[string]int)
+	for _, name := range names {
+		nameMap[name] += 1
+	}
+
+	if len(names) != 2 ||
+		nameMap["/tmp/testing/1.txt"] != 1 || nameMap["/tmp/testing/2.txt"] != 1 {
+		t.Fatalf("Glob result isn't correct. Get = %v, Want = %v", nameMap, []string{"/tmp/testing/1.txt", "/tmp/testing/2.txt"})
+	}
 
 	c.client.Remove("/tmp/testing")
+}
+
+func TestHdfsClientRename(t *testing.T) {
+	checkHdfsConfig(t)
+
 }
 
 func checkHdfsConfig(t *testing.T) {
