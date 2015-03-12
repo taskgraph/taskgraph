@@ -40,7 +40,7 @@ type Framework interface {
 // Context is used in task callbacks. It provides APIs for tasks to ask framework
 // to do work in certain context.
 type Context interface {
-	// This useful for task to inform the framework their status change.
+	// This is useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Set meta flag to notify meta to all nodes of linkType to this node.
 	FlagMeta(linkType, meta string)
@@ -50,10 +50,6 @@ type Context interface {
 
 	// Request data from parent or children.
 	DataRequest(toID uint64, meta string)
-
-	// Simplified interface so allow for arbitrary link type as opposed to only Parent/Child
-	// FlagMeta(linktype, meta string)
-	// DataRequest(toID uint64, meta string, dataReceiver chan<- []byte)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
