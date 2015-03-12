@@ -59,11 +59,12 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummyMaster) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
-func (t *dummyMaster) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, childID)
-	// Get data from child. When all the data is back, starts the next epoch.
-	ctx.DataRequest(childID, meta)
+func (t *dummyMaster) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+	if linkType == "Children" {
+		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
+		// Get data from child. When all the data is back, starts the next epoch.
+		ctx.DataRequest(fromID, meta)
+	}
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -81,19 +82,21 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	ctx.FlagMetaToChild("ParamReady")
+	ctx.FlagMeta("Children", "ParamReady")
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.param)
-	if err != nil {
-		t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
-	}
-	dataReceiver <- b
+func (t *dummyMaster) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.param)
+	//if err != nil {
+	//	t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
+	//}
+	//dataReceiver <- b
 }
 
-func (t *dummyMaster) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {}
+func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
+	return nil, nil
+}
 
 func (t *dummyMaster) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
 }
@@ -111,7 +114,7 @@ func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
 		}
@@ -180,19 +183,20 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummySlave) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {
-	t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	ctx.DataRequest(parentID, meta)
-}
-
-func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-	go func() {
-		// If a new node restart and find out both parent and child meta ready, it will
-		// simultaneously request both data. We need to wait until gradient data is there.
-		t.gradientReady.Await()
-		ctx.DataRequest(childID, meta)
-	}()
+func (t *dummySlave) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+	if linkType == "Parents" {
+		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
+		ctx.DataRequest(fromID, meta)
+	}
+	if linkType == "Children" {
+		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
+		go func() {
+			// If a new node restart and find out both parent and child meta ready, it will
+			// simultaneously request both data. We need to wait until gradient data is there.
+			t.gradientReady.Await()
+			ctx.DataRequest(fromID, meta)
+		}()
+	}
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -208,20 +212,20 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 }
 
 // These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.param)
-	if err != nil {
-		t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
-	}
-	dataReceiver <- b
+func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.param)
+	//if err != nil {
+	//	t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
+	//}
+	//dataReceiver <- b
 }
 
-func (t *dummySlave) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {
-	b, err := json.Marshal(t.gradient)
-	if err != nil {
-		t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
-	}
-	dataReceiver <- b
+func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
+	return json.Marshal(t.gradient)
+	//if err != nil {
+	//	t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
+	//}
+	//dataReceiver <- b
 }
 
 func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
@@ -240,13 +244,13 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 
 	// If this task has children, flag meta so that children can start pull
 	// parameter.
-	children := t.framework.GetTopology().GetChildren(t.epoch)
+	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
 	if len(children) != 0 {
-		ctx.FlagMetaToChild("ParamReady")
+		ctx.FlagMeta("Children", "ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		ctx.FlagMetaToParent("GradientReady")
+		ctx.FlagMeta("Parents", "GradientReady")
 	}
 }
 
@@ -264,7 +268,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetChildren(t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
@@ -275,7 +279,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 			return
 		}
 
-		ctx.FlagMetaToParent("GradientReady")
+		ctx.FlagMeta("Parents", "GradientReady")
 
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could

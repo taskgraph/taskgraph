@@ -18,14 +18,19 @@ type Task interface {
 
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.
-	ParentMetaReady(ctx Context, parentID uint64, meta string)
-	ChildMetaReady(ctx Context, childID uint64, meta string)
+	// ParentMetaReady(ctx Context, parentID uint64, meta string)
+	// ChildMetaReady(ctx Context, childID uint64, meta string)
+
+	// This now allow use to use arbirary type instead of Parents/Children.
+	MetaReady(ctx Context, childID uint64, linkType, meta string)
+
+	// These two should go away, folding into DataRequest.
 	ParentDataReady(ctx Context, parentID uint64, req string, resp []byte)
 	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte)
-	ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte)
+	ServeAsParent(fromID uint64, req string) ([]byte, error)
+	ServeAsChild(fromID uint64, req string) ([]byte, error)
 }
 
 type UpdateLog interface {

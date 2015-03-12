@@ -107,9 +107,20 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		f.task.ServeAsChild(dr.taskID, dr.req, dataReceiver)
+		b, err := f.task.ServeAsChild(dr.taskID, dr.req)
+		if err != nil {
+			// TODO: We should handle network faults later by retrying
+			f.log.Fatalf("ServeAsChild Error with id = %d, %v\n", dr.taskID, err)
+		}
+		dataReceiver <- b
+
 	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		f.task.ServeAsParent(dr.taskID, dr.req, dataReceiver)
+		b, err := f.task.ServeAsParent(dr.taskID, dr.req)
+		if err != nil {
+			// TODO: We should handle network faults later by retrying
+			f.log.Fatalf("ServeAsParent Error with id = %d, %v\n", dr.taskID, err)
+		}
+		dataReceiver <- b
 	default:
 		f.log.Panic("unexpected")
 	}

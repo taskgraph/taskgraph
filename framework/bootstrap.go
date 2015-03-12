@@ -158,8 +158,8 @@ func (f *framework) setEpochStarted() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.watchMeta(roleParent, f.topology.GetParents(f.epoch))
-	f.watchMeta(roleChild, f.topology.GetChildren(f.epoch))
+	f.watchMeta(roleParent, f.topology.GetNeighbors("Parents", f.epoch))
+	f.watchMeta(roleChild, f.topology.GetNeighbors("Children", f.epoch))
 }
 
 func (f *framework) releaseEpochResource() {
@@ -257,9 +257,9 @@ func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID
 
 	switch who {
 	case roleParent:
-		f.task.ParentMetaReady(ctx, taskID, meta)
+		f.task.MetaReady(ctx, taskID, "Parents", meta)
 	case roleChild:
-		f.task.ChildMetaReady(ctx, taskID, meta)
+		f.task.MetaReady(ctx, taskID, "Children", meta)
 	}
 }
 
