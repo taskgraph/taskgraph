@@ -21,7 +21,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		c := New(tt.name, etcdClient, tt.numberOfTasks)
+		c := New(tt.name, etcdClient, tt.numberOfTasks, []string{"Parents", "Children"})
 		c.InitEtcdLayout()
 
 		for taskID := uint64(0); taskID < tt.numberOfTasks; taskID++ {
@@ -29,11 +29,11 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 			if _, err := etcdClient.Get(key, false, false); err != nil {
 				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
-			key = etcdutil.ParentMetaPath(c.name, taskID)
+			key = etcdutil.MetaPath("Parents", c.name, taskID)
 			if _, err := etcdClient.Get(key, false, false); err != nil {
 				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
-			key = etcdutil.ChildMetaPath(c.name, taskID)
+			key = etcdutil.MetaPath("Children", c.name, taskID)
 			if _, err := etcdClient.Get(key, false, false); err != nil {
 				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}

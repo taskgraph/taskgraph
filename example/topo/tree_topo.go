@@ -29,7 +29,7 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *TreeTopology) GetLinkTypes(epoch uint64) []string {
+func (t *TreeTopology) GetLinkTypes() []string {
 	return []string{"Parents", "Children"}
 }
 

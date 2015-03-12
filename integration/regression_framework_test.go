@@ -20,7 +20,7 @@ func TestRegressionFramework(t *testing.T) {
 	numOfIterations := uint64(10)
 
 	// controller start first to setup task directories in etcd
-	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks)
+	controller := controller.New(job, etcd.NewClient(etcdURLs), numOfTasks, []string{"Parents", "Children"})
 	controller.Start()
 
 	// We need to set etcd so that nodes know what to do.
