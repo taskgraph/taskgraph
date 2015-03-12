@@ -288,6 +288,15 @@ func (t *testableTask) ChildMetaReady(ctx taskgraph.Context, fromID uint64, meta
 	t.ParentMetaReady(ctx, fromID, meta)
 }
 
+func (t *testableTask) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+	if linkType == "Parents" {
+		t.ParentMetaReady(ctx, fromID, meta)
+	}
+	if linkType == "Children" {
+		t.ChildMetaReady(ctx, fromID, meta)
+	}
+}
+
 func (t *testableTask) ServeAsParent(fromID uint64, req string) ([]byte, error) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, nil}

@@ -257,9 +257,9 @@ func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID
 
 	switch who {
 	case roleParent:
-		f.task.ParentMetaReady(ctx, taskID, meta)
+		f.task.MetaReady(ctx, taskID, "Parents", meta)
 	case roleChild:
-		f.task.ChildMetaReady(ctx, taskID, meta)
+		f.task.MetaReady(ctx, taskID, "Children", meta)
 	}
 }
 

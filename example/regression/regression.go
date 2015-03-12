@@ -66,6 +66,12 @@ func (t *dummyMaster) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta
 	ctx.DataRequest(childID, meta)
 }
 
+func (t *dummyMaster) MetaReady(ctx taskgraph.Context, parentID uint64, linkType, meta string) {
+	if linkType == "Children" {
+		t.ChildMetaReady(ctx, parentID, meta)
+	}
+}
+
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
@@ -81,7 +87,7 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	ctx.FlagMetaToChild("ParamReady")
+	ctx.FlagMeta("Children", "ParamReady")
 }
 
 // These are payload rpc for application purpose.
@@ -197,6 +203,15 @@ func (t *dummySlave) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta 
 	}()
 }
 
+func (t *dummySlave) MetaReady(ctx taskgraph.Context, childID uint64, linkType, meta string) {
+	if linkType == "Parents" {
+		t.ParentMetaReady(ctx, childID, meta)
+	}
+	if linkType == "Children" {
+		t.ChildMetaReady(ctx, childID, meta)
+	}
+}
+
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
@@ -244,11 +259,11 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 	// parameter.
 	children := t.framework.GetTopology().GetLinks("Children", t.epoch)
 	if len(children) != 0 {
-		ctx.FlagMetaToChild("ParamReady")
+		ctx.FlagMeta("Children", "ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		ctx.FlagMetaToParent("GradientReady")
+		ctx.FlagMeta("Parents", "GradientReady")
 	}
 }
 
@@ -277,7 +292,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 			return
 		}
 
-		ctx.FlagMetaToParent("GradientReady")
+		ctx.FlagMeta("Parents", "GradientReady")
 
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could
