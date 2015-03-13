@@ -154,34 +154,34 @@ type HdfsFile struct {
 func (f *HdfsFile) Write(b []byte) (int, error) {
 	tr := &http.Transport{}
 	urlStr := buildNamenodeURL(f.webHdfsAddr, f.path, f.user)
-	f.logger.Printf("url: %s", urlStr)
 
+	// POST request to namenode. We shouldn't follow redirect and should get
+	// the datanode URL in response.
 	req, err := http.NewRequest("POST", urlStr, nil)
 	if err != nil {
-		f.logger.Fatalf("NewRequest failed: %v", err)
+		return 0, fmt.Errorf("Write: NewRequest failed: %v", err)
 	}
 	// no redirect
 	resp, err := tr.RoundTrip(req)
 	if err != nil {
-		f.logger.Fatalf("RoundTrip failed: %v", err)
+		return 0, fmt.Errorf("Write: RoundTrip failed: %v", err)
 	}
 	defer resp.Body.Close()
 	loc := resp.Header.Get("Location")
-	f.logger.Printf("location: %s", loc)
 
 	u, err := url.ParseRequestURI(loc)
 	if err != nil {
-		f.logger.Fatalf("ParseRequestURI failed: %v", err)
+		return 0, fmt.Errorf("Write: ParseRequestURI failed: %v", err)
 	}
-	f.logger.Printf("data url: %s", u.String())
+	// POST request to datanode.
 	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
 	if err != nil {
-		f.logger.Fatalf("Post failed: %v", err)
+		return 0, fmt.Errorf("Write: POST to datanode (%s) failed: %v", u.String(), err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		// Reason will show the java stack trace for the error.
-		f.logger.Fatalf("Status code isn't OK. Response: %v\nReason: %v", resp, explain(resp.Body))
+		return 0, fmt.Errorf("Status code isn't OK. Response: %v\nReason: %v", resp, explain(resp.Body))
 	}
 	return len(b), nil
 }

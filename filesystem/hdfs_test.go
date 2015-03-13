@@ -69,11 +69,11 @@ func TestHdfsClientGlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Glob(%s) failed: %v", globPath, err)
 	}
+	// make sure glob result includes all *.txt files
 	nameMap := make(map[string]int)
 	for _, name := range names {
 		nameMap[name] += 1
 	}
-
 	if len(names) != 2 ||
 		nameMap["/tmp/testing/1.txt"] != 1 || nameMap["/tmp/testing/2.txt"] != 1 {
 		t.Fatalf("Glob result isn't correct. Get = %v, Want = %v", nameMap, []string{"/tmp/testing/1.txt", "/tmp/testing/2.txt"})
