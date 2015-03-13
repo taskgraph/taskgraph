@@ -17,18 +17,18 @@ func init() {
 	hdfsUser = os.Getenv("hdfs_user")
 }
 
+// I was making two assumptions through all test cases:
+// 1. "/tmp" dir exists.
+// 2. I don't care about test failure. Though under failures you might need
+//    to clean up files or dirs manually.
+
 func TestHdfsClientWrite(t *testing.T) {
-	data := []byte("some data")
-	checkHdfsConfig(t)
-	client, err := NewHdfsClient(namenodeAddr, webhdfsAddr, hdfsUser)
-	if err != nil {
-		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
-			namenodeAddr, webhdfsAddr, err)
-	}
+	client := setupHdfsTest(t)
 	writeCloser, err := client.OpenWriteCloser("/tmp/testing")
 	if err != nil {
 		t.Fatalf("OpenWriteCloser failed: %v", err)
 	}
+	data := []byte("some data")
 	_, err = writeCloser.Write(data)
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
@@ -48,22 +48,19 @@ func TestHdfsClientWrite(t *testing.T) {
 		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
 	}
 
-	c := client.(*HdfsClient)
-	c.client.Remove("/tmp/testing")
+	c := client.(*HdfsClient).client
+	c.Remove("/tmp/testing")
 }
 
 func TestHdfsClientGlob(t *testing.T) {
-	checkHdfsConfig(t)
-	client, err := NewHdfsClient(namenodeAddr, webhdfsAddr, hdfsUser)
-	if err != nil {
-		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
-			namenodeAddr, webhdfsAddr, err)
-	}
-	c := client.(*HdfsClient)
-	c.client.Mkdir("/tmp/testing", 0644)
-	c.client.CreateEmptyFile("/tmp/testing/1")
-	c.client.CreateEmptyFile("/tmp/testing/1.txt")
-	c.client.CreateEmptyFile("/tmp/testing/2.txt")
+	client := setupHdfsTest(t)
+
+	c := client.(*HdfsClient).client
+	c.Mkdir("/tmp/testing", 0644)
+	c.CreateEmptyFile("/tmp/testing/1")
+	c.CreateEmptyFile("/tmp/testing/1.txt")
+	c.CreateEmptyFile("/tmp/testing/2.txt")
+	defer c.Remove("/tmp/testing")
 
 	globPath := "/tmp/testing/*.txt"
 	names, err := client.Glob(globPath)
@@ -79,17 +76,30 @@ func TestHdfsClientGlob(t *testing.T) {
 		nameMap["/tmp/testing/1.txt"] != 1 || nameMap["/tmp/testing/2.txt"] != 1 {
 		t.Fatalf("Glob result isn't correct. Get = %v, Want = %v", nameMap, []string{"/tmp/testing/1.txt", "/tmp/testing/2.txt"})
 	}
-
-	c.client.Remove("/tmp/testing")
 }
 
 func TestHdfsClientRename(t *testing.T) {
-	checkHdfsConfig(t)
+	client := setupHdfsTest(t)
 
+	c := client.(*HdfsClient).client
+	c.CreateEmptyFile("/tmp/testing")
+
+	client.Rename("/tmp/testing", "/tmp/tesing-renamed")
+	exist, _ := client.Exists("/tmp/tesing-renamed")
+	if !exist {
+		t.Fatalf("Rename failed")
+	}
+	c.Remove("/tmp/renamed")
 }
 
-func checkHdfsConfig(t *testing.T) {
+func setupHdfsTest(t *testing.T) Client {
 	if namenodeAddr == "" || webhdfsAddr == "" || hdfsUser == "" {
 		t.Skip("HDFS config not specified.")
 	}
+	client, err := NewHdfsClient(namenodeAddr, webhdfsAddr, hdfsUser)
+	if err != nil {
+		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
+			namenodeAddr, webhdfsAddr, err)
+	}
+	return client
 }
