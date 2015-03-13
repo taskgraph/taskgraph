@@ -42,6 +42,7 @@ func TestHdfsClientWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
+	readCloser.Close()
 
 	if bytes.Compare(b, data) != 0 {
 		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
