@@ -82,7 +82,7 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	ctx.FlagMeta("Children", "ParamReady")
+	ctx.FlagMeta("Parents", "ParamReady")
 }
 
 // These are payload rpc for application purpose.
@@ -182,7 +182,7 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 }
 func (t *dummySlave) Exit() {}
 
-// Ideally, we should also have the following:
+// Ideally, we should also have the following
 func (t *dummySlave) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
@@ -246,11 +246,11 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 	// parameter.
 	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
 	if len(children) != 0 {
-		ctx.FlagMeta("Children", "ParamReady")
+		ctx.FlagMeta("Parents", "ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		ctx.FlagMeta("Parents", "GradientReady")
+		ctx.FlagMeta("Children", "GradientReady")
 	}
 }
 
@@ -279,7 +279,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 			return
 		}
 
-		ctx.FlagMeta("Parents", "GradientReady")
+		ctx.FlagMeta("Children", "GradientReady")
 
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could
