@@ -17,12 +17,7 @@ func (c *context) IncEpoch() {
 }
 
 func (c *context) FlagMeta(linkType, meta string) {
-	if linkType == "Parents" {
-		c.f.flagMetaToParent(meta, c.epoch)
-	}
-	if linkType == "Children" {
-		c.f.flagMetaToChild(meta, c.epoch)
-	}
+	c.f.flagMeta(linkType, meta, c.epoch)
 }
 
 func (c *context) DataRequest(toID uint64, req string) {
