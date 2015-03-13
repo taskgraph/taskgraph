@@ -2,7 +2,7 @@ package framework
 
 type metaChange struct {
 	from  uint64
-	who   taskRole
+	who   string
 	epoch uint64
 	meta  string
 }

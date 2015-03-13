@@ -14,14 +14,6 @@ import (
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 )
 
-type taskRole int
-
-const (
-	roleNone taskRole = iota
-	roleParent
-	roleChild
-)
-
 // One need to pass in at least these two for framework to start.
 func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
 	return &framework{
@@ -117,7 +109,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
+			f.handleMetaChange(f.createContext(), meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
@@ -158,8 +150,9 @@ func (f *framework) setEpochStarted() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.watchMeta(roleParent, f.topology.GetNeighbors("Parents", f.epoch))
-	f.watchMeta(roleChild, f.topology.GetNeighbors("Children", f.epoch))
+	for _, linkType := range f.topology.GetLinkTypes() {
+		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
+	}
 }
 
 func (f *framework) releaseEpochResource() {
@@ -195,29 +188,18 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
+func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
 		stop := make(chan bool, 1)
 		stops[i] = stop
 
-		var watchPath string
-		switch who {
-		case roleParent:
-			// Watch parent's child-meta.
-			watchPath = etcdutil.MetaPath("Children", f.name, taskID)
-		case roleChild:
-			// Watch child's parent-meta.
-			watchPath = etcdutil.MetaPath("Parents", f.name, taskID)
-		default:
-			f.log.Panic("unexpected role")
-		}
+		watchPath := etcdutil.MetaPath(linkType, f.name, taskID)
 
 		// When a node working for a task crashed, a new node will take over
 		// the task and continue what's left. It assumes that progress is stalled
 		// until the new node comes (i.e. epoch won't change).
-
 		responseHandler := func(resp *etcd.Response, taskID uint64) {
 			if resp.Action != "set" && resp.Action != "get" {
 				return
@@ -232,7 +214,7 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 			}
 			f.metaChan <- &metaChange{
 				from:  taskID,
-				who:   who,
+				who:   linkType,
 				epoch: ep,
 				meta:  values[1],
 			}
@@ -247,7 +229,7 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID uint64, meta string) {
+func (f *framework) handleMetaChange(ctx taskgraph.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {
@@ -255,12 +237,8 @@ func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID
 	}
 	f.metaNotified[tm] = true
 
-	switch who {
-	case roleParent:
-		f.task.MetaReady(ctx, taskID, "Parents", meta)
-	case roleChild:
-		f.task.MetaReady(ctx, taskID, "Children", meta)
-	}
+	f.task.MetaReady(ctx, taskID, linkType, meta)
+
 }
 
 func taskMeta(taskID uint64, meta string) string {
