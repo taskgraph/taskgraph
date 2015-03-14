@@ -41,7 +41,7 @@ to parent/child dia/restart event to carry out the correct application logic. No
 that application developer need to implement TaskBuilder/Topology that suit their
 need (implementaion of these three interface are wired together in the driver).
 
-For an example of driver and task implementation, check dummy_task.go.
+For an example of driver and task implementation, check `example/regression`.
 
 Note, for now, the completion of TaskGraph is not defined explicitly. Instead, each
 application will have their way of exit based on application dependent logic. As
