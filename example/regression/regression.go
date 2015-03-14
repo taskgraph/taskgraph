@@ -171,6 +171,7 @@ type dummySlave struct {
 	param, gradient *dummyData
 	fromChildren    map[uint64]*dummyData
 	gradientReady   *common.CountdownLatch
+	parameterReady  *common.CountdownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -205,6 +206,7 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
 	t.gradientReady = common.NewCountdownLatch(1)
+	t.parameterReady = common.NewCountdownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
@@ -213,6 +215,12 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 
 // These are payload rpc for application purpose.
 func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+	// There is a race:
+	//   A -> B -> C (parent -> child)
+	//	 B has flagged "parameter Ready"
+	//   Now B crashed, and C crashed. C restarted and found B has flagged "parameter Ready".
+	//   C requested B. B needs to await until it actually has the data.
+	t.parameterReady.Await()
 	return json.Marshal(t.param)
 	//if err != nil {
 	//	t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
@@ -237,6 +245,7 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 		return
 	}
 	t.param = new(dummyData)
+	t.parameterReady.CountDown()
 	json.Unmarshal(resp, t.param)
 	// We need to carry out local compuation.
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
