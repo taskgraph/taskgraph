@@ -12,6 +12,7 @@ import (
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"golang.org/x/net/context"
 )
 
 // One need to pass in at least these two for framework to start.
@@ -229,7 +230,7 @@ func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx taskgraph.Context, taskID uint64, linkType, meta string) {
+func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {

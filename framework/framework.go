@@ -10,6 +10,7 @@ import (
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"golang.org/x/net/context"
 )
 
 const exitEpoch = math.MaxUint64
@@ -53,7 +54,22 @@ type framework struct {
 	dataRespChan       chan *frameworkhttp.DataResponse
 }
 
-func (f *framework) flagMeta(linkType, meta string, epoch uint64) {
+// The key type is unexported to prevent collisions with context keys defined in
+// other packages.
+type contextKey uint64
+
+// epochkey is the context key for the epoch.  Its value of zero is
+// arbitrary.  If this package defined other context keys, they would have
+// different integer values.
+const epochKey contextKey = 0
+
+// Now use google context, for we simply create a barebone and attach the epoch to it.
+func (f *framework) createContext() context.Context {
+	return context.WithValue(context.Background(), epochKey, f.epoch)
+}
+
+func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
+	epoch := ctxt.Value(epochKey).(uint64)
 	value := fmt.Sprintf("%d-%s", epoch, meta)
 	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
@@ -65,7 +81,8 @@ func (f *framework) flagMeta(linkType, meta string, epoch uint64) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) incEpoch(epoch uint64) {
+func (f *framework) IncEpoch(ctxt context.Context) {
+	epoch := ctxt.Value(epochKey).(uint64)
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
@@ -73,7 +90,8 @@ func (f *framework) incEpoch(epoch uint64) {
 	}
 }
 
-func (f *framework) dataRequest(toID uint64, req string, epoch uint64) {
+func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
+	epoch := ctxt.Value(epochKey).(uint64)
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.

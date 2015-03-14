@@ -1,5 +1,7 @@
 package taskgraph
 
+import "golang.org/x/net/context"
+
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
 // Each task has exact one master Node and might have multiple salve Nodes.
@@ -14,7 +16,7 @@ type Task interface {
 
 	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
-	SetEpoch(ctx Context, epoch uint64)
+	SetEpoch(ctx context.Context, epoch uint64)
 
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.
@@ -22,11 +24,11 @@ type Task interface {
 	// ChildMetaReady(ctx Context, childID uint64, meta string)
 
 	// This now allow use to use arbirary type instead of Parents/Children.
-	MetaReady(ctx Context, childID uint64, linkType, meta string)
+	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
 	// These two should go away, folding into DataRequest.
-	ParentDataReady(ctx Context, parentID uint64, req string, resp []byte)
-	ChildDataReady(ctx Context, childID uint64, req string, resp []byte)
+	ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte)
+	ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte)
 
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) ([]byte, error)

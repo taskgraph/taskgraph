@@ -12,6 +12,7 @@ import (
 	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"golang.org/x/net/context"
 )
 
 // TestRequestDataEpochMismatch creates a scenario where data request happened
@@ -111,9 +112,10 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		{"ParamReady", "GradientReady"},
 	}
 
+	ctx := context.WithValue(context.Background(), epochKey, 0)
 	for i, tt := range tests {
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
-		f0.flagMeta("Parents", tt.cMeta, 0)
+		f0.FlagMeta(ctx, "Parents", tt.cMeta)
 		// from child(1)'s view
 		data := <-pDataChan
 		expected := &tDataBundle{0, tt.cMeta, "", nil}
@@ -122,7 +124,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
-		f1.flagMeta("Children", tt.pMeta, 0)
+		f1.FlagMeta(ctx, "Children", tt.pMeta)
 		// from parent(0)'s view
 		data = <-cDataChan
 		expected = &tDataBundle{1, tt.pMeta, "", nil}
@@ -192,10 +194,10 @@ func TestFrameworkDataRequest(t *testing.T) {
 	}
 
 	defer f0.ShutdownJob()
-
+	ctx := context.WithValue(context.Background(), epochKey, 0)
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
-		f0.dataRequest(1, tt.req, 0)
+		f0.DataRequest(ctx, 1, tt.req)
 		// from child(1)'s view at 1: T#ServeAsChild
 		data := <-pDataChan
 		expected := &tDataBundle{0, "", data.req, nil}
@@ -210,7 +212,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 		}
 
 		// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
-		f1.dataRequest(0, tt.req, 0)
+		f1.DataRequest(ctx, 0, tt.req)
 		// from parent(0)'s view at 0: T#ServeAsParent
 		data = <-cDataChan
 		expected = &tDataBundle{1, "", data.req, nil}
@@ -275,10 +277,10 @@ func (t *testableTask) Init(taskID uint64, framework taskgraph.Framework) {
 		t.setupLatch.Done()
 	}
 }
-func (t *testableTask) Exit()                                        {}
-func (t *testableTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {}
+func (t *testableTask) Exit()                                      {}
+func (t *testableTask) SetEpoch(ctx context.Context, epoch uint64) {}
 
-func (t *testableTask) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+func (t *testableTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, meta, "", nil}
 	}
@@ -295,13 +297,13 @@ func (t *testableTask) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return t.ServeAsParent(fromID, req)
 }
 
-func (t *testableTask) ParentDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
+func (t *testableTask) ParentDataReady(ctx context.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, resp}
 	}
 }
 
-func (t *testableTask) ChildDataReady(ctx taskgraph.Context, fromID uint64, req string, resp []byte) {
+func (t *testableTask) ChildDataReady(ctx context.Context, fromID uint64, req string, resp []byte) {
 	t.ParentDataReady(ctx, fromID, req, resp)
 }
 
