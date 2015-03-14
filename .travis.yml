@@ -5,6 +5,7 @@ go:
 
 install:
   - go get github.com/coreos/go-etcd/etcd
+  - go get github.com/colinmarc/hdfs
 
 before_script:
   - mkdir .tmp
