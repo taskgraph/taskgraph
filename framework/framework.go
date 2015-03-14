@@ -69,7 +69,10 @@ func (f *framework) createContext() context.Context {
 }
 
 func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
-	epoch := ctxt.Value(epochKey).(uint64)
+	epoch, ok := ctxt.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in FlagMeta")
+	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
 	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
@@ -82,7 +85,10 @@ func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
 func (f *framework) IncEpoch(ctxt context.Context) {
-	epoch := ctxt.Value(epochKey).(uint64)
+	epoch, ok := ctxt.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in FlagMeta")
+	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
@@ -91,7 +97,10 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 }
 
 func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
-	epoch := ctxt.Value(epochKey).(uint64)
+	epoch, ok := ctxt.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in FlagMeta")
+	}
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
