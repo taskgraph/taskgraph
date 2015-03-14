@@ -217,23 +217,15 @@ func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
 	// There is a race:
 	//   A -> B -> C (parent -> child)
-	//	 B has flagged "parameter Ready"
+	//   B has flagged "parameter Ready"
 	//   Now B crashed, and C crashed. C restarted and found B has flagged "parameter Ready".
 	//   C requested B. B needs to await until it actually has the data.
 	t.parameterReady.Await()
 	return json.Marshal(t.param)
-	//if err != nil {
-	//	t.logger.Fatalf("Slave can't encode parameter: %v, error: %v\n", t.param, err)
-	//}
-	//dataReceiver <- b
 }
 
 func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return json.Marshal(t.gradient)
-	//if err != nil {
-	//	t.logger.Fatalf("Slave can't encode gradient: %v, error: %v\n", t.gradient, err)
-	//}
-	//dataReceiver <- b
 }
 
 func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
