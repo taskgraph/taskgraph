@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"github.com/taskgraph/taskgraph/pkg/topoutil"
+	"golang.org/x/net/context"
 )
 
 func (f *framework) sendRequest(dr *dataRequest) {
@@ -148,7 +148,7 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	}()
 }
 
-func (f *framework) handleDataResp(ctx taskgraph.Context, resp *frameworkhttp.DataResponse) {
+func (f *framework) handleDataResp(ctx context.Context, resp *frameworkhttp.DataResponse) {
 	switch {
 	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
 		f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)

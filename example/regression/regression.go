@@ -11,6 +11,7 @@ import (
 
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/common"
+	"golang.org/x/net/context"
 )
 
 /*
@@ -59,16 +60,16 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummyMaster) Exit() {}
 
 // Ideally, we should also have the following:
-func (t *dummyMaster) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Children" {
 		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
 		// Get data from child. When all the data is back, starts the next epoch.
-		ctx.DataRequest(fromID, meta)
+		t.framework.DataRequest(ctx, fromID, meta)
 	}
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
+func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
@@ -82,7 +83,7 @@ func (t *dummyMaster) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*dummyData)
-	ctx.FlagMeta("Parents", "ParamReady")
+	t.framework.FlagMeta(ctx, "Parents", "ParamReady")
 }
 
 // These are payload rpc for application purpose.
@@ -98,9 +99,9 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return nil, nil
 }
 
-func (t *dummyMaster) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
+func (t *dummyMaster) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
 }
-func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
+func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
@@ -131,7 +132,7 @@ func (t *dummyMaster) ChildDataReady(ctx taskgraph.Context, childID uint64, req 
 			t.framework.ShutdownJob()
 		} else {
 			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
-			ctx.IncEpoch()
+			t.framework.IncEpoch(ctx)
 		}
 	}
 }
@@ -184,10 +185,10 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummySlave) Exit() {}
 
 // Ideally, we should also have the following
-func (t *dummySlave) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, meta string) {
+func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		ctx.DataRequest(fromID, meta)
+		t.framework.DataRequest(ctx, fromID, meta)
 	}
 	if linkType == "Children" {
 		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
@@ -195,13 +196,13 @@ func (t *dummySlave) MetaReady(ctx taskgraph.Context, fromID uint64, linkType, m
 			// If a new node restart and find out both parent and child meta ready, it will
 			// simultaneously request both data. We need to wait until gradient data is there.
 			t.gradientReady.Await()
-			ctx.DataRequest(fromID, meta)
+			t.framework.DataRequest(ctx, fromID, meta)
 		}()
 	}
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(ctx taskgraph.Context, epoch uint64) {
+func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = &dummyData{}
 	t.gradient = &dummyData{}
@@ -228,7 +229,7 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return json.Marshal(t.gradient)
 }
 
-func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {
+func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
@@ -247,15 +248,15 @@ func (t *dummySlave) ParentDataReady(ctx taskgraph.Context, parentID uint64, req
 	// parameter.
 	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
 	if len(children) != 0 {
-		ctx.FlagMeta("Parents", "ParamReady")
+		t.framework.FlagMeta(ctx, "Parents", "ParamReady")
 	} else {
 		// On leaf node, we can immediately return by and flag parent
 		// that this node is ready.
-		ctx.FlagMeta("Children", "GradientReady")
+		t.framework.FlagMeta(ctx, "Children", "GradientReady")
 	}
 }
 
-func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
+func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
 	d := new(dummyData)
 	json.Unmarshal(resp, d)
 	if _, ok := t.fromChildren[childID]; ok {
@@ -280,7 +281,7 @@ func (t *dummySlave) ChildDataReady(ctx taskgraph.Context, childID uint64, req s
 			return
 		}
 
-		ctx.FlagMeta("Children", "GradientReady")
+		t.framework.FlagMeta(ctx, "Children", "GradientReady")
 
 		// if this failure happens, the parent could
 		// 1. not have the data yet. In such case, the parent could
