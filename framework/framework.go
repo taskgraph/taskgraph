@@ -61,7 +61,7 @@ type contextKey int
 // epochkey is the context key for the epoch.  Its value of zero is
 // arbitrary.  If this package defined other context keys, they would have
 // different integer values.
-const epochKey contextKey = 0
+const epochKey contextKey = 1
 
 // Now use google context, for we simply create a barebone and attach the epoch to it.
 func (f *framework) createContext() context.Context {

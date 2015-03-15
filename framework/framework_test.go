@@ -112,12 +112,8 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		{"ParamReady", "GradientReady"},
 	}
 
-	ctx := context.WithValue(context.Background(), epochKey, 0)
+	ctx := context.WithValue(context.Background(), epochKey, uint64(0))
 	for i, tt := range tests {
-		_, ok := ctx.Value(epochKey).(uint64)
-		if !ok {
-			t.Errorf("can not get epoch from context")
-		}
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
 		f0.FlagMeta(ctx, "Parents", tt.cMeta)
 		// from child(1)'s view
@@ -198,7 +194,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 	}
 
 	defer f0.ShutdownJob()
-	ctx := context.WithValue(context.Background(), epochKey, 0)
+	ctx := context.WithValue(context.Background(), epochKey, uint64(0))
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
 		f0.DataRequest(ctx, 1, tt.req)
