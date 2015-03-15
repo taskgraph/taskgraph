@@ -6,6 +6,8 @@ go:
 install:
   - go get github.com/coreos/go-etcd/etcd
   - go get github.com/colinmarc/hdfs
+  - go get golang.org/x/net/context
+  - go get code.google.com/p/goprotobuf/proto
 
 before_script:
   - mkdir .tmp
