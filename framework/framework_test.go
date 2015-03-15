@@ -114,6 +114,10 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), epochKey, 0)
 	for i, tt := range tests {
+		_, ok := ctx.Value(epochKey).(uint64)
+		if !ok {
+			t.Errorf("can not get epoch from context")
+		}
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
 		f0.FlagMeta(ctx, "Parents", tt.cMeta)
 		// from child(1)'s view

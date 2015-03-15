@@ -56,7 +56,7 @@ type framework struct {
 
 // The key type is unexported to prevent collisions with context keys defined in
 // other packages.
-type contextKey uint64
+type contextKey int
 
 // epochkey is the context key for the epoch.  Its value of zero is
 // arbitrary.  If this package defined other context keys, they would have
@@ -71,7 +71,7 @@ func (f *framework) createContext() context.Context {
 func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 	epoch, ok := ctxt.Value(epochKey).(uint64)
 	if !ok {
-		f.log.Fatalf("Can not find epochKey in FlagMeta")
+		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
 	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
@@ -87,7 +87,7 @@ func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 func (f *framework) IncEpoch(ctxt context.Context) {
 	epoch, ok := ctxt.Value(epochKey).(uint64)
 	if !ok {
-		f.log.Fatalf("Can not find epochKey in FlagMeta")
+		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
@@ -99,8 +99,9 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
 	epoch, ok := ctxt.Value(epochKey).(uint64)
 	if !ok {
-		f.log.Fatalf("Can not find epochKey in FlagMeta")
+		f.log.Fatalf("Can not find epochKey in DataRequest")
 	}
+
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
