@@ -40,7 +40,6 @@ type Framework interface {
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
 
-	// The go way to use context.
 	// This is useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Set meta flag to notify meta to all nodes of linkType to this node.
