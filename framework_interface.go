@@ -50,7 +50,7 @@ type Framework interface {
 	IncEpoch(ctx context.Context)
 
 	// Request data from parent or children.
-	DataRequest(ctx context.Context, toID uint64, methodName string, input proto.Message, output proto.Message)
+	Fetch(ctx context.Context, toID uint64, methodName string, input proto.Message, output chan<- proto.Message)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

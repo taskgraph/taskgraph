@@ -9,6 +9,9 @@ import (
 	"os"
 	"strconv"
 
+	pb "github.com/taskgraph/taskgraph/example/regression/proto"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/common"
 	"golang.org/x/net/context"
@@ -27,11 +30,6 @@ master will print out the epochID and aggregated vector. After all 10 epoch, it 
 job.
 */
 
-// dummyData is used to carry parameter and gradient;
-type dummyData struct {
-	Value int32
-}
-
 // dummyMaster is prototype of parameter server, for now it does not
 // carry out optimization yet. But it should be easy to add support when
 // this full tests out.
@@ -46,8 +44,9 @@ type dummyMaster struct {
 	config             map[string]string
 	numberOfIterations uint64
 
-	param, gradient *dummyData
-	fromChildren    map[uint64]*dummyData
+	param        *pb.Parameter
+	gradient     *pb.Gradient
+	fromChildren map[uint64]*pb.Gradient
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -55,21 +54,8 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 func (t *dummyMaster) Exit() {}
-
-// Ideally, we should also have the following:
-func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	if linkType == "Children" {
-		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
-		// Get data from child. When all the data is back, starts the next epoch.
-		if meta == "GradientReady" {
-			t.framework.DataRequest(ctx, fromID, "methodName", nil, nil)
-			// output to childDataReady??
-		}
-	}
-}
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
@@ -98,38 +84,63 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return nil, nil
 }
 
-func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
-	d := new(dummyData)
-	json.Unmarshal(resp, d)
-	if _, ok := t.fromChildren[childID]; ok {
-		return
+func (t *dummyMaster) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.Regression/GetParameter":
+		return new(pb.Parameter)
+	default:
+		return nil
 	}
-	t.fromChildren[childID] = d
+}
 
-	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
-		t.taskID, t.epoch, childID, len(t.fromChildren))
+func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	if linkType == "Children" {
+		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
+		// Get data from child. When all the data is back, starts the next epoch.
+		if meta == "GradientReady" {
+			output := make(chan proto.Message, 1)
+			t.framework.Fetch(ctx, fromID, "/proto.Regression/GetGradient", &pb.Input{t.epoch}, output)
 
-	// This is a weak form of checking. We can also check the task ids.
-	// But this really means that we get all the events from children, we
-	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
-		for _, g := range t.fromChildren {
-			t.gradient.Value += g.Value
+			go t.ChildDataReady(ctx, fromID, meta, output)
 		}
+	}
+}
 
-		t.dataChan <- t.gradient.Value
-		// TODO(xiaoyunwu) We need to do some test here.
+func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, output <-chan proto.Message) {
+	// we need to select ctx cancel later.
+	select {
+	case msg := <-output:
+		d, ok := msg.(*pb.Gradient)
+		if !ok {
+			t.logger.Fatalf("Can't convert message to Gradient: %v", msg)
+		}
+		t.fromChildren[childID] = d
 
-		// In real ML, we modify the gradient first. But here it is noop.
-		if t.epoch == t.numberOfIterations {
-			if t.config["writefile"] != "" {
-				data := []byte(fmt.Sprintf("Finished job. Gradient value: %v\n", t.gradient.Value))
-				ioutil.WriteFile(t.config["writefile"], data, 0644)
+		t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+			t.taskID, t.epoch, childID, len(t.fromChildren))
+
+		// This is a weak form of checking. We can also check the task ids.
+		// It means that we get all the events from children, and we
+		// should go into the next epoch now.
+		if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
+			for _, g := range t.fromChildren {
+				t.gradient.Value += g.Value
 			}
-			t.framework.ShutdownJob()
-		} else {
-			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
-			t.framework.IncEpoch(ctx)
+
+			t.dataChan <- t.gradient.Value
+			// TODO(xiaoyunwu) We need to do some test here.
+
+			// In real ML, we modify the gradient first. But here it is noop.
+			if t.epoch == t.numberOfIterations {
+				if t.config["writefile"] != "" {
+					data := []byte(fmt.Sprintf("Finished job. Gradient value: %v\n", t.gradient.Value))
+					ioutil.WriteFile(t.config["writefile"], data, 0644)
+				}
+				t.framework.ShutdownJob()
+			} else {
+				t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
+				t.framework.IncEpoch(ctx)
+			}
 		}
 	}
 }
@@ -166,10 +177,11 @@ type dummySlave struct {
 	NodeProducer  chan bool
 	config        map[string]string
 
-	param, gradient *dummyData
-	fromChildren    map[uint64]*dummyData
-	gradientReady   *common.CountdownLatch
-	parameterReady  *common.CountdownLatch
+	param          *pb.Parameter
+	gradient       *pb.Gradient
+	fromChildren   map[uint64]*pb.Gradient
+	gradientReady  *common.CountdownLatch
+	parameterReady *common.CountdownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -195,6 +207,16 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 			t.gradientReady.Await()
 			t.framework.DataRequest(ctx, fromID, "methodName", nil, nil)
 		}()
+	}
+}
+func (t *dummySlave) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.Regression/GetParameter":
+		return new(pb.Parameter)
+	case "/proto.Regression/GetGradient":
+		return new(pb.Gradient)
+	default:
+		return nil
 	}
 }
 

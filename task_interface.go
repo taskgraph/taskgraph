@@ -1,6 +1,9 @@
 package taskgraph
 
-import "golang.org/x/net/context"
+import (
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+)
 
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
@@ -23,7 +26,8 @@ type Task interface {
 	// TODO: one can also get this from channel.
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
-	CreateOutputMessage(methodName string)
+	// This provides framework the place-holder message object in gRPC call.
+	CreateOutputMessage(methodName string) proto.Message
 
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) ([]byte, error)
