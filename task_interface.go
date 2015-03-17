@@ -23,6 +23,8 @@ type Task interface {
 	// TODO: one can also get this from channel.
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
+	CreateOutputMessage(methodName string)
+
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) ([]byte, error)
 	ServeAsChild(fromID uint64, req string) ([]byte, error)

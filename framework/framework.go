@@ -70,8 +70,8 @@ func (f *framework) createContext() context.Context {
 	return context.WithValue(context.Background(), epochKey, f.epoch)
 }
 
-func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
@@ -86,14 +86,14 @@ func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctxt context.Context) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) IncEpoch(ctx context.Context) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
-		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
+		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v",
 			f.taskID, epoch+1, epoch, err)
 	}
 }
