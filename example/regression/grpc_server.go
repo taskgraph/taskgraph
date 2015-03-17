@@ -7,11 +7,13 @@ import (
 )
 
 type regressionServer struct {
+	param    *pb.Parameter
+	gradient *pb.Gradient
 }
 
 func (s *regressionServer) GetParameter(context.Context, *pb.Input) (*pb.Parameter, error) {
-	panic("")
+	return s.param, nil
 }
 func (s *regressionServer) GetGradient(context.Context, *pb.Input) (*pb.Gradient, error) {
-	panic("")
+	return s.gradient, nil
 }
