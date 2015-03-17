@@ -11,6 +11,7 @@ import (
 )
 
 func (f *framework) sendRequest(dr *dataRequest) {
+	// TODO(grpc): we should create new grpc client here.
 	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
@@ -79,7 +80,6 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
 	f.log.Printf("serving http on %s\n", f.ln.Addr())
-	// TODO: http server graceful shutdown
 	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
 	err := http.Serve(f.ln, handler)
 	select {

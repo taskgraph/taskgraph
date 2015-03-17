@@ -23,10 +23,6 @@ type Task interface {
 	// TODO: one can also get this from channel.
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
-	// These two should go away, folding into DataRequest.
-	ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte)
-	ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte)
-
 	// These are payload for application purpose.
 	ServeAsParent(fromID uint64, req string) ([]byte, error)
 	ServeAsChild(fromID uint64, req string) ([]byte, error)

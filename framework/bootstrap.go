@@ -13,15 +13,17 @@ import (
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
+func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, gRPCServer *grpc.Server, logger *log.Logger) taskgraph.Bootstrap {
 	return &framework{
-		name:     jobName,
-		etcdURLs: etcdURLs,
-		ln:       ln,
-		log:      logger,
+		name:      jobName,
+		etcdURLs:  etcdURLs,
+		ln:        ln,
+		log:       logger,
+		rpcServer: gRPCServer,
 	}
 }
 
@@ -41,11 +43,10 @@ func (f *framework) Start() {
 	if err = f.occupyTask(); err != nil {
 		f.log.Panicf("occupyTask() failed: %v", err)
 	}
-
 	f.log.SetPrefix(fmt.Sprintf("task %d: ", f.taskID))
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
-	f.epochStop = make(chan bool, 1)   // stop etcd watch
+	f.epochStop = make(chan bool, 1)   // stop epoch watch
 	// meta will have epoch prepended so we must get epoch before any watch on meta
 	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
 	if err != nil {
@@ -64,6 +65,12 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
+	// TODO(grpc):
+	// replace f.startHTTP() with:
+	// go func(){
+	//   	err:= grpcServer.Serve(listener)
+	//   	... check err ...
+	// }
 	go f.startHTTP()
 
 	f.heartbeat()

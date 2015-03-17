@@ -11,6 +11,7 @@ import (
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 const exitEpoch = math.MaxUint64
@@ -30,6 +31,7 @@ type framework struct {
 	epoch      uint64
 	etcdClient *etcd.Client
 	ln         net.Listener
+	rpcServer  *grpc.Server
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -96,8 +98,8 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) DataRequest(ctx context.Context, toID uint64, req string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in DataRequest")
 	}

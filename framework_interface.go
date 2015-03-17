@@ -3,6 +3,7 @@ package taskgraph
 import (
 	"log"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
@@ -43,13 +44,13 @@ type Framework interface {
 	// This is useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Set meta flag to notify meta to all nodes of linkType to this node.
-	FlagMeta(ctxt context.Context, linkType, meta string)
+	FlagMeta(ctx context.Context, linkType, meta string)
 
 	// Some task can inform all participating tasks to new epoch
-	IncEpoch(ctxt context.Context)
+	IncEpoch(ctx context.Context)
 
 	// Request data from parent or children.
-	DataRequest(ctxt context.Context, toID uint64, meta string)
+	DataRequest(ctx context.Context, toID uint64, methodName string, input proto.Message, out proto.Message)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
