@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
@@ -32,6 +33,7 @@ type framework struct {
 	etcdClient *etcd.Client
 	ln         net.Listener
 	rpcServer  *grpc.Server
+	cc         *grpc.ClientConn
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -76,10 +78,10 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.taskID), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, err)
+			etcdutil.MetaPath(linkType, f.name, f.taskID), value, err)
 	}
 }
 
@@ -93,9 +95,14 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
-		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v",
-			f.taskID, epoch+1, epoch, err)
+		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", epoch+1, epoch, err)
 	}
+}
+
+func (f *framework) Fetch(ctx context.Context, toID uint64, methodName string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
+	reply := f.task.CreateOutputMessage(methodName)
+	grpc.Invoke(ctx, methodName, input, reply, f.cc, opts...)
+	outputC <- reply
 }
 
 func (f *framework) DataRequest(ctx context.Context, toID uint64, req string) {
@@ -103,11 +110,6 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, req string) {
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in DataRequest")
 	}
-
-	// assumption here:
-	// Event driven task will call this in a synchronous way so that
-	// the epoch won't change at the time task sending this request.
-	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
 		taskID: toID,
 		epoch:  epoch,

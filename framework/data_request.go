@@ -153,9 +153,9 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 func (f *framework) handleDataResp(ctx context.Context, resp *frameworkhttp.DataResponse) {
 	switch {
 	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
+		// f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
 	case topoutil.IsChild(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ChildDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
+		// f.task.ChildDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
 	default:
 		f.log.Panic("unexpected")
 	}
