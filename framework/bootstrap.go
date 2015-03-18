@@ -84,6 +84,7 @@ func (f *framework) run() {
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
 	// this for-select is primarily used to synchronize epoch specific events.
+	// There's an assumption that createContext() is a sequential execution in select loop.
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:

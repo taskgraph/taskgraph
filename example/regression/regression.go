@@ -32,14 +32,14 @@ func (tc SimpleTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		return &dummyMaster{
 			dataChan:           tc.GDataChan,
 			numberOfIterations: tc.NumberOfIterations,
-			taskCommon: taskCommon{
+			taskCommon: &taskCommon{
 				NodeProducer: tc.NodeProducer,
-				config:       tc.SlaveConfig,
+				config:       tc.MasterConfig,
 			},
 		}
 	}
 	return &dummySlave{
-		taskCommon: taskCommon{
+		taskCommon: &taskCommon{
 			NodeProducer: tc.NodeProducer,
 			config:       tc.SlaveConfig,
 		},

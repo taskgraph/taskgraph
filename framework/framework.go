@@ -63,6 +63,7 @@ const epochKey contextKey = 1
 
 // Now use google context, for we simply create a barebone and attach the epoch to it.
 func (f *framework) createContext() context.Context {
+	// both epoch and requestCancels require sequential execution in select loop.
 	ctx := context.WithValue(context.Background(), epochKey, f.epoch)
 	ctx, cancel := context.WithCancel(ctx)
 	f.requestCancels = append(f.requestCancels, cancel)

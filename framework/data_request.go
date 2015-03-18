@@ -36,7 +36,7 @@ func (f *framework) fetch(ctx context.Context, toID uint64, method string, input
 				// TODO: etcd client error handling
 				f.log.Panicf("etcd getAddress(%d) failed: %v", toID, err)
 			}
-			f.log.Printf("connecting to addr: %v", addr)
+			f.log.Printf("connecting to task: %d, addr: %v", toID, addr)
 			cc, err := grpc.Dial(addr)
 			if err != nil {
 				f.log.Panicf("grpc.Dial(%s) failed: %v", addr, err)
@@ -45,6 +45,7 @@ func (f *framework) fetch(ctx context.Context, toID uint64, method string, input
 			reply = f.task.CreateOutputMessage(method)
 			err = grpc.Invoke(ctx, method, input, reply, cc)
 			if err == nil {
+				cc.Close()
 				break
 			}
 

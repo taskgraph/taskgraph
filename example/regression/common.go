@@ -9,7 +9,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
-	"golang.org/x/net/context"
 )
 
 type taskCommon struct {
@@ -24,28 +23,22 @@ type taskCommon struct {
 	config       map[string]string
 }
 
-func (t taskCommon) Init(taskID uint64, framework taskgraph.Framework) {
+func (t *taskCommon) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func (t taskCommon) Exit() {}
+func (t *taskCommon) Exit() {}
 
-func (s taskCommon) GetParameter(context.Context, *pb.Input) (*pb.Parameter, error) {
-	return s.param, nil
-}
-func (s taskCommon) GetGradient(context.Context, *pb.Input) (*pb.Gradient, error) {
-	return s.gradient, nil
-}
-
-func (t taskCommon) CreateOutputMessage(methodName string) proto.Message {
+func (t *taskCommon) CreateOutputMessage(methodName string) proto.Message {
 	switch methodName {
 	case "/proto.Regression/GetParameter":
 		return new(pb.Parameter)
 	case "/proto.Regression/GetGradient":
 		return new(pb.Gradient)
 	default:
+		t.logger.Panicf("Unknown method: %s", methodName)
 		return nil
 	}
 }

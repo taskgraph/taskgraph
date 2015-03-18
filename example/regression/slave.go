@@ -1,8 +1,6 @@
 package regression
 
 import (
-	"encoding/json"
-
 	"github.com/golang/protobuf/proto"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/common"
@@ -16,7 +14,7 @@ import (
 type dummySlave struct {
 	gradientReady  *common.CountdownLatch
 	parameterReady *common.CountdownLatch
-	taskCommon
+	*taskCommon
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -30,21 +28,18 @@ func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 }
 
-// These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
 	// There is a race:
 	//   A -> B -> C (parent -> child)
 	//   B has flagged "parameter Ready"
 	//   Now B crashed, and C crashed. C restarted and found B has flagged "parameter Ready".
 	//   C requested B. B needs to await until it actually has the data.
 	t.parameterReady.Await()
-	return json.Marshal(t.param)
+	return t.param, nil
 }
-
-func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
-	return json.Marshal(t.gradient)
+func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
+	return t.gradient, nil
 }
-
 func (t *dummySlave) CreateGRPCServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterRegressionServer(server, t)

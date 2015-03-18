@@ -1,7 +1,6 @@
 package regression
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strconv"
@@ -20,7 +19,7 @@ import (
 type dummyMaster struct {
 	dataChan           chan int32
 	numberOfIterations uint64
-	taskCommon
+	*taskCommon
 }
 
 // This give the task an opportunity to cleanup and regroup.
@@ -31,25 +30,22 @@ func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
 	}
 	t.param = new(pb.Parameter)
 	t.gradient = new(pb.Gradient)
-	t.param.Value = int32(t.epoch)
 	t.epoch = epoch
+	t.param.Value = int32(t.epoch)
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 	t.framework.FlagMeta(ctx, "Parents", "ParamReady")
-}
-
-// These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(fromID uint64, req string) ([]byte, error) {
-	return json.Marshal(t.param)
-}
-
-func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
-	return nil, nil
 }
 
 func (t *dummyMaster) CreateGRPCServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterRegressionServer(server, t)
 	return server
+}
+func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
+	return t.param, nil
+}
+func (t *dummyMaster) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
+	return t.gradient, nil
 }
 
 func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
