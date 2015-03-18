@@ -4,46 +4,65 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"github.com/taskgraph/taskgraph/pkg/topoutil"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
 
-func (f *framework) sendRequest(dr *dataRequest) {
-	// TODO(grpc): we should create new grpc client here.
-	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
-	if err != nil {
-		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", dr.taskID, err)
-		return
+func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in context: %v", ctx)
 	}
 
-	if dr.retry {
-		f.log.Printf("retry request data from task %d, addr %s", dr.taskID, addr)
-	} else {
-		f.log.Printf("request data from task %d, addr %s", dr.taskID, addr)
+	epochMismatchC := make(chan struct{})
+	epochCheckedC := make(chan struct{})
+	f.dataReqtoSendChan <- &dataRequest{
+		epoch:          epoch,
+		epochMismatchC: epochMismatchC,
+		epochCheckedC:  epochCheckedC,
 	}
 
-	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
-	// we need to retry if some task failed and there is a temporary Get request failure.
-	if err != nil {
-		f.log.Printf("RequestData from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
-		if err == frameworkhttp.ErrReqEpochMismatch {
-			// It's out of date. Should wait for new epoch to set up.
-			return
-		}
-		// Should retry for other errors.
-		go func() {
-			// we try again after the previous task key expires and hopefully another task
-			// gets up and running.
+	select {
+	case <-epochMismatchC:
+	case <-epochCheckedC:
+		for {
+			// establish grpc ClientConn
+			addr, err := etcdutil.GetAddress(f.etcdClient, f.name, toID)
+			if err != nil {
+				// TODO: etcd client error handling
+				f.log.Panicf("getAddress(%d) failed: %v", toID, err)
+				return
+			}
+			f.log.Printf("reconnecting to addr: %v", addr)
+			cc, err := grpc.Dial(addr)
+			if err != nil {
+				f.log.Panicf("grpc.Dial(%s) failed: %v", addr, err)
+			}
+			f.log.Printf("requesting data from task %d", toID)
+			reply := f.task.CreateOutputMessage(method)
+			err = grpc.Invoke(ctx, method, input, reply, cc)
+			if err == nil {
+				outputC <- reply
+				return
+			}
+
+			f.log.Printf("grpc.Invoke, method: %s, from task %d (addr: %s), failed: %v", method, toID, addr, err)
+			if grpc.Code(err) == codes.Canceled {
+				// New epoch has been set up.
+				// It happens when the data has been retrieved successfully before
+				// it crashed and then task restarts still doing the same thing.
+				return
+			}
+
+			// we need to retry if task failure happened
 			time.Sleep(2 * heartbeatInterval)
-			dr.retry = true
-			f.dataReqtoSendChan <- dr
-		}()
-		return
+		}
 	}
-	f.dataRespChan <- d
 }
 
 // This is used by the server side to handle data requests coming from remote.

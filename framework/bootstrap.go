@@ -121,9 +121,10 @@ func (f *framework) run() {
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				req.epochMismatch()
 				break
 			}
-			go f.sendRequest(req)
+			req.send()
 		case req := <-f.dataReqChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
@@ -152,6 +153,7 @@ func (f *framework) setEpochStarted() {
 	f.epochPassed = make(chan struct{})
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
+	f.requestCancels = make([]context.CancelFunc, 0)
 
 	f.task.SetEpoch(f.createContext(), f.epoch)
 	// setup etcd watches
@@ -169,6 +171,9 @@ func (f *framework) releaseEpochResource() {
 		c <- true
 	}
 	f.metaStops = nil
+	for _, cancel := range f.requestCancels {
+		cancel()
+	}
 }
 
 // release resources: heartbeat, epoch watch.

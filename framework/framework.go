@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
@@ -27,13 +26,13 @@ type framework struct {
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 
-	task       taskgraph.Task
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	ln         net.Listener
-	rpcServer  *grpc.Server
-	cc         *grpc.ClientConn
+	task           taskgraph.Task
+	taskID         uint64
+	epoch          uint64
+	etcdClient     *etcd.Client
+	ln             net.Listener
+	rpcServer      *grpc.Server
+	requestCancels []context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -69,7 +68,10 @@ const epochKey contextKey = 1
 
 // Now use google context, for we simply create a barebone and attach the epoch to it.
 func (f *framework) createContext() context.Context {
-	return context.WithValue(context.Background(), epochKey, f.epoch)
+	ctx := context.WithValue(context.Background(), epochKey, f.epoch)
+	ctx, cancel := context.WithCancel(ctx)
+	f.requestCancels = append(f.requestCancels, cancel)
+	return ctx
 }
 
 func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
@@ -96,24 +98,6 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", epoch+1, epoch, err)
-	}
-}
-
-func (f *framework) Fetch(ctx context.Context, toID uint64, methodName string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
-	reply := f.task.CreateOutputMessage(methodName)
-	grpc.Invoke(ctx, methodName, input, reply, f.cc, opts...)
-	outputC <- reply
-}
-
-func (f *framework) DataRequest(ctx context.Context, toID uint64, req string) {
-	epoch, ok := ctx.Value(epochKey).(uint64)
-	if !ok {
-		f.log.Fatalf("Can not find epochKey in DataRequest")
-	}
-	f.dataReqtoSendChan <- &dataRequest{
-		taskID: toID,
-		epoch:  epoch,
-		req:    req,
 	}
 }
 
