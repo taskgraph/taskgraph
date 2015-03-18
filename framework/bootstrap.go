@@ -159,7 +159,7 @@ func (f *framework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
 	f.epochStop <- true
 	close(f.heartbeatStop)
-	f.stopHTTP()
+	f.stopGRPC()
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
