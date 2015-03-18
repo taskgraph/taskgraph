@@ -10,7 +10,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -65,13 +64,7 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	// TODO(grpc):
-	// replace f.startHTTP() with:
-	// go func(){
-	//   	err:= grpcServer.Serve(listener)
-	//   	... check err ...
-	// }
-	go f.startHTTP()
+	go f.startGRPC()
 
 	f.heartbeat()
 	f.setupChannels()
@@ -82,12 +75,10 @@ func (f *framework) Start() {
 }
 
 func (f *framework) setupChannels() {
-	f.httpStop = make(chan struct{})
+	f.rpcStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataResponse, 100)
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
 }
 
 func (f *framework) run() {
@@ -125,26 +116,13 @@ func (f *framework) run() {
 				break
 			}
 			req.send()
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				req.notifyEpochMismatch()
-				break
-			}
-			f.handleDataReq(req)
-		case resp := <-f.dataRespToSendChan:
-			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				resp.notifyEpochMismatch()
-				break
-			}
-			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
-			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				resp.epochMismatch()
 				break
 			}
-			f.handleDataResp(f.createContext(), resp)
+			resp.finish()
 		}
 	}
 }

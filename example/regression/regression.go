@@ -104,7 +104,10 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
 	// we need to select ctx cancel-chan later.
 	select {
-	case msg := <-outputC:
+	case msg, ok := <-outputC:
+		if !ok {
+			return
+		}
 		d, ok := msg.(*pb.Gradient)
 		if !ok {
 			t.logger.Fatalf("Can't convert message to Gradient: %v", msg)
@@ -241,7 +244,10 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 
 func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req string, outputC <-chan proto.Message) {
 	select {
-	case msg := <-outputC:
+	case msg, ok := <-outputC:
+		if !ok {
+			return
+		}
 		t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 		if t.testablyFail("ParentDataReady") {
 			return
@@ -271,7 +277,10 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req s
 
 func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
 	select {
-	case msg := <-outputC:
+	case msg, ok := <-outputC:
+		if !ok {
+			return
+		}
 		d, ok := msg.(*pb.Gradient)
 		if !ok {
 			t.logger.Fatalf("Can't convert message to Gradient: %v", msg)

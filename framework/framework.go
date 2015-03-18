@@ -8,7 +8,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -43,18 +42,16 @@ type framework struct {
 	metaStops []chan bool
 	epochStop chan bool
 
-	httpStop      chan struct{}
+	rpcStop       chan struct{}
 	heartbeatStop chan struct{}
 
 	epochPassed chan struct{}
 
 	// event loop
-	epochChan          chan uint64
-	metaChan           chan *metaChange
-	dataReqtoSendChan  chan *dataRequest
-	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataResponse
-	dataRespChan       chan *frameworkhttp.DataResponse
+	epochChan         chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataRespChan      chan *dataResponse
 }
 
 // The key type is unexported to prevent collisions with context keys defined in

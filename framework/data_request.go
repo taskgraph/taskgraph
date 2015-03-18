@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -27,8 +26,10 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 		epochCheckedC:  epochCheckedC,
 	}
 
+	var reply proto.Message
 	select {
 	case <-epochMismatchC:
+		return
 	case <-epochCheckedC:
 		for {
 			// establish grpc ClientConn
@@ -44,11 +45,10 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 				f.log.Panicf("grpc.Dial(%s) failed: %v", addr, err)
 			}
 			f.log.Printf("requesting data from task %d", toID)
-			reply := f.task.CreateOutputMessage(method)
+			reply = f.task.CreateOutputMessage(method)
 			err = grpc.Invoke(ctx, method, input, reply, cc)
 			if err == nil {
-				outputC <- reply
-				return
+				break
 			}
 
 			f.log.Printf("grpc.Invoke, method: %s, from task %d (addr: %s), failed: %v", method, toID, addr, err)
@@ -62,6 +62,20 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 			// we need to retry if task failure happened
 			time.Sleep(2 * heartbeatInterval)
 		}
+	}
+
+	epochMismatchC = make(chan struct{})
+	epochCheckedC = make(chan struct{})
+	f.dataRespChan <- &dataResponse{
+		epoch:          epoch,
+		epochMismatchC: epochMismatchC,
+		epochCheckedC:  epochCheckedC,
+	}
+	select {
+	case <-epochMismatchC:
+		close(outputC)
+	case <-epochCheckedC:
+		outputC <- reply
 	}
 }
 
@@ -82,7 +96,7 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 			return nil, frameworkhttp.ErrReqEpochMismatch
 		}
 		return d, nil
-	case <-f.httpStop:
+	case <-f.rpcStop:
 		// If a node stopped running and there is remaining requests, we need to
 		// respond error message back. It is used to let client routines stop blocking --
 		// especially helpful in test cases.
@@ -93,16 +107,12 @@ func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error
 	}
 }
 
-// Framework http server for data request.
-// Each request will be in the format: "/datareq?taskID=XXX&req=XXX".
-// "taskID" indicates the requesting task. "req" is the meta data for this request.
-// On success, it should respond with requested data in http body.
-func (f *framework) startHTTP() {
-	f.log.Printf("serving http on %s\n", f.ln.Addr())
-	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
-	err := http.Serve(f.ln, handler)
+// Starts user implemented grpc Server.
+func (f *framework) startGRPC() {
+	f.log.Printf("serving grpc on %s\n", f.ln.Addr())
+	err := f.rpcServer.Serve(f.ln)
 	select {
-	case <-f.httpStop:
+	case <-f.rpcStop:
 		f.log.Printf("http stops serving")
 	default:
 		if err != nil {
@@ -114,7 +124,7 @@ func (f *framework) startHTTP() {
 // Close listener, stop HTTP server;
 // Write error message back to under-serving responses.
 func (f *framework) stopHTTP() {
-	close(f.httpStop)
+	close(f.rpcStop)
 	f.ln.Close()
 }
 
