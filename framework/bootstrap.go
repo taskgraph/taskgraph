@@ -62,6 +62,9 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
+	// There is a possible race:
+	// A task restarts and has nothing. But a fetch still comes.
+	// How to fix? Use node to node channel (pipeline) instead of single request every time.
 	go f.startGRPC()
 
 	f.heartbeat()
