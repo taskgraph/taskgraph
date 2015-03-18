@@ -57,7 +57,7 @@ func createListener(t *testing.T) net.Listener {
 
 // This is used to show how to drive the network.
 func drive(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder taskgraph.TaskBuilder) {
-	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil, nil)
+	bootstrap := framework.NewBootStrap(jobName, etcds, createListener(t), nil)
 	bootstrap.SetTaskBuilder(taskBuilder)
 	bootstrap.SetTopology(topo.NewTreeTopology(2, ntask))
 	bootstrap.Start()

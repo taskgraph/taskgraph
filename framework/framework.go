@@ -10,7 +10,6 @@ import (
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 const exitEpoch = math.MaxUint64
@@ -30,7 +29,6 @@ type framework struct {
 	epoch          uint64
 	etcdClient     *etcd.Client
 	ln             net.Listener
-	rpcServer      *grpc.Server
 	requestCancels []context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.

@@ -12,17 +12,15 @@ import (
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 // One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, gRPCServer *grpc.Server, logger *log.Logger) taskgraph.Bootstrap {
+func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
 	return &framework{
-		name:      jobName,
-		etcdURLs:  etcdURLs,
-		ln:        ln,
-		log:       logger,
-		rpcServer: gRPCServer,
+		name:     jobName,
+		etcdURLs: etcdURLs,
+		ln:       ln,
+		log:      logger,
 	}
 }
 

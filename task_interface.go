@@ -3,6 +3,7 @@ package taskgraph
 import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // Task is a logic repersentation of a computing unit.
@@ -28,10 +29,7 @@ type Task interface {
 
 	// This provides framework the place-holder message object in gRPC call.
 	CreateOutputMessage(methodName string) proto.Message
-
-	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string) ([]byte, error)
-	ServeAsChild(fromID uint64, req string) ([]byte, error)
+	CreateGRPCServer() *grpc.Server
 }
 
 type UpdateLog interface {

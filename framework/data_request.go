@@ -10,12 +10,12 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
+func (f *framework) fetch(ctx context.Context, toID uint64, method string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in context: %v", ctx)
 	}
-
+	// check the request if epoch is stale
 	epochMismatchC := make(chan struct{})
 	epochCheckedC := make(chan struct{})
 	f.dataReqtoSendChan <- &dataRequest{
@@ -34,10 +34,9 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 			addr, err := etcdutil.GetAddress(f.etcdClient, f.name, toID)
 			if err != nil {
 				// TODO: etcd client error handling
-				f.log.Panicf("getAddress(%d) failed: %v", toID, err)
-				return
+				f.log.Panicf("etcd getAddress(%d) failed: %v", toID, err)
 			}
-			f.log.Printf("reconnecting to addr: %v", addr)
+			f.log.Printf("connecting to addr: %v", addr)
 			cc, err := grpc.Dial(addr)
 			if err != nil {
 				f.log.Panicf("grpc.Dial(%s) failed: %v", addr, err)
@@ -61,7 +60,7 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 			time.Sleep(2 * heartbeatInterval)
 		}
 	}
-
+	// check epoch again for the response.
 	epochMismatchC = make(chan struct{})
 	epochCheckedC = make(chan struct{})
 	f.dataRespChan <- &dataResponse{
@@ -77,16 +76,20 @@ func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input
 	}
 }
 
+func (f *framework) Fetch(ctx context.Context, toID uint64, method string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption) {
+	go f.fetch(ctx, toID, method, input, outputC, opts...)
+}
+
 // Starts user implemented grpc Server.
 func (f *framework) startGRPC() {
 	f.log.Printf("serving grpc on %s\n", f.ln.Addr())
-	err := f.rpcServer.Serve(f.ln)
+	err := f.task.CreateGRPCServer().Serve(f.ln)
 	select {
 	case <-f.rpcStop:
-		f.log.Printf("http stops serving")
+		f.log.Printf("grpc server stopped")
 	default:
 		if err != nil {
-			f.log.Fatalf("http.Serve() returns error: %v\n", err)
+			f.log.Fatalf("grpc server returns error: %v\n", err)
 		}
 	}
 }
