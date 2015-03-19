@@ -6,6 +6,8 @@ import (
  	// "go/build"
     // "github.com/MSOpenTech/azure-sdk-for-go/management"
     // server "github.com/MSOpenTech/azure-sdk-for-go/management/core/http"
+	"io"
+	"log"
 	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 	// "github.com/MSOpenTech/azure-sdk-for-go/core/http"
 	// ""
@@ -14,6 +16,7 @@ import (
 	"strings"
 	// "bytes"
 	"crypto/rand"
+	// "bytes"
 	// "io/ioutil"
 	// "net/http"
 	// "time"
@@ -26,49 +29,149 @@ import (
 // 	baseUrl string
 // }
 
+type azureConfig struct {
+	accountName string
+	accountKey  []byte
+	useHttps    bool
+	baseUrl     string
+	apiVersion  string
+}
+
 type AzureClient struct {
 	client *storage.StorageClient
 	blobClient *storage.BlobStorageClient
 }
 
+type AzureFile struct {
+	path   string
+	logger *log.Logger
+	azureConfig
+	// buffer
+}
+
+
+/*
+	convertToAzurePath function
+	----------------------------------
+	like this pattern "ContainerName/BlobName"
+	Due to Azure restriction, the length of ContainerName must be 32
+*/
+
+
 func convertToAzurePath(name string) (string, string, error) {
 	afterSplit := strings.Split(name, "/")
 	if len(afterSplit) != 2 || len(afterSplit[0]) != 32 {
-		return "","",fmt.Errorf("Azure : Need Correct Path Name")
+		return "", "", fmt.Errorf("AzureClient : Need Correct Path Name")
 	}
 	return afterSplit[0], afterSplit[1], nil
 } 
 
-// func (c *Glob) OpenReadCloser(name string) (io.ReadCloser, error) {
-// 	return c.client.Open(name)
-// }
-
-// func (c *storage.BlobStorageClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
-// 	exist, err := c.Exists(name)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if !exist {
-// 		err := c.client.CreateEmptyFile(name)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return &HdfsFile{
-// 		path:       name,
-// 		logger:     log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags),
-// 		hdfsConfig: c.hdfsConfig,
-// 	}, nil
-// }
+/*
+	AzureClient -> Exist function 
+	-----------------------------------------
+	Only check the BlobName if exist or not
+	User should Provide corresponding ContainerName
+	PS : Need check ContainerName ?
+*/
 
 func (c *AzureClient) Exists(name string) (bool, error) {
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
 		return false, err
 	}
-	return c.blobClient.BlobExists(containerName, blobName)
-	// _, err := c.client.Stat(name)
-	// return existCommon(err)
+	// exist, err := c.blobClient.ContainerExists(containerName)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// if exist {
+	// 	fmt.Println(containerName, blobName, exist)
+	return  c.blobClient.BlobExists(containerName, blobName)
+	// }
+	// return exist, err
+	
+
+}
+
+/*
+	AzureClient -> Rename function 
+	----------------------------------------
+	Azure prevent user renaming their blob
+	Thus this function firstly copy the source blob, 
+	when finished, delete the source blob.
+	http://stackoverflow.com/questions/3734672/azure-storage-blob-rename
+*/
+
+func (c *AzureClient) Rename(oldpath, newpath string) error {
+	
+	_, err := c.Exists(oldpath)
+	if err != nil {
+		return err
+	}
+	
+	srcContainerName, srcBlobName, err := convertToAzurePath(oldpath)
+	if err != nil {
+		return err
+	}
+	dstContainerName, dstBlobName, err := convertToAzurePath(newpath)
+	if err != nil {
+		return err
+	}
+
+	// _, err = c.blobClient.CreateContainerIfNotExists(dstContainerName, storage.ContainerAccessTypePrivate)
+	// if err != nil {
+	// 	return err
+	// }
+	
+
+	// err = c.blobClient.PutBlockBlob(dstContainerName, dstBlobName, bytes.NewReader(body))
+	// if err != nil {
+	// 	return err
+	// }
+	dstBlobUrl := c.blobClient.GetBlobUrl(dstContainerName, dstBlobName)
+	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
+	// fmt.Println(srcContainerName, srcBlobName, dstContainerName, dstBlobName, srcBlobUrl)
+	// exist, err := c.blobClient.CreateContainerIfNotExists(dstContainerName, ContainerAccessTypeContainer)
+	c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
+	if dstBlobUrl != srcBlobUrl {
+		fmt.Println(srcContainerName, srcBlobName, dstContainerName, dstBlobName, srcBlobUrl)
+		err = c.blobClient.DeleteBlob(srcContainerName, srcBlobName)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+/*
+	AzureClient -> OpenReadCloser function
+	-----------------------------------------
+*/
+
+func (c *AzureClient) OpenReadCloser(name string) (io.ReadCloser, error) {
+	containerName, blobName, err := convertToAzurePath(name)
+	if err != nil {
+		return nil, err
+	}
+	return c.blobClient.GetBlob(containerName, blobName)
+}
+
+
+/*
+	AzureClient -> OpenWriteCloser function
+	-----------------------------------------
+*/
+
+
+func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
+	return nil, nil
+}
+
+func (f *AzureFile) Write(b []byte) (int, error) {
+	return 0, nil
+}
+
+func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
+	return nil, nil
 }
 
 // func (b BlobStorageClient) BlobExists(container, name string) (bool, error)
@@ -163,21 +266,6 @@ func NewAzureClient(accountName, accountKey, blobServiceBaseUrl, apiVersion stri
 	}, nil
 }
 
-// func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
-// 	client, err := hdfs.NewForUser(namenodeAddr, user)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return &HdfsClient{
-// 		client: client,
-// 		hdfsConfig: hdfsConfig{
-// 			namenodeAddr: namenodeAddr,
-// 			webHdfsAddr:  webHdfsAddr,
-// 			user:         user,
-// 		},
-// 	}, nil
-// }
-
 
 // func (c storage.StorageClient) GetBlobService() *storage.BlobStorageClient {
 // 	return &storage.BlobStorageClient{c}
@@ -265,9 +353,9 @@ func NewAzureClient(accountName, accountKey, blobServiceBaseUrl, apiVersion stri
 // }
 
 // cli, err := getBlobClient()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 	
 
 
@@ -293,12 +381,43 @@ func main() {
 	// client, err := storage.NewClient("spluto", "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw==", "core.chinacloudapi.cn", "2014-02-14", true)
 	// cli, err := newStorageServer()
 	cli, err := NewAzureClient("spluto", "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw==", "core.chinacloudapi.cn", "2014-02-14", true)
-	exist, err := cli.Exists("11111111111111111111111111111111/sa")
+	exist, err := cli.Exists("test1111111111111111111111111114/www2")
+	err = cli.Rename("test1111111111111111111111111112/www2.txt", "test1111111111111111111111111112/b.txt")
+	// err = cli.blobClient.CreateContainer("test1111111111111111111111111112", storage.ContainerAccessTypeBlob)
+	// if err != nil {
+	// 	// fmt.Println(err)
+	// 	log.Fatal(err)
+	// }
+	// defer cli.DeleteContainer(cnt)
+	// err = cli.blobClient.DeleteBlob("test1111111111111111111111111112", "www2.txt")
+	// err = cli.blobClient.PutBlockBlob("test1111111111111111111111111112", "www2.txt", strings.NewReader("Hello!"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	if (err != nil) {
 		fmt.Println(err)
 	} 
-	fmt.Println(exist)
 
+
+	fmt.Println(exist)
+	resp, err := cli.blobClient.ListContainers(storage.ListContainersParameters{Prefix: ""})
+	if err != nil {
+		fmt.Println(err)	
+	}
+
+	for _, c := range resp.Containers {
+		fmt.Println(c.Name)
+		resp, err := cli.blobClient.ListBlobs(c.Name, storage.ListBlobsParameters{MaxResults: 2,
+			Marker:     ""})
+		if err != nil {
+			fmt.Println(err)	
+		}
+
+		for _, v := range resp.Blobs {
+			fmt.Println("-----", v.Name)
+		}
+		
+	}
 	// connectStorageSever()
 
 }
