@@ -37,7 +37,7 @@ func (f *framework) fetch(ctx context.Context, toID uint64, method string, input
 				f.log.Panicf("etcd getAddress(%d) failed: %v", toID, err)
 			}
 			f.log.Printf("connecting to task: %d, addr: %v", toID, addr)
-			cc, err := grpc.Dial(addr)
+			cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 			if err != nil {
 				f.log.Printf("grpc.Dial(%s) failed: %v", addr, err)
 				continue
