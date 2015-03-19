@@ -1,6 +1,10 @@
 package taskgraph
 
-import "golang.org/x/net/context"
+import (
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+)
 
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
@@ -23,13 +27,9 @@ type Task interface {
 	// TODO: one can also get this from channel.
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
-	// These two should go away, folding into DataRequest.
-	ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte)
-	ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte)
-
-	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string) ([]byte, error)
-	ServeAsChild(fromID uint64, req string) ([]byte, error)
+	// This provides framework the place-holder message object in gRPC call.
+	CreateOutputMessage(methodName string) proto.Message
+	CreateGRPCServer() *grpc.Server
 }
 
 type UpdateLog interface {

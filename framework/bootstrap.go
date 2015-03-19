@@ -10,7 +10,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -41,11 +40,10 @@ func (f *framework) Start() {
 	if err = f.occupyTask(); err != nil {
 		f.log.Panicf("occupyTask() failed: %v", err)
 	}
-
 	f.log.SetPrefix(fmt.Sprintf("task %d: ", f.taskID))
 
 	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
-	f.epochStop = make(chan bool, 1)   // stop etcd watch
+	f.epochStop = make(chan bool, 1)   // stop epoch watch
 	// meta will have epoch prepended so we must get epoch before any watch on meta
 	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
 	if err != nil {
@@ -64,7 +62,12 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	go f.startHTTP()
+	// There is a possible race:
+	// A task restarts and has nothing. But a fetch still comes.
+	// TODO:
+	// User should handle grpc server to synchronize with epoch change events,
+	// and should return framework-defined epoch related error if happened.
+	go f.startGRPC()
 
 	f.heartbeat()
 	f.setupChannels()
@@ -75,12 +78,10 @@ func (f *framework) Start() {
 }
 
 func (f *framework) setupChannels() {
-	f.httpStop = make(chan struct{})
+	f.rpcStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataResponse, 100)
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
 }
 
 func (f *framework) run() {
@@ -88,6 +89,7 @@ func (f *framework) run() {
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
 	// this for-select is primarily used to synchronize epoch specific events.
+	// There's an assumption that createContext() is a sequential execution in select loop.
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochChan:
@@ -114,29 +116,17 @@ func (f *framework) run() {
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				req.epochMismatch()
 				break
 			}
-			go f.sendRequest(req)
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				req.notifyEpochMismatch()
-				break
-			}
-			f.handleDataReq(req)
-		case resp := <-f.dataRespToSendChan:
-			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				resp.notifyEpochMismatch()
-				break
-			}
-			go f.sendResponse(resp)
+			req.send()
 		case resp := <-f.dataRespChan:
-			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				resp.epochMismatch()
 				break
 			}
-			f.handleDataResp(f.createContext(), resp)
+			resp.finish()
 		}
 	}
 }
@@ -145,6 +135,7 @@ func (f *framework) setEpochStarted() {
 	f.epochPassed = make(chan struct{})
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
+	f.requestCancels = make([]context.CancelFunc, 0)
 
 	f.task.SetEpoch(f.createContext(), f.epoch)
 	// setup etcd watches
@@ -162,6 +153,9 @@ func (f *framework) releaseEpochResource() {
 		c <- true
 	}
 	f.metaStops = nil
+	for _, cancel := range f.requestCancels {
+		cancel()
+	}
 }
 
 // release resources: heartbeat, epoch watch.
@@ -169,7 +163,7 @@ func (f *framework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
 	f.epochStop <- true
 	close(f.heartbeatStop)
-	f.stopHTTP()
+	f.stopGRPC()
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
@@ -180,7 +174,10 @@ func (f *framework) occupyTask() error {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		ok, err := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		if err != nil {
+			return err
+		}
 		if ok {
 			f.taskID = freeTask
 			return nil

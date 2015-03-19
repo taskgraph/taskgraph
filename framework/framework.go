@@ -8,7 +8,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -25,11 +24,12 @@ type framework struct {
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 
-	task       taskgraph.Task
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	ln         net.Listener
+	task           taskgraph.Task
+	taskID         uint64
+	epoch          uint64
+	etcdClient     *etcd.Client
+	ln             net.Listener
+	requestCancels []context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -40,18 +40,16 @@ type framework struct {
 	metaStops []chan bool
 	epochStop chan bool
 
-	httpStop      chan struct{}
+	rpcStop       chan struct{}
 	heartbeatStop chan struct{}
 
 	epochPassed chan struct{}
 
 	// event loop
-	epochChan          chan uint64
-	metaChan           chan *metaChange
-	dataReqtoSendChan  chan *dataRequest
-	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataResponse
-	dataRespChan       chan *frameworkhttp.DataResponse
+	epochChan         chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataRespChan      chan *dataResponse
 }
 
 // The key type is unexported to prevent collisions with context keys defined in
@@ -65,51 +63,37 @@ const epochKey contextKey = 1
 
 // Now use google context, for we simply create a barebone and attach the epoch to it.
 func (f *framework) createContext() context.Context {
-	return context.WithValue(context.Background(), epochKey, f.epoch)
+	// both epoch and requestCancels require sequential execution in select loop.
+	ctx := context.WithValue(context.Background(), epochKey, f.epoch)
+	ctx, cancel := context.WithCancel(ctx)
+	f.requestCancels = append(f.requestCancels, cancel)
+	return ctx
 }
 
-func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.taskID), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, err)
+			etcdutil.MetaPath(linkType, f.name, f.taskID), value, err)
 	}
 }
 
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctxt context.Context) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) IncEpoch(ctx context.Context) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
-		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
-			f.taskID, epoch+1, epoch, err)
-	}
-}
-
-func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
-	if !ok {
-		f.log.Fatalf("Can not find epochKey in DataRequest")
-	}
-
-	// assumption here:
-	// Event driven task will call this in a synchronous way so that
-	// the epoch won't change at the time task sending this request.
-	// Epoch may change, however, before the request is actually being sent.
-	f.dataReqtoSendChan <- &dataRequest{
-		taskID: toID,
-		epoch:  epoch,
-		req:    req,
+		f.log.Fatalf("Epoch CompareAndSwap(%d, %d) failed: %v", epoch+1, epoch, err)
 	}
 }
 

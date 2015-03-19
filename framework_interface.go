@@ -3,7 +3,9 @@ package taskgraph
 import (
 	"log"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // This interface is used by application during taskgraph configuration phase.
@@ -43,13 +45,18 @@ type Framework interface {
 	// This is useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
 	// Set meta flag to notify meta to all nodes of linkType to this node.
-	FlagMeta(ctxt context.Context, linkType, meta string)
+	FlagMeta(ctx context.Context, linkType, meta string)
 
 	// Some task can inform all participating tasks to new epoch
-	IncEpoch(ctxt context.Context)
+	IncEpoch(ctx context.Context)
 
-	// Request data from parent or children.
-	DataRequest(ctxt context.Context, toID uint64, meta string)
+	// ctx -- the Google context library that framework gives to user in task callback
+	// and user should pass back in any framework call.
+	// taskID -- the task to ask data from.
+	// methodName -- the gRPC method to call for serving the data
+	// input -- user defined arguments to call gRPC service of the other end.
+	// dataChan -- the channel to return requested data.
+	Fetch(ctx context.Context, toID uint64, methodName string, input proto.Message, outputC chan<- proto.Message, opts ...grpc.CallOption)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
