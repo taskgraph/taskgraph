@@ -64,7 +64,9 @@ func (f *framework) Start() {
 
 	// There is a possible race:
 	// A task restarts and has nothing. But a fetch still comes.
-	// How to fix? Use node to node channel (pipeline) instead of single request every time.
+	// TODO:
+	// User should handle grpc server to synchronize with epoch change events,
+	// and should return framework-defined epoch related error if happened.
 	go f.startGRPC()
 
 	f.heartbeat()

@@ -52,17 +52,17 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 		outputC := make(chan proto.Message, 1)
 		t.framework.Fetch(ctx, fromID, "/proto.Regression/GetParameter", &pb.Input{t.epoch}, outputC)
-		go t.ParentDataReady(ctx, fromID, meta, outputC)
+		go t.parentDataReady(ctx, fromID, meta, outputC)
 	}
 	if linkType == "Children" {
 		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
 		outputC := make(chan proto.Message, 1)
 		t.framework.Fetch(ctx, fromID, "/proto.Regression/GetGradient", &pb.Input{t.epoch}, outputC)
-		go t.ChildDataReady(ctx, fromID, meta, outputC)
+		go t.childDataReady(ctx, fromID, meta, outputC)
 	}
 }
 
-func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req string, outputC <-chan proto.Message) {
+func (t *dummySlave) parentDataReady(ctx context.Context, parentID uint64, req string, outputC <-chan proto.Message) {
 	select {
 	case msg, ok := <-outputC:
 		if !ok {
@@ -95,7 +95,7 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req s
 	}
 }
 
-func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
+func (t *dummySlave) childDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
 	select {
 	case msg, ok := <-outputC:
 		if !ok {

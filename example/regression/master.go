@@ -55,12 +55,12 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 		if meta == "GradientReady" {
 			outputC := make(chan proto.Message, 1)
 			t.framework.Fetch(ctx, fromID, "/proto.Regression/GetGradient", &pb.Input{t.epoch}, outputC)
-			go t.ChildDataReady(ctx, fromID, meta, outputC)
+			go t.childDataReady(ctx, fromID, meta, outputC)
 		}
 	}
 }
 
-func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
+func (t *dummyMaster) childDataReady(ctx context.Context, childID uint64, req string, outputC <-chan proto.Message) {
 	// we need to select ctx cancel-chan later.
 	select {
 	case msg, ok := <-outputC:
