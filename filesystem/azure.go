@@ -103,9 +103,12 @@ func (c *AzureClient) Exists(name string) (bool, error) {
 
 func (c *AzureClient) Rename(oldpath, newpath string) error {
 	
-	_, err := c.Exists(oldpath)
+	exist, err := c.Exists(oldpath)
 	if err != nil {
 		return err
+	}
+	if !exist {
+		return fmt.Errorf("AzureClient : oldpath doesnot exist")
 	}
 	
 	srcContainerName, srcBlobName, err := convertToAzurePath(oldpath)
@@ -383,17 +386,17 @@ func main() {
 	cli, err := NewAzureClient("spluto", "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw==", "core.chinacloudapi.cn", "2014-02-14", true)
 	exist, err := cli.Exists("test1111111111111111111111111114/www2")
 	err = cli.Rename("test1111111111111111111111111112/www2.txt", "test1111111111111111111111111112/b.txt")
-	// err = cli.blobClient.CreateContainer("test1111111111111111111111111112", storage.ContainerAccessTypeBlob)
+	// err = cli.blobClient.CreateContainer("test1111111111111111111111111114", storage.ContainerAccessTypeBlob)
 	// if err != nil {
 	// 	// fmt.Println(err)
 	// 	log.Fatal(err)
 	// }
 	// defer cli.DeleteContainer(cnt)
 	// err = cli.blobClient.DeleteBlob("test1111111111111111111111111112", "www2.txt")
-	// err = cli.blobClient.PutBlockBlob("test1111111111111111111111111112", "www2.txt", strings.NewReader("Hello!"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	err = cli.blobClient.PutBlockBlob("test1111111111111111111111111112", "www2.txt", strings.NewReader("Hello!"))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 	if (err != nil) {
 		fmt.Println(err)
 	} 
@@ -407,7 +410,7 @@ func main() {
 
 	for _, c := range resp.Containers {
 		fmt.Println(c.Name)
-		resp, err := cli.blobClient.ListBlobs(c.Name, storage.ListBlobsParameters{MaxResults: 2,
+		resp, err := cli.blobClient.ListBlobs(c.Name, storage.ListBlobsParameters{
 			Marker:     ""})
 		if err != nil {
 			fmt.Println(err)	
