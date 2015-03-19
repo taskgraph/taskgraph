@@ -96,7 +96,7 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
+func (f *framework) DataRequest(ctxt context.Context, toID uint64, linkType, req string) {
 	epoch, ok := ctxt.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
@@ -107,9 +107,10 @@ func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
-		taskID: toID,
-		epoch:  epoch,
-		req:    req,
+		taskID:   toID,
+		epoch:    epoch,
+		linkType: linkType,
+		req:      req,
 	}
 }
 

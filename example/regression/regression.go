@@ -64,7 +64,7 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 	if linkType == "Children" {
 		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
 		// Get data from child. When all the data is back, starts the next epoch.
-		t.framework.DataRequest(ctx, fromID, meta)
+		t.framework.DataRequest(ctx, fromID, linkType, meta)
 	}
 }
 
@@ -204,7 +204,7 @@ func (t *dummySlave) Exit() {}
 func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		t.framework.DataRequest(ctx, fromID, meta)
+		t.framework.DataRequest(ctx, fromID, linkType, meta)
 	}
 	if linkType == "Children" {
 		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
@@ -212,7 +212,7 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 			// If a new node restart and find out both parent and child meta ready, it will
 			// simultaneously request both data. We need to wait until gradient data is there.
 			t.gradientReady.Await()
-			t.framework.DataRequest(ctx, fromID, meta)
+			t.framework.DataRequest(ctx, fromID, linkType, meta)
 		}()
 	}
 }
