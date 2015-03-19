@@ -297,6 +297,14 @@ func (t *testableTask) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return t.ServeAsParent(fromID, req)
 }
 
+func (t *testableTask) Serve(fromID uint64, linkType, req string) ([]byte, error) {
+	if linkType == "Parents" {
+		return t.ServeAsParent(fromID, req)
+	} else {
+		return t.ServeAsChild(fromID, req)
+	}
+}
+
 func (t *testableTask) ParentDataReady(ctx context.Context, fromID uint64, req string, resp []byte) {
 	if t.dataChan != nil {
 		t.dataChan <- &tDataBundle{fromID, "", req, resp}
@@ -305,6 +313,14 @@ func (t *testableTask) ParentDataReady(ctx context.Context, fromID uint64, req s
 
 func (t *testableTask) ChildDataReady(ctx context.Context, fromID uint64, req string, resp []byte) {
 	t.ParentDataReady(ctx, fromID, req, resp)
+}
+
+func (t *testableTask) DataReady(ctx context.Context, fromID uint64, linkType, req string, resp []byte) {
+	if linkType == "Parents" {
+		t.ParentDataReady(ctx, fromID, req, resp)
+	} else {
+		t.ChildDataReady(ctx, fromID, req, resp)
+	}
 }
 
 func createListener(t *testing.T) net.Listener {

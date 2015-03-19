@@ -99,6 +99,14 @@ func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return nil, nil
 }
 
+func (t *dummyMaster) Serve(fromID uint64, linkType, req string) ([]byte, error) {
+	if linkType == "Parents" {
+		return t.ServeAsParent(fromID, req)
+	} else {
+		return nil, nil
+	}
+}
+
 func (t *dummyMaster) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
 }
 func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
@@ -134,6 +142,14 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req st
 			t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
 			t.framework.IncEpoch(ctx)
 		}
+	}
+}
+
+func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, linkType, req string, resp []byte) {
+	if linkType == "Parents" {
+		t.ParentDataReady(ctx, fromID, req, resp)
+	} else {
+		t.ChildDataReady(ctx, fromID, req, resp)
 	}
 }
 
@@ -229,6 +245,14 @@ func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
 	return json.Marshal(t.gradient)
 }
 
+func (t *dummySlave) Serve(fromID uint64, linkType, req string) ([]byte, error) {
+	if linkType == "Parents" {
+		return t.ServeAsParent(fromID, req)
+	} else {
+		return t.ServeAsChild(fromID, req)
+	}
+}
+
 func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
@@ -293,6 +317,14 @@ func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req str
 		if t.testablyFail("ChildDataReady") {
 			return
 		}
+	}
+}
+
+func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, linkType, req string, resp []byte) {
+	if linkType == "Parents" {
+		t.ParentDataReady(ctx, fromID, req, resp)
+	} else {
+		t.ChildDataReady(ctx, fromID, req, resp)
 	}
 }
 

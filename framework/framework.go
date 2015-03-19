@@ -99,7 +99,7 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
 	epoch, ok := ctxt.Value(epochKey).(uint64)
 	if !ok {
-		f.log.Fatalf("Can not find epochKey in DataRequest")
+		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
 	}
 
 	// assumption here:

@@ -107,7 +107,7 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 	dataReceiver := make(chan []byte, 1)
 	switch {
 	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		b, err := f.task.ServeAsChild(dr.taskID, dr.req)
+		b, err := f.task.Serve(dr.taskID, "Children", dr.req)
 		if err != nil {
 			// TODO: We should handle network faults later by retrying
 			f.log.Fatalf("ServeAsChild Error with id = %d, %v\n", dr.taskID, err)
@@ -115,7 +115,7 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 		dataReceiver <- b
 
 	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		b, err := f.task.ServeAsParent(dr.taskID, dr.req)
+		b, err := f.task.Serve(dr.taskID, "Parents", dr.req)
 		if err != nil {
 			// TODO: We should handle network faults later by retrying
 			f.log.Fatalf("ServeAsParent Error with id = %d, %v\n", dr.taskID, err)
@@ -151,9 +151,9 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 func (f *framework) handleDataResp(ctx context.Context, resp *frameworkhttp.DataResponse) {
 	switch {
 	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ParentDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
+		f.task.DataReady(ctx, resp.TaskID, "Parents", resp.Req, resp.Data)
 	case topoutil.IsChild(f.topology, resp.Epoch, resp.TaskID):
-		f.task.ChildDataReady(ctx, resp.TaskID, resp.Req, resp.Data)
+		f.task.DataReady(ctx, resp.TaskID, "Children", resp.Req, resp.Data)
 	default:
 		f.log.Panic("unexpected")
 	}
