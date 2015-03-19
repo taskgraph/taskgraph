@@ -39,7 +39,8 @@ func (f *framework) fetch(ctx context.Context, toID uint64, method string, input
 			f.log.Printf("connecting to task: %d, addr: %v", toID, addr)
 			cc, err := grpc.Dial(addr)
 			if err != nil {
-				f.log.Panicf("grpc.Dial(%s) failed: %v", addr, err)
+				f.log.Printf("grpc.Dial(%s) failed: %v", addr, err)
+				continue
 			}
 			f.log.Printf("requesting data from task %d", toID)
 			reply = f.task.CreateOutputMessage(method)

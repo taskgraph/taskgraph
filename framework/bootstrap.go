@@ -172,7 +172,10 @@ func (f *framework) occupyTask() error {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		ok, err := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		if err != nil {
+			return err
+		}
 		if ok {
 			f.taskID = freeTask
 			return nil
