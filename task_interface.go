@@ -24,12 +24,10 @@ type Task interface {
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
 	// These two should go away, folding into DataRequest.
-	ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte)
-	ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte)
+	DataReady(ctx context.Context, parentID uint64, linkType, req string, resp []byte)
 
 	// These are payload for application purpose.
-	ServeAsParent(fromID uint64, req string) ([]byte, error)
-	ServeAsChild(fromID uint64, req string) ([]byte, error)
+	Serve(fromID uint64, linkType, req string) ([]byte, error)
 }
 
 type UpdateLog interface {
