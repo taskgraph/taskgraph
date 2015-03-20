@@ -23,7 +23,7 @@ type Task interface {
 	// TODO: one can also get this from channel.
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
-	// These two should go away, folding into DataRequest.
+	// This is the callback when data from server is ready.
 	DataReady(ctx context.Context, parentID uint64, linkType, req string, resp []byte)
 
 	// These are payload for application purpose.
