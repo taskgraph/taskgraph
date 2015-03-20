@@ -68,8 +68,8 @@ func (f *framework) createContext() context.Context {
 	return context.WithValue(context.Background(), epochKey, f.epoch)
 }
 
-func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
@@ -84,8 +84,8 @@ func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctxt context.Context) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) IncEpoch(ctx context.Context) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
@@ -96,8 +96,8 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctxt context.Context, toID uint64, linkType, req string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) DataRequest(ctx context.Context, toID uint64, linkType, req string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
 	}
