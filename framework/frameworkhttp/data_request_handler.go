@@ -18,11 +18,12 @@ const (
 	DataRequestPrefix string = "/datareq"
 	DataRequestTaskID string = "taskID"
 	DataRequestReq    string = "req"
+	DataRequestMethod string = "method"
 	DataRequestEpoch  string = "epoch"
 )
 
 type DataGetter interface {
-	GetTaskData(uint64, uint64, string) ([]byte, error)
+	GetTaskData(uint64, uint64, string, string) ([]byte, error)
 }
 
 type dataReqHandler struct {
@@ -33,6 +34,7 @@ type dataReqHandler struct {
 type DataResponse struct {
 	TaskID uint64
 	Epoch  uint64
+	Method string
 	Req    string
 	Data   []byte
 }
@@ -62,8 +64,9 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Panic("Internal error: epoch couldn't be parsed")
 	}
 	req := q.Get(DataRequestReq)
+	linkType := q.Get(DataRequestMethod)
 
-	b, err := h.GetTaskData(fromID, epoch, req)
+	b, err := h.GetTaskData(fromID, epoch, linkType, req)
 	if err != nil {
 		if err == ErrReqEpochMismatch || err == ErrServerClosed {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -77,7 +80,7 @@ func (h *dataReqHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Logger) (*DataResponse, error) {
+func RequestData(addr string, linkType, req string, from, to, epoch uint64, logger *log.Logger) (*DataResponse, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   addr,
@@ -86,6 +89,7 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	q := u.Query()
 	q.Add(DataRequestTaskID, strconv.FormatUint(from, 10))
 	q.Add(DataRequestReq, req)
+	q.Add(DataRequestMethod, linkType)
 	q.Add(DataRequestEpoch, strconv.FormatUint(epoch, 10))
 	u.RawQuery = q.Encode()
 	urlStr := u.String()
@@ -118,6 +122,7 @@ func RequestData(addr string, req string, from, to, epoch uint64, logger *log.Lo
 	return &DataResponse{
 		TaskID: to,
 		Epoch:  epoch,
+		Method: linkType,
 		Req:    req,
 		Data:   data,
 	}, nil

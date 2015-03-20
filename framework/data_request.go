@@ -6,7 +6,6 @@ import (
 
 	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
-	"github.com/taskgraph/taskgraph/pkg/topoutil"
 	"golang.org/x/net/context"
 )
 
@@ -24,7 +23,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		f.log.Printf("request data from task %d, addr %s", dr.taskID, addr)
 	}
 
-	d, err := frameworkhttp.RequestData(addr, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
+	d, err := frameworkhttp.RequestData(addr, dr.linkType, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
 	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
 		f.log.Printf("RequestData from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
@@ -46,11 +45,12 @@ func (f *framework) sendRequest(dr *dataRequest) {
 }
 
 // This is used by the server side to handle data requests coming from remote.
-func (f *framework) GetTaskData(taskID, epoch uint64, req string) ([]byte, error) {
+func (f *framework) GetTaskData(taskID, epoch uint64, linkType, req string) ([]byte, error) {
 	dataChan := make(chan []byte, 1)
 	f.dataReqChan <- &dataRequest{
 		taskID:   taskID,
 		epoch:    epoch,
+		linkType: linkType,
 		req:      req,
 		dataChan: dataChan,
 	}
@@ -105,25 +105,14 @@ func (f *framework) sendResponse(dr *dataResponse) {
 
 func (f *framework) handleDataReq(dr *dataRequest) {
 	dataReceiver := make(chan []byte, 1)
-	switch {
-	case topoutil.IsParent(f.topology, dr.epoch, dr.taskID):
-		b, err := f.task.Serve(dr.taskID, "Children", dr.req)
-		if err != nil {
-			// TODO: We should handle network faults later by retrying
-			f.log.Fatalf("ServeAsChild Error with id = %d, %v\n", dr.taskID, err)
-		}
-		dataReceiver <- b
 
-	case topoutil.IsChild(f.topology, dr.epoch, dr.taskID):
-		b, err := f.task.Serve(dr.taskID, "Parents", dr.req)
-		if err != nil {
-			// TODO: We should handle network faults later by retrying
-			f.log.Fatalf("ServeAsParent Error with id = %d, %v\n", dr.taskID, err)
-		}
-		dataReceiver <- b
-	default:
-		f.log.Panic("unexpected")
+	b, err := f.task.Serve(dr.taskID, dr.linkType, dr.req)
+	if err != nil {
+		// TODO: We should handle network faults later by retrying
+		f.log.Fatalf("ServeAsParent Error with id = %d, %v\n", dr.taskID, err)
 	}
+	dataReceiver <- b
+
 	go func() {
 		select {
 		case data, ok := <-dataReceiver:
@@ -149,12 +138,5 @@ func (f *framework) handleDataReq(dr *dataRequest) {
 }
 
 func (f *framework) handleDataResp(ctx context.Context, resp *frameworkhttp.DataResponse) {
-	switch {
-	case topoutil.IsParent(f.topology, resp.Epoch, resp.TaskID):
-		f.task.DataReady(ctx, resp.TaskID, "Parents", resp.Req, resp.Data)
-	case topoutil.IsChild(f.topology, resp.Epoch, resp.TaskID):
-		f.task.DataReady(ctx, resp.TaskID, "Children", resp.Req, resp.Data)
-	default:
-		f.log.Panic("unexpected")
-	}
+	f.task.DataReady(ctx, resp.TaskID, resp.Method, resp.Req, resp.Data)
 }
