@@ -6,7 +6,7 @@ a. At beginning of the framework initialization for each task, framework
    call the SetTaskID so that the singleton Topology knows which taskID it
    represents.
 b. At beginning of each epoch, the framework implementation (on each task)
-   will call GetParents and GetChildren with given epoch, so that it knows
+   will call GetLinkTypes and GetNeighbors with given epoch, so that it knows
    how to setup watcher for node failures.
 */
 package taskgraph

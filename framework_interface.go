@@ -48,8 +48,8 @@ type Framework interface {
 	// Some task can inform all participating tasks to new epoch
 	IncEpoch(ctxt context.Context)
 
-	// Request data from parent or children.
-	DataRequest(ctxt context.Context, toID uint64, meta string)
+	// Request data from task toID with specified linkType and meta.
+	DataRequest(ctxt context.Context, toID uint64, linkType, meta string)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

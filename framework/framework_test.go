@@ -44,7 +44,7 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAddress failed: %v", err)
 	}
-	_, err = frameworkhttp.RequestData(addr, "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
+	_, err = frameworkhttp.RequestData(addr, "Parents", "req", 0, fw.GetTaskID(), 10, fw.GetLogger())
 	if err != frameworkhttp.ErrReqEpochMismatch {
 		t.Fatalf("error want = %v, but get = (%)", frameworkhttp.ErrReqEpochMismatch, err.Error())
 	}
@@ -197,7 +197,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 	ctx := context.WithValue(context.Background(), epochKey, uint64(0))
 	for i, tt := range tests {
 		// 0: F#DataRequest -> 1: T#ServeAsChild -> 0: T#ChildDataReady
-		f0.DataRequest(ctx, 1, tt.req)
+		f0.DataRequest(ctx, 1, "Children", tt.req)
 		// from child(1)'s view at 1: T#ServeAsChild
 		data := <-pDataChan
 		expected := &tDataBundle{0, "", data.req, nil}
@@ -212,7 +212,7 @@ func TestFrameworkDataRequest(t *testing.T) {
 		}
 
 		// 1: F#DataRequest -> 0: T#ServeAsParent -> 1: T#ParentDataReady
-		f1.DataRequest(ctx, 0, tt.req)
+		f1.DataRequest(ctx, 0, "Parents", tt.req)
 		// from parent(0)'s view at 0: T#ServeAsParent
 		data = <-cDataChan
 		expected = &tDataBundle{1, "", data.req, nil}

@@ -10,6 +10,7 @@ type metaChange struct {
 type dataRequest struct {
 	taskID   uint64
 	epoch    uint64
+	linkType string
 	req      string
 	retry    bool
 	dataChan chan []byte
@@ -22,6 +23,7 @@ func (dr *dataRequest) notifyEpochMismatch() {
 type dataResponse struct {
 	taskID   uint64
 	epoch    uint64
+	linkType string
 	req      string
 	data     []byte
 	dataChan chan []byte
