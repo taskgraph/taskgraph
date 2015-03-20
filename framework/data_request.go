@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -8,6 +9,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
+
+func (f *framework) CheckEpoch(epoch uint64) error {
+	resChan := make(chan bool, 1)
+	f.epochCheckChan <- &epochCheck{
+		epoch:   epoch,
+		resChan: resChan,
+	}
+	ok := <-resChan
+	if ok {
+		return nil
+	} else {
+		return fmt.Errorf("server epoch mismatch")
+	}
+}
 
 func (f *framework) sendRequest(dr *dataRequest) {
 	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)

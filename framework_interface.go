@@ -51,7 +51,7 @@ type Framework interface {
 
 	// Request data from task toID with specified linkType and meta.
 	DataRequest(ctx context.Context, toID uint64, linkType, method string, input proto.Message)
-	CheckEpoch(ctx context.Context) error
+	CheckEpoch(epoch uint64) error
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

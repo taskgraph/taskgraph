@@ -30,6 +30,7 @@ var _ grpc.ClientConn
 var _ = proto1.Marshal
 
 type Input struct {
+	Epoch uint64 `protobuf:"varint,1,opt,name=epoch" json:"epoch,omitempty"`
 }
 
 func (m *Input) Reset()         { *m = Input{} }

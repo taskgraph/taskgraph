@@ -68,7 +68,7 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 		// Get data from child. When all the data is back, starts the next epoch.
 		switch meta {
 		case "GradientReady":
-			t.framework.DataRequest(ctx, fromID, "Children", "/proto.Regression/GetGradient", &pb.Input{})
+			t.framework.DataRequest(ctx, fromID, "Children", "/proto.Regression/GetGradient", &pb.Input{t.epoch})
 		default:
 			panic("")
 		}
@@ -95,7 +95,7 @@ func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
 
 // These are payload rpc for application purpose.
 func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
-	err := t.framework.CheckEpoch(ctx)
+	err := t.framework.CheckEpoch(input.Epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (t *dummySlave) Exit() {}
 func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		t.framework.DataRequest(ctx, fromID, "Parents", "/proto.Regression/GetParameter", new(pb.Input))
+		t.framework.DataRequest(ctx, fromID, "Parents", "/proto.Regression/GetParameter", &pb.Input{t.epoch})
 	}
 	if linkType == "Children" {
 		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
@@ -226,7 +226,7 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 			// If a new node restart and find out both parent and child meta ready, it will
 			// simultaneously request both data. We need to wait until gradient data is there.
 			t.gradientReady.Await()
-			t.framework.DataRequest(ctx, fromID, "Children", "/proto.Regression/GetGradient", new(pb.Input))
+			t.framework.DataRequest(ctx, fromID, "Children", "/proto.Regression/GetGradient", &pb.Input{t.epoch})
 		}()
 	}
 }
@@ -246,7 +246,7 @@ func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
-	err := t.framework.CheckEpoch(ctx)
+	err := t.framework.CheckEpoch(input.Epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Par
 }
 
 func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
-	err := t.framework.CheckEpoch(ctx)
+	err := t.framework.CheckEpoch(input.Epoch)
 	if err != nil {
 		return nil, err
 	}
