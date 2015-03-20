@@ -46,6 +46,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		go f.retrySendRequest(dr)
 		return
 	}
+	defer cc.Close()
 	reply := f.task.CreateOutputMessage(dr.method)
 	err = grpc.Invoke(dr.ctx, dr.method, dr.input, reply, cc)
 	if err != nil {
