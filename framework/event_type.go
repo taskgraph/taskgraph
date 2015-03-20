@@ -1,5 +1,7 @@
 package framework
 
+import "github.com/golang/protobuf/proto"
+
 type metaChange struct {
 	from  uint64
 	who   string
@@ -11,24 +13,19 @@ type dataRequest struct {
 	taskID   uint64
 	epoch    uint64
 	linkType string
-	req      string
+	input    proto.Message
+	method   string
 	retry    bool
-	dataChan chan []byte
-}
-
-func (dr *dataRequest) notifyEpochMismatch() {
-	close(dr.dataChan)
 }
 
 type dataResponse struct {
 	taskID   uint64
 	epoch    uint64
 	linkType string
-	req      string
-	data     []byte
-	dataChan chan []byte
+	input    proto.Message
+	output   proto.Message
 }
 
-func (dr *dataResponse) notifyEpochMismatch() {
-	close(dr.dataChan)
+type epochCheck struct {
+	epoch uint64
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -77,11 +76,17 @@ func (f *framework) setupChannels() {
 	f.httpStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataResponse, 100)
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
+	f.epochCheckChan = make(chan *epochCheck, 100)
 }
 
+func (f *framework) CheckEpoch(ctx context.Context) error {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
+	}
+
+}
 func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
@@ -116,26 +121,13 @@ func (f *framework) run() {
 				break
 			}
 			go f.sendRequest(req)
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				req.notifyEpochMismatch()
-				break
-			}
-			f.handleDataReq(req)
-		case resp := <-f.dataRespToSendChan:
-			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				resp.notifyEpochMismatch()
-				break
-			}
-			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
-			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.epoch, f.epoch)
 				break
 			}
 			f.handleDataResp(f.createContext(), resp)
+		case ec := <-f.epochCheckChan:
 		}
 	}
 }

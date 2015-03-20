@@ -3,6 +3,7 @@ package taskgraph
 import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // Task is a logic repersentation of a computing unit.
@@ -28,6 +29,9 @@ type Task interface {
 
 	// This is the callback when data from server is ready.
 	DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message)
+
+	CreateOutputMessage(methodName string) proto.Message
+	CreateServer() *grpc.Server
 }
 
 type UpdateLog interface {

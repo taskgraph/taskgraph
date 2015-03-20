@@ -13,6 +13,7 @@ import (
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/common"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 /*
@@ -102,11 +103,7 @@ func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Pa
 }
 
 func (t *dummyMaster) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
-	err := t.framework.CheckEpoch(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return t.gradient, nil
+	panic("")
 }
 
 func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, input proto.Message, output proto.Message) {
@@ -145,11 +142,29 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, input 
 }
 
 func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
-	if linkType == "Parents" {
-		panic("")
-	} else {
+	if linkType == "Children" {
 		t.ChildDataReady(ctx, fromID, input, output)
+		return
 	}
+	panic("")
+}
+
+func (t *dummyMaster) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.Regression/GetParameter":
+		return new(pb.Parameter)
+	case "/proto.Regression/GetGradient":
+		return new(pb.Gradient)
+	default:
+		t.logger.Panicf("Unknown method: %s", methodName)
+		return nil
+	}
+}
+
+func (t *dummyMaster) CreateServer() *grpc.Server {
+	server := grpc.NewServer()
+	pb.RegisterRegressionServer(server, t)
+	return server
 }
 
 func (t *dummyMaster) testablyFail(method string, args ...string) bool {
@@ -343,6 +358,23 @@ func (t *dummySlave) testablyFail(method string, args ...string) bool {
 	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
+}
+func (t *dummySlave) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.Regression/GetParameter":
+		return new(pb.Parameter)
+	case "/proto.Regression/GetGradient":
+		return new(pb.Gradient)
+	default:
+		t.logger.Panicf("Unknown method: %s", methodName)
+		return nil
+	}
+}
+
+func (t *dummySlave) CreateServer() *grpc.Server {
+	server := grpc.NewServer()
+	pb.RegisterRegressionServer(server, t)
+	return server
 }
 
 func probablyFail(levelStr string) bool {
