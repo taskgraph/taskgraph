@@ -1,7 +1,6 @@
 package regression
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,7 +8,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
+	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/common"
 	"golang.org/x/net/context"
 )
@@ -46,8 +47,9 @@ type dummyMaster struct {
 	config             map[string]string
 	numberOfIterations uint64
 
-	param, gradient *dummyData
-	fromChildren    map[uint64]*dummyData
+	param        *pb.Parameter
+	gradient     *pb.Gradient
+	fromChildren map[uint64]*pb.Gradient
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -55,7 +57,6 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 func (t *dummyMaster) Exit() {}
 
@@ -64,7 +65,12 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 	if linkType == "Children" {
 		t.logger.Printf("master ChildMetaReady, task: %d, epoch: %d, child: %d\n", t.taskID, t.epoch, fromID)
 		// Get data from child. When all the data is back, starts the next epoch.
-		t.framework.DataRequest(ctx, fromID, linkType, meta)
+		switch meta {
+		case "GradientReady":
+			t.framework.DataRequest(ctx, fromID, "/proto.Regression/GetGradient", &pb.Input{})
+		default:
+			panic("")
+		}
 	}
 }
 
@@ -75,45 +81,38 @@ func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
 		return
 	}
 
-	t.param = &dummyData{}
-	t.gradient = &dummyData{}
+	t.param = new(pb.Parameter)
+	t.gradient = new(pb.Gradient)
 
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
 
 	// Make sure we have a clean slate.
-	t.fromChildren = make(map[uint64]*dummyData)
+	t.fromChildren = make(map[uint64]*pb.Gradient)
 	t.framework.FlagMeta(ctx, "Parents", "ParamReady")
 }
 
 // These are payload rpc for application purpose.
-func (t *dummyMaster) ServeAsParent(fromID uint64, req string) ([]byte, error) {
-	return json.Marshal(t.param)
-	//if err != nil {
-	//	t.logger.Fatalf("Master can't encode parameter: %v, error: %v\n", t.param, err)
-	//}
-	//dataReceiver <- b
-}
-
-func (t *dummyMaster) ServeAsChild(fromID uint64, req string) ([]byte, error) {
-	return nil, nil
-}
-
-func (t *dummyMaster) Serve(fromID uint64, linkType, req string) ([]byte, error) {
-	if linkType == "Parents" {
-		return t.ServeAsParent(fromID, req)
-	} else {
-		return nil, nil
+func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
+	err := t.framework.CheckEpoch(ctx)
+	if err != nil {
+		return nil, err
 	}
+	return t.param, nil
 }
 
-func (t *dummyMaster) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
+func (t *dummyMaster) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
+	err := t.framework.CheckEpoch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t.gradient, nil
 }
-func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
-	d := new(dummyData)
-	json.Unmarshal(resp, d)
-	if _, ok := t.fromChildren[childID]; ok {
-		return
+
+func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, input proto.Message, output proto.Message) {
+	d, ok := output.(*pb.Gradient)
+	if !ok {
+		panic("")
 	}
 	t.fromChildren[childID] = d
 
@@ -145,11 +144,11 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, req st
 	}
 }
 
-func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, linkType, req string, resp []byte) {
+func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
 	if linkType == "Parents" {
-		t.ParentDataReady(ctx, fromID, req, resp)
+		panic("")
 	} else {
-		t.ChildDataReady(ctx, fromID, req, resp)
+		t.ChildDataReady(ctx, fromID, input, output)
 	}
 }
 
@@ -185,10 +184,11 @@ type dummySlave struct {
 	NodeProducer  chan bool
 	config        map[string]string
 
-	param, gradient *dummyData
-	fromChildren    map[uint64]*dummyData
-	gradientReady   *common.CountdownLatch
-	parameterReady  *common.CountdownLatch
+	param          *pb.Parameter
+	gradient       *pb.Gradient
+	fromChildren   map[uint64]*pb.Gradient
+	gradientReady  *common.CountdownLatch
+	parameterReady *common.CountdownLatch
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -196,7 +196,6 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// t.logger = log.New(ioutil.Discard, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 func (t *dummySlave) Exit() {}
 
@@ -204,7 +203,7 @@ func (t *dummySlave) Exit() {}
 func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if linkType == "Parents" {
 		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		t.framework.DataRequest(ctx, fromID, linkType, meta)
+		t.framework.DataRequest(ctx, fromID, "/proto.Regression/GetParameter", new(pb.Input))
 	}
 	if linkType == "Children" {
 		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
@@ -212,7 +211,7 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 			// If a new node restart and find out both parent and child meta ready, it will
 			// simultaneously request both data. We need to wait until gradient data is there.
 			t.gradientReady.Await()
-			t.framework.DataRequest(ctx, fromID, linkType, meta)
+			t.framework.DataRequest(ctx, fromID, "/proto.Regression/GetGradient", new(pb.Input))
 		}()
 	}
 }
@@ -220,40 +219,40 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
-	t.param = &dummyData{}
-	t.gradient = &dummyData{}
+
+	t.param = new(pb.Parameter)
+	t.gradient = new(pb.Gradient)
 	t.gradientReady = common.NewCountdownLatch(1)
 	t.parameterReady = common.NewCountdownLatch(1)
 
 	t.epoch = epoch
 	// Make sure we have a clean slate.
-	t.fromChildren = make(map[uint64]*dummyData)
+	t.fromChildren = make(map[uint64]*pb.Gradient)
 }
 
-// These are payload rpc for application purpose.
-func (t *dummySlave) ServeAsParent(fromID uint64, req string) ([]byte, error) {
+func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
+	err := t.framework.CheckEpoch(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// There is a race:
 	//   A -> B -> C (parent -> child)
 	//   B has flagged "parameter Ready"
 	//   Now B crashed, and C crashed. C restarted and found B has flagged "parameter Ready".
 	//   C requested B. B needs to await until it actually has the data.
 	t.parameterReady.Await()
-	return json.Marshal(t.param)
+	return t.param, nil
 }
 
-func (t *dummySlave) ServeAsChild(fromID uint64, req string) ([]byte, error) {
-	return json.Marshal(t.gradient)
-}
-
-func (t *dummySlave) Serve(fromID uint64, linkType, req string) ([]byte, error) {
-	if linkType == "Parents" {
-		return t.ServeAsParent(fromID, req)
-	} else {
-		return t.ServeAsChild(fromID, req)
+func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
+	err := t.framework.CheckEpoch(ctx)
+	if err != nil {
+		return nil, err
 	}
+	return t.gradient, nil
 }
 
-func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req string, resp []byte) {
+func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, input proto.Message, output proto.Message) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
@@ -261,9 +260,12 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req s
 	if t.gradientReady.Count() == 0 {
 		return
 	}
-	t.param = new(dummyData)
+	d, ok := output.(*pb.Parameter)
+	if !ok {
+		panic("")
+	}
+	t.param = d
 	t.parameterReady.CountDown()
-	json.Unmarshal(resp, t.param)
 	// We need to carry out local compuation.
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
 	t.gradientReady.CountDown()
@@ -280,11 +282,10 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, req s
 	}
 }
 
-func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req string, resp []byte) {
-	d := new(dummyData)
-	json.Unmarshal(resp, d)
-	if _, ok := t.fromChildren[childID]; ok {
-		return
+func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, input proto.Message, output proto.Message) {
+	d, ok := output.(*pb.Gradient)
+	if !ok {
+		panic("")
 	}
 	t.fromChildren[childID] = d
 
@@ -320,11 +321,11 @@ func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, req str
 	}
 }
 
-func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, linkType, req string, resp []byte) {
+func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
 	if linkType == "Parents" {
-		t.ParentDataReady(ctx, fromID, req, resp)
+		t.ParentDataReady(ctx, fromID, input, output)
 	} else {
-		t.ChildDataReady(ctx, fromID, req, resp)
+		t.ChildDataReady(ctx, fromID, input, output)
 	}
 }
 

@@ -3,6 +3,7 @@ package taskgraph
 import (
 	"log"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
@@ -49,7 +50,8 @@ type Framework interface {
 	IncEpoch(ctx context.Context)
 
 	// Request data from task toID with specified linkType and meta.
-	DataRequest(ctx context.Context, toID uint64, linkType, meta string)
+	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
+	CheckEpoch(ctx context.Context) error
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

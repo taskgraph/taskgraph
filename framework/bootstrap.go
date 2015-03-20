@@ -64,11 +64,10 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	go f.startHTTP()
-
 	f.heartbeat()
 	f.setupChannels()
 	f.task.Init(f.taskID, f)
+	go f.startHTTP()
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
