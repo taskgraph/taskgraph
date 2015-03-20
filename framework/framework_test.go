@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"log"
 	"net"
 	"reflect"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/topo"
 
+	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -61,7 +63,6 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 // Here we have implemented a helper user task to capture those data, test if
 // it's passed from framework correctly and unmodified.
 func TestFrameworkFlagMetaReady(t *testing.T) {
-	t.Skip("TODO: create server")
 	appName := "framework_test_flagmetaready"
 	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
@@ -296,9 +297,35 @@ func (t *testableTask) MetaReady(ctx context.Context, fromID uint64, linkType, m
 }
 
 func (t *testableTask) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
+	panic("")
 }
-func (t *testableTask) CreateOutputMessage(methodName string) proto.Message { panic("") }
-func (t *testableTask) CreateServer() *grpc.Server                          { panic("") }
+
+// These are payload rpc for application purpose.
+func (t *testableTask) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
+	panic("")
+}
+
+func (t *testableTask) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
+	panic("")
+}
+
+func (t *testableTask) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.Regression/GetParameter":
+		return new(pb.Parameter)
+	case "/proto.Regression/GetGradient":
+		return new(pb.Gradient)
+	default:
+		log.Fatalf("Unknown method: %s", methodName)
+		return nil
+	}
+}
+
+func (t *testableTask) CreateServer() *grpc.Server {
+	server := grpc.NewServer()
+	pb.RegisterRegressionServer(server, t)
+	return server
+}
 
 func createListener(t *testing.T) net.Listener {
 	l, err := net.Listen("tcp4", "127.0.0.1:0")
