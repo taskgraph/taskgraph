@@ -1,6 +1,9 @@
 package framework
 
-import "github.com/golang/protobuf/proto"
+import (
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+)
 
 type metaChange struct {
 	from  uint64
@@ -10,6 +13,7 @@ type metaChange struct {
 }
 
 type dataRequest struct {
+	ctx      context.Context
 	taskID   uint64
 	epoch    uint64
 	linkType string
@@ -27,5 +31,14 @@ type dataResponse struct {
 }
 
 type epochCheck struct {
-	epoch uint64
+	epoch   uint64
+	resChan chan bool
+}
+
+func (c *epochCheck) fail() {
+	c.resChan <- false
+}
+
+func (c *epochCheck) pass() {
+	c.resChan <- true
 }

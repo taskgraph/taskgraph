@@ -85,8 +85,19 @@ func (f *framework) CheckEpoch(ctx context.Context) error {
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
 	}
-
+	resChan := make(chan bool, 1)
+	f.epochCheckChan <- &epochCheck{
+		epoch:   epoch,
+		resChan: resChan,
+	}
+	ok = <-resChan
+	if ok {
+		return nil
+	} else {
+		return fmt.Errorf("server epoch mismatch")
+	}
 }
+
 func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")

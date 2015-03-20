@@ -106,6 +106,7 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
+		ctx:      ctx,
 		taskID:   toID,
 		epoch:    epoch,
 		linkType: linkType,
