@@ -1,6 +1,9 @@
 package taskgraph
 
-import "golang.org/x/net/context"
+import (
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+)
 
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
@@ -24,10 +27,10 @@ type Task interface {
 	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
 
 	// This is the callback when data from server is ready.
-	DataReady(ctx context.Context, parentID uint64, linkType, req string, resp []byte)
+	DataReady(ctx context.Context, parentID uint64, method, string, resp proto.Message)
 
-	// These are payload for application purpose.
-	Serve(fromID uint64, linkType, req string) ([]byte, error)
+	// These are payload for application purpose. (TODO, might need to remove this.)
+	Serve(fromID uint64, method string, req proto.Message) (proto.Message, error)
 }
 
 type UpdateLog interface {
