@@ -50,7 +50,7 @@ type Framework interface {
 	IncEpoch(ctx context.Context)
 
 	// Request data from task toID with specified linkType and meta.
-	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
+	DataRequest(ctx context.Context, toID uint64, linkType, method string, input proto.Message)
 	CheckEpoch(ctx context.Context) error
 }
 

@@ -95,7 +95,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
+func (f *framework) DataRequest(ctx context.Context, toID uint64, linkType, method string, input proto.Message) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
@@ -110,7 +110,8 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 		taskID:   toID,
 		epoch:    epoch,
 		linkType: linkType,
-		req:      req,
+		input:    input,
+		method:   method,
 	}
 }
 
