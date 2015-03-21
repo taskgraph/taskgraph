@@ -13,21 +13,20 @@ type metaChange struct {
 }
 
 type dataRequest struct {
-	ctx      context.Context
-	taskID   uint64
-	epoch    uint64
-	linkType string
-	input    proto.Message
-	method   string
-	retry    bool
+	ctx    context.Context
+	taskID uint64
+	epoch  uint64
+	input  proto.Message
+	method string
+	retry  bool
 }
 
 type dataResponse struct {
-	taskID   uint64
-	epoch    uint64
-	linkType string
-	input    proto.Message
-	output   proto.Message
+	taskID uint64
+	epoch  uint64
+	method string
+	input  proto.Message
+	output proto.Message
 }
 
 type epochCheck struct {
