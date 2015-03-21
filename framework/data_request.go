@@ -10,6 +10,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	ErrEpochMismatch = fmt.Errorf("server epoch mismatch")
+)
+
 func (f *framework) CheckEpoch(epoch uint64) error {
 	resChan := make(chan bool, 1)
 	f.epochCheckChan <- &epochCheck{
@@ -20,7 +24,7 @@ func (f *framework) CheckEpoch(epoch uint64) error {
 	if ok {
 		return nil
 	} else {
-		return fmt.Errorf("server epoch mismatch")
+		return ErrEpochMismatch
 	}
 }
 
