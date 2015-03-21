@@ -100,5 +100,5 @@ func (f *framework) stopHTTP() {
 }
 
 func (f *framework) handleDataResp(ctx context.Context, resp *dataResponse) {
-	f.task.DataReady(ctx, resp.taskID, resp.method, resp.input, resp.output)
+	f.task.DataReady(ctx, resp.taskID, resp.method, resp.output)
 }

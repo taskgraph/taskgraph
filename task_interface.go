@@ -28,7 +28,7 @@ type Task interface {
 	MetaReady(ctx context.Context, fromID uint64, linkType, meta string)
 
 	// This is the callback when data from server is ready.
-	DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message)
+	DataReady(ctx context.Context, fromID uint64, method string, output proto.Message)
 
 	CreateOutputMessage(methodName string) proto.Message
 	CreateServer() *grpc.Server

@@ -106,7 +106,7 @@ func (t *dummyMaster) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gra
 	panic("")
 }
 
-func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, input proto.Message, output proto.Message) {
+func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, output proto.Message) {
 	d, ok := output.(*pb.Gradient)
 	if !ok {
 		panic("")
@@ -141,9 +141,9 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, input 
 	}
 }
 
-func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
-	if linkType == "Children" {
-		t.ChildDataReady(ctx, fromID, input, output)
+func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	if method == "/proto.Regression/GetGradient" {
+		t.ChildDataReady(ctx, fromID, output)
 		return
 	}
 	panic("")
@@ -267,7 +267,7 @@ func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Grad
 	return t.gradient, nil
 }
 
-func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, input proto.Message, output proto.Message) {
+func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, output proto.Message) {
 	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
@@ -297,7 +297,7 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, input
 	}
 }
 
-func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, input proto.Message, output proto.Message) {
+func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, output proto.Message) {
 	d, ok := output.(*pb.Gradient)
 	if !ok {
 		panic("")
@@ -336,11 +336,11 @@ func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, input p
 	}
 }
 
-func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
-	if linkType == "Parents" {
-		t.ParentDataReady(ctx, fromID, input, output)
+func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	if method == "/proto.Regression/GetParameter" {
+		t.ParentDataReady(ctx, fromID, output)
 	} else {
-		t.ChildDataReady(ctx, fromID, input, output)
+		t.ChildDataReady(ctx, fromID, output)
 	}
 }
 

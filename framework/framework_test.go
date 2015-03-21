@@ -296,7 +296,7 @@ func (t *testableTask) MetaReady(ctx context.Context, fromID uint64, linkType, m
 	}
 }
 
-func (t *testableTask) DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message) {
+func (t *testableTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	panic("")
 }
 
