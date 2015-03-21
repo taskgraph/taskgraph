@@ -59,11 +59,11 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		return
 	}
 	f.dataRespChan <- &dataResponse{
-		epoch:    dr.epoch,
-		taskID:   dr.taskID,
-		linkType: dr.linkType,
-		input:    dr.input,
-		output:   reply,
+		epoch:  dr.epoch,
+		taskID: dr.taskID,
+		method: dr.method,
+		input:  dr.input,
+		output: reply,
 	}
 }
 
@@ -100,5 +100,5 @@ func (f *framework) stopHTTP() {
 }
 
 func (f *framework) handleDataResp(ctx context.Context, resp *dataResponse) {
-	f.task.DataReady(ctx, resp.taskID, resp.linkType, resp.input, resp.output)
+	f.task.DataReady(ctx, resp.taskID, resp.method, resp.input, resp.output)
 }
