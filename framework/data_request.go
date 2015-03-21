@@ -1,19 +1,34 @@
 package framework
 
 import (
-	"net/http"
+	"fmt"
+	"strings"
 	"time"
 
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
+
+func (f *framework) CheckEpoch(epoch uint64) error {
+	resChan := make(chan bool, 1)
+	f.epochCheckChan <- &epochCheck{
+		epoch:   epoch,
+		resChan: resChan,
+	}
+	ok := <-resChan
+	if ok {
+		return nil
+	} else {
+		return fmt.Errorf("server epoch mismatch")
+	}
+}
 
 func (f *framework) sendRequest(dr *dataRequest) {
 	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
 	if err != nil {
 		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("getAddress(%d) failed: %v", dr.taskID, err)
+		f.log.Panicf("getAddress(%d) failed: %v", dr.taskID, err)
 		return
 	}
 
@@ -23,54 +38,41 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		f.log.Printf("request data from task %d, addr %s", dr.taskID, addr)
 	}
 
-	d, err := frameworkhttp.RequestData(addr, dr.linkType, dr.req, f.taskID, dr.taskID, dr.epoch, f.log)
+	cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
-		f.log.Printf("RequestData from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
-		if err == frameworkhttp.ErrReqEpochMismatch {
-			// It's out of date. Should wait for new epoch to set up.
-			return
-		}
+		f.log.Printf("grpc.Dial from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
 		// Should retry for other errors.
-		go func() {
-			// we try again after the previous task key expires and hopefully another task
-			// gets up and running.
-			time.Sleep(2 * heartbeatInterval)
-			dr.retry = true
-			f.dataReqtoSendChan <- dr
-		}()
+		go f.retrySendRequest(dr)
 		return
 	}
-	f.dataRespChan <- d
+	defer cc.Close()
+	reply := f.task.CreateOutputMessage(dr.method)
+	err = grpc.Invoke(dr.ctx, dr.method, dr.input, reply, cc)
+	if err != nil {
+		if strings.Contains(err.Error(), "server epoch mismatch") {
+			// It's out of date. Should abort this data request.
+			return
+		}
+		f.log.Printf("grpc.Invoke from task %d (addr: %s), method: %s, failed: %v", dr.taskID, addr, dr.method, err)
+		go f.retrySendRequest(dr)
+		return
+	}
+	f.dataRespChan <- &dataResponse{
+		epoch:    dr.epoch,
+		taskID:   dr.taskID,
+		linkType: dr.linkType,
+		input:    dr.input,
+		output:   reply,
+	}
 }
 
-// This is used by the server side to handle data requests coming from remote.
-func (f *framework) GetTaskData(taskID, epoch uint64, linkType, req string) ([]byte, error) {
-	dataChan := make(chan []byte, 1)
-	f.dataReqChan <- &dataRequest{
-		taskID:   taskID,
-		epoch:    epoch,
-		linkType: linkType,
-		req:      req,
-		dataChan: dataChan,
-	}
-
-	select {
-	case d, ok := <-dataChan:
-		if !ok {
-			// it assumes that only epoch mismatch will close the channel
-			return nil, frameworkhttp.ErrReqEpochMismatch
-		}
-		return d, nil
-	case <-f.httpStop:
-		// If a node stopped running and there is remaining requests, we need to
-		// respond error message back. It is used to let client routines stop blocking --
-		// especially helpful in test cases.
-
-		// This is used to drain the channel queue and get the rest notified.
-		<-f.dataReqChan
-		return nil, frameworkhttp.ErrServerClosed
-	}
+func (f *framework) retrySendRequest(dr *dataRequest) {
+	// we try again after the previous task key expires and hopefully another task
+	// gets up and running.
+	time.Sleep(2 * heartbeatInterval)
+	dr.retry = true
+	f.dataReqtoSendChan <- dr
 }
 
 // Framework http server for data request.
@@ -78,16 +80,14 @@ func (f *framework) GetTaskData(taskID, epoch uint64, linkType, req string) ([]b
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
-	f.log.Printf("serving http on %s\n", f.ln.Addr())
-	// TODO: http server graceful shutdown
-	handler := frameworkhttp.NewDataRequestHandler(f.log, f)
-	err := http.Serve(f.ln, handler)
+	f.log.Printf("serving grpc on %s\n", f.ln.Addr())
+	err := f.task.CreateServer().Serve(f.ln)
 	select {
 	case <-f.httpStop:
-		f.log.Printf("http stops serving")
+		f.log.Printf("grpc stops serving")
 	default:
 		if err != nil {
-			f.log.Fatalf("http.Serve() returns error: %v\n", err)
+			f.log.Fatalf("grpc.Serve returns error: %v\n", err)
 		}
 	}
 }
@@ -99,44 +99,6 @@ func (f *framework) stopHTTP() {
 	f.ln.Close()
 }
 
-func (f *framework) sendResponse(dr *dataResponse) {
-	dr.dataChan <- dr.data
-}
-
-func (f *framework) handleDataReq(dr *dataRequest) {
-	dataReceiver := make(chan []byte, 1)
-
-	b, err := f.task.Serve(dr.taskID, dr.linkType, dr.req)
-	if err != nil {
-		// TODO: We should handle network faults later by retrying
-		f.log.Fatalf("ServeAsParent Error with id = %d, %v\n", dr.taskID, err)
-	}
-	dataReceiver <- b
-
-	go func() {
-		select {
-		case data, ok := <-dataReceiver:
-			if !ok || data == nil {
-				return
-			}
-			// Getting the data from task could take a long time. We need to let
-			// the response-to-send go through event loop to check epoch.
-			f.dataRespToSendChan <- &dataResponse{
-				taskID:   dr.taskID,
-				epoch:    dr.epoch,
-				req:      dr.req,
-				data:     data,
-				dataChan: dr.dataChan,
-			}
-		case <-f.epochPassed:
-			// We can't leave a go-routine to wait for the data channel forever.
-			// Users might forget to close the channel if they didn't want to do anything.
-			// We can clean it up in releaseEpochResource() as the epoch moves on.
-			// Because we won't be interested even though the data would come later.
-		}
-	}()
-}
-
-func (f *framework) handleDataResp(ctx context.Context, resp *frameworkhttp.DataResponse) {
-	f.task.DataReady(ctx, resp.TaskID, resp.Method, resp.Req, resp.Data)
+func (f *framework) handleDataResp(ctx context.Context, resp *dataResponse) {
+	f.task.DataReady(ctx, resp.taskID, resp.linkType, resp.input, resp.output)
 }

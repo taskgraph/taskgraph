@@ -7,8 +7,8 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -46,12 +46,11 @@ type framework struct {
 	epochPassed chan struct{}
 
 	// event loop
-	epochChan          chan uint64
-	metaChan           chan *metaChange
-	dataReqtoSendChan  chan *dataRequest
-	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataResponse
-	dataRespChan       chan *frameworkhttp.DataResponse
+	epochChan         chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataRespChan      chan *dataResponse
+	epochCheckChan    chan *epochCheck
 }
 
 // The key type is unexported to prevent collisions with context keys defined in
@@ -96,7 +95,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctx context.Context, toID uint64, linkType, req string) {
+func (f *framework) DataRequest(ctx context.Context, toID uint64, linkType, method string, input proto.Message) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
@@ -107,10 +106,12 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, linkType, req 
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
+		ctx:      ctx,
 		taskID:   toID,
 		epoch:    epoch,
 		linkType: linkType,
-		req:      req,
+		input:    input,
+		method:   method,
 	}
 }
 

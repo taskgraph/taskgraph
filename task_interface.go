@@ -1,6 +1,10 @@
 package taskgraph
 
-import "golang.org/x/net/context"
+import (
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+)
 
 // Task is a logic repersentation of a computing unit.
 // Each task contain at least one Node.
@@ -21,13 +25,13 @@ type Task interface {
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.
 	// TODO: one can also get this from channel.
-	MetaReady(ctx context.Context, childID uint64, linkType, meta string)
+	MetaReady(ctx context.Context, fromID uint64, linkType, meta string)
 
 	// This is the callback when data from server is ready.
-	DataReady(ctx context.Context, parentID uint64, linkType, req string, resp []byte)
+	DataReady(ctx context.Context, fromID uint64, linkType string, input proto.Message, output proto.Message)
 
-	// These are payload for application purpose.
-	Serve(fromID uint64, linkType, req string) ([]byte, error)
+	CreateOutputMessage(methodName string) proto.Message
+	CreateServer() *grpc.Server
 }
 
 type UpdateLog interface {
