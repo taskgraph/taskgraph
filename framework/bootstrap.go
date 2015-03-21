@@ -66,7 +66,6 @@ func (f *framework) Start() {
 	f.heartbeat()
 	f.setupChannels()
 	f.task.Init(f.taskID, f)
-	go f.startHTTP()
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
@@ -84,6 +83,8 @@ func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
+	// We need put off starting server here after task#SetEpoch is called.
+	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
