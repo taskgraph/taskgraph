@@ -136,7 +136,7 @@ func (f *framework) setEpochStarted() {
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
-	f.task.SetEpoch(f.createContext(), f.epoch)
+	f.task.EnterEpoch(f.createContext(), f.epoch)
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
@@ -152,6 +152,7 @@ func (f *framework) releaseEpochResource() {
 		c <- true
 	}
 	f.metaStops = nil
+	f.task.ExitEpoch(f.createContext(), f.epoch)
 }
 
 // release resources: heartbeat, epoch watch.

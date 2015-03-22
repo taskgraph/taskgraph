@@ -55,7 +55,7 @@ func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, met
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
+func (t *dummySlave) EnterEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 
 	t.param = new(pb.Parameter)
@@ -67,6 +67,8 @@ func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
 	// Make sure we have a clean slate.
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 }
+
+func (t *dummySlave) ExitEpoch(ctx context.Context, epoch uint64) {}
 
 func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
 	err := t.framework.CheckEpoch(input.Epoch)

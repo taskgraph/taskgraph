@@ -20,7 +20,9 @@ type Task interface {
 
 	// Framework tells user task what current epoch is.
 	// This give the task an opportunity to cleanup and regroup.
-	SetEpoch(ctx context.Context, epoch uint64)
+	EnterEpoch(ctx context.Context, epoch uint64)
+
+	ExitEpoch(ctx context.Context, epoch uint64)
 
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.

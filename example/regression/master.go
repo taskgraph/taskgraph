@@ -56,7 +56,7 @@ func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, me
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
+func (t *dummyMaster) EnterEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
@@ -72,6 +72,8 @@ func (t *dummyMaster) SetEpoch(ctx context.Context, epoch uint64) {
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 	t.framework.FlagMeta(ctx, "Parents", "ParamReady")
 }
+
+func (t *dummyMaster) ExitEpoch(ctx context.Context, epoch uint64) {}
 
 // These are payload rpc for application purpose.
 func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
