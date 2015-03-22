@@ -1,7 +1,8 @@
 TaskGraph
 =========
 
-[![Build Status](https://travis-ci.org/taskgraph/taskgraph.svg)](https://travis-ci.org/taskgraph/taskgraph)
+[![Build Status](https://drone.io/github.com/taskgraph/taskgraph/status.png)](https://drone.io/github.com/taskgraph/taskgraph/latest)
+
 
 TaskGraph is a framework for writing fault tolerent distributed applications. It
 assumes that application consists of a network of tasks, which are inter-connected
