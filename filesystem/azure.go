@@ -115,11 +115,7 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 		logger : log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags),
 		client : c.blobClient,
 	}, nil
-
-	return nil, nil
 }
-
-
 
 func (f *AzureFile) Write(b []byte) (int, error) {
 	cnt, blob, err := convertToAzurePath(f.path)
@@ -192,6 +188,14 @@ func randString(n int) string {
 	return string(bytes)
 }
 
+//NewAzureClient function
+// NewClient constructs a StorageClient and blobStorageClinet. 
+// This should be used if the caller wants to specify 
+// whether to use HTTPS, a specific REST API version or a
+// custom storage endpoint than Azure Public Cloud.
+// Recommended API version "2014-02-14"
+// synax : 
+// "spluto", "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw==", "core.chinacloudapi.cn", "2014-02-14", true
 func NewAzureClient(accountName, accountKey, blobServiceBaseUrl, apiVersion string, useHttps bool) (*AzureClient, error) {
 	cli, err := storage.NewClient(accountName, accountKey, blobServiceBaseUrl, apiVersion, useHttps)
 	if err != nil {
