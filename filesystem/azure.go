@@ -175,19 +175,6 @@ func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 	return matches, nil
 }
 
-func randString(n int) string {
-	if n <= 0 {
-		panic("negative number")
-	}
-	const alphanum = "0123456789abcdefghijklmnopqrstuvwxyz"
-	var bytes = make([]byte, n)
-	rand.Read(bytes)
-	for i, b := range bytes {
-		bytes[i] = alphanum[b%byte(len(alphanum))]
-	}
-	return string(bytes)
-}
-
 //NewAzureClient function
 // NewClient constructs a StorageClient and blobStorageClinet. 
 // This should be used if the caller wants to specify 
