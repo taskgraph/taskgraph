@@ -69,7 +69,6 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
 	c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
 	if dstBlobUrl != srcBlobUrl {
-		fmt.Println(srcContainerName, srcBlobName, dstContainerName, dstBlobName, srcBlobUrl)
 		err = c.blobClient.DeleteBlob(srcContainerName, srcBlobName)
 		if err != nil {
 			return err
@@ -97,14 +96,10 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("!!!")
-
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
 		return nil, err
 	}
-
 	if !exist {
 		_, err := c.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 		if err != nil {
@@ -115,9 +110,6 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 			return nil, err
 		}
 	}
-
-	
-
 	return &AzureFile{
 		path  : name,
 		logger : log.New(os.Stdout, "", log.Lshortfile|log.LstdFlags),
@@ -135,32 +127,20 @@ func (f *AzureFile) Write(b []byte) (int, error) {
 		return 0, nil
 	}
 	blockList, err := f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
-	fmt.Println(len(blockList.CommittedBlocks))
-	fmt.Println(len(blockList.UncommittedBlocks))
-
 	blocksLen := len(blockList.CommittedBlocks) + len(blockList.UncommittedBlocks)
-
 	blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen - 1)))
-
 	err = f.client.PutBlock(cnt, blob, blockId, b)
-	
 	blockList, err = f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
-
-
 	amendList := []storage.Block{}
 	for _, v := range blockList.CommittedBlocks {
-		fmt.Println(v.Name)
 		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusCommitted})	
 	}
-	
 	for _, v := range blockList.UncommittedBlocks {
-		fmt.Println(v.Name)
 		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusUncommitted})
 	}
-	
 	err = f.client.PutBlockList(cnt, blob, amendList)
 	if (err != nil) {
-		fmt.Println(err)	
+		return 0, nil
 	}
 	return 0, nil
 }
@@ -178,28 +158,23 @@ func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 	if len(afterSplit) != 2 {	
 		return nil, fmt.Errorf("Glob pattern should follow the Syntax")
 	}
-	fmt.Println(cntPattern, " ", blobPattern)
 	resp, err := c.blobClient.ListContainers(storage.ListContainersParameters{Prefix: ""})
 	if err != nil {
-		fmt.Println(err)	
+		return nil, err
 	}
-
 	for _, cnt := range resp.Containers {
 		if match, err := regexp.MatchString(cntPattern, cnt.Name); match && err == nil {
-			fmt.Println("in Containers ", cnt.Name)
 			resp, err := c.blobClient.ListBlobs(cnt.Name, storage.ListBlobsParameters{
 				Marker:     ""})
 			if err != nil {
-				fmt.Println(err)	
+				return nil, err
 			}
-
 			for _, v := range resp.Blobs {
 				if match, err := regexp.MatchString(blobPattern, v.Name); match && err == nil {
 					matches = append(matches, cnt.Name + "/" + v.Name)
 				}
 			}
 		}
-		
 	}
 	return matches, nil
 }
