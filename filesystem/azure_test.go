@@ -2,29 +2,31 @@ package filesystem
 
 import (
 	"bytes"
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"crypto/rand"
 	"io/ioutil"
-	"os"
+	// "os"
 	"strings"
 	"testing"
+
+	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 )
 
 var (
-	cnt, blob, accountName, accountKey, blobServiceBaseUrl, apiVersion string
-	useHttps                                                           bool
+	cnt, blob, TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion string
+	useHttps                                                                                      bool
 )
 
 // Example :
-// accountName : yourAccountName
-// accountKey : yourKey
-// blobServiceBaseUrl : "core.chinacloudapi.cn"
+// TestAzureAccountName : yourAccountName
+// TestAzureAccountKey : yourKey
+// TestAzureBlobServiceBaseUrl : "core.chinacloudapi.cn"
 // apiVersion : "2014-02-14"
 // useHttps : true
 
 func init() {
-	accountName = os.Getenv("accountName")
-	accountKey = os.Getenv("accountKey")
-	blobServiceBaseUrl = os.Getenv("blobServiceBaseUrl")
+	TestAzureAccountName = os.Getenv("TestAzureAccountName")
+	TestAzureAccountKey = os.Getenv("TestAzureAccountKey")
+	TestAzureBlobServiceBaseUrl = os.Getenv("TestAzureBlobServiceBaseUrl")
 	apiVersion = "2014-02-14"
 	useHttps = true
 	blob = "textForExamination"
@@ -95,7 +97,7 @@ func TestAzureClientGlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteBlob(cnt, blob)
-	globPath := cnt + "/.*.txt"
+	globPath := cnt + "/*.txt"
 	names, err := cli.Glob(globPath)
 	if err != nil {
 		t.Fatalf("Glob(%s) failed: %v", globPath, err)
@@ -165,13 +167,13 @@ func TestAzureClientExist(t *testing.T) {
 }
 
 func setupAzureTest(t *testing.T) *AzureClient {
-	if accountName == "" || accountKey == "" || blobServiceBaseUrl == "" {
+	if TestAzureAccountName == "" || TestAzureAccountKey == "" || TestAzureBlobServiceBaseUrl == "" {
 		t.Skip("Azure config not specified.")
 	}
-	client, err := NewAzureClient(accountName, accountKey, blobServiceBaseUrl, apiVersion, useHttps)
+	client, err := NewAzureClient(TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion, useHttps)
 	if err != nil {
 		t.Fatalf("NewAzureClient(%s, %s, %s) failed: %v",
-			accountName, accountKey, blobServiceBaseUrl, err)
+			TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, err)
 	}
 	return client
 }

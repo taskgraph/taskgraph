@@ -1,15 +1,15 @@
 package filesystem
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 	"io"
 	"log"
 	"os"
-	"regexp"
+	"path"
 	"strings"
+
+	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 )
 
 type AzureClient struct {
@@ -24,12 +24,17 @@ type AzureFile struct {
 }
 
 // convertToAzurePath function
-// like this pattern "ContainerName/BlobName"
-// Due to Azure restriction, the length of ContainerName must be 32
+// convertToAzurePath splits the given name into two parts
+// The first part represents the container's name, and the length of it shoulb be 32 due to Azure restriction
+// The second part represents the blob's name
+// It will return any error while converting
 func convertToAzurePath(name string) (string, string, error) {
 	afterSplit := strings.Split(name, "/")
-	if len(afterSplit) != 2 || len(afterSplit[0]) != 32 {
-		return "", "", fmt.Errorf("AzureClient : Need Correct Path Name")
+	if len(afterSplit) != 2 {
+		return "", "", fmt.Errorf("azureClient : need correct Azure storage path, example : container/blob")
+	}
+	if len(afterSplit[0]) != 32 {
+		return "", "", fmt.Errorf("azureClient : the length of container should be 32")
 	}
 	return afterSplit[0], afterSplit[1], nil
 }
@@ -56,7 +61,7 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 		return err
 	}
 	if !exist {
-		return fmt.Errorf("AzureClient : oldpath doesnot exist")
+		return fmt.Errorf("azureClient : oldpath does not exist")
 	}
 	srcContainerName, srcBlobName, err := convertToAzurePath(oldpath)
 	if err != nil {
@@ -68,7 +73,10 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 	}
 	dstBlobUrl := c.blobClient.GetBlobUrl(dstContainerName, dstBlobName)
 	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
-	c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
+	err = c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
+	if err != nil {
+		return err
+	}
 	if dstBlobUrl != srcBlobUrl {
 		err = c.blobClient.DeleteBlob(srcContainerName, srcBlobName)
 		if err != nil {
@@ -102,7 +110,7 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 		return nil, err
 	}
 	if !exist {
-		_, err := c.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+		_, err = c.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 		if err != nil {
 			return nil, err
 		}
@@ -124,10 +132,19 @@ func (f *AzureFile) Write(b []byte) (int, error) {
 		return 0, nil
 	}
 	blockList, err := f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
+	if err != nil {
+		return 0, nil
+	}
 	blocksLen := len(blockList.CommittedBlocks) + len(blockList.UncommittedBlocks)
 	blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen-1)))
 	err = f.client.PutBlock(cnt, blob, blockId, b)
+	if err != nil {
+		return 0, err
+	}
 	blockList, err = f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
+	if err != nil {
+		return 0, err
+	}
 	amendList := []storage.Block{}
 	for _, v := range blockList.CommittedBlocks {
 		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusCommitted})
@@ -137,7 +154,7 @@ func (f *AzureFile) Write(b []byte) (int, error) {
 	}
 	err = f.client.PutBlockList(cnt, blob, amendList)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return 0, nil
 }
@@ -147,8 +164,9 @@ func (f *AzureFile) Close() error {
 }
 
 // AzureClient -> Glob function
-// Syntax : Adf{1,3}?ee*/ytsd.*
-// Follow regexp syntax except "/"
+// only supports '*', '?'
+// Syntax:
+// cntName?/part.*
 func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 	afterSplit := strings.Split(pattern, "/")
 	cntPattern, blobPattern := afterSplit[0], afterSplit[1]
@@ -160,14 +178,21 @@ func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 		return nil, err
 	}
 	for _, cnt := range resp.Containers {
-		if match, err := regexp.MatchString(cntPattern, cnt.Name); match && err == nil {
-			resp, err := c.blobClient.ListBlobs(cnt.Name, storage.ListBlobsParameters{
-				Marker: ""})
+		matched, err := path.Match(cntPattern, cnt.Name)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			resp, err := c.blobClient.ListBlobs(cnt.Name, storage.ListBlobsParameters{Marker: ""})
 			if err != nil {
 				return nil, err
 			}
 			for _, v := range resp.Blobs {
-				if match, err := regexp.MatchString(blobPattern, v.Name); match && err == nil {
+				matched, err := path.Match(blobPattern, v.Name)
+				if err != nil {
+					return nil, err
+				}
+				if matched {
 					matches = append(matches, cnt.Name+"/"+v.Name)
 				}
 			}
@@ -176,14 +201,14 @@ func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 	return matches, nil
 }
 
-//NewAzureClient function
+// NewAzureClient function
 // NewClient constructs a StorageClient and blobStorageClinet.
 // This should be used if the caller wants to specify
 // whether to use HTTPS, a specific REST API version or a
 // custom storage endpoint than Azure Public Cloud.
 // Recommended API version "2014-02-14"
 // synax :
-// "spluto", "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw==", "core.chinacloudapi.cn", "2014-02-14", true
+// AzurestorageAccountName, AzurestorageAccountKey, "core.chinacloudapi.cn", "2014-02-14", true
 func NewAzureClient(accountName, accountKey, blobServiceBaseUrl, apiVersion string, useHttps bool) (*AzureClient, error) {
 	cli, err := storage.NewClient(accountName, accountKey, blobServiceBaseUrl, apiVersion, useHttps)
 	if err != nil {
