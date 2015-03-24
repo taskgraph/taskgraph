@@ -2,29 +2,29 @@ package filesystem
 
 import (
 	"bytes"
+	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 	"io/ioutil"
 	"os"
 	"strings"
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
 	"testing"
 )
 
 var (
 	cnt, blob, accountName, accountKey, blobServiceBaseUrl, apiVersion string
-	useHttps bool
+	useHttps                                                           bool
 )
 
 // Example :
-// accountName : "spluto"
-// accountKey : "b7yy+C33a//uLE62Og9CkKDHRLNErMrbX40nKUxiTimgOvkP3MhEbjObmRxumda9grCwY8zqL6nLNcKCAS40Iw=="
+// accountName : yourAccountName
+// accountKey : yourKey
 // blobServiceBaseUrl : "core.chinacloudapi.cn"
 // apiVersion : "2014-02-14"
 // useHttps : true
 
 func init() {
 	accountName = os.Getenv("accountName")
-	accountKey = os.Getenv("accountKey") 
-	blobServiceBaseUrl = os.Getenv("blobServiceBaseUrl") 
+	accountKey = os.Getenv("accountKey")
+	blobServiceBaseUrl = os.Getenv("blobServiceBaseUrl")
 	apiVersion = "2014-02-14"
 	useHttps = true
 	blob = "textForExamination"
@@ -66,7 +66,6 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
 	}
 
-	
 }
 
 func TestAzureClientGlob(t *testing.T) {
@@ -107,7 +106,7 @@ func TestAzureClientGlob(t *testing.T) {
 		nameMap[name] += 1
 	}
 	if len(names) != 2 ||
-		nameMap[cnt + "/1.txt"] != 1 || nameMap[cnt + "/2.txt"] != 1 {
+		nameMap[cnt+"/1.txt"] != 1 || nameMap[cnt+"/2.txt"] != 1 {
 		t.Fatalf("Glob result isn't correct. Get = %v, Want = %v", nameMap, []string{"/tmp/testing/1.txt", "/tmp/testing/2.txt"})
 	}
 }
@@ -124,7 +123,7 @@ func TestAzureClientRename(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli.Rename(cnt + "/" + blob, cnt + "/" + blob + "-Rename")
+	cli.Rename(cnt+"/"+blob, cnt+"/"+blob+"-Rename")
 	exist, _ := cli.Exists(cnt + "/" + blob + "-Rename")
 	if !exist {
 		t.Fatalf("Rename failed")
@@ -133,7 +132,7 @@ func TestAzureClientRename(t *testing.T) {
 	if exist {
 		t.Fatalf("Rename failed")
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob + "-Rename")
+	defer cli.blobClient.DeleteBlob(cnt, blob+"-Rename")
 }
 
 func TestAzureClientExist(t *testing.T) {
@@ -189,4 +188,3 @@ func randString(n int) string {
 	}
 	return string(bytes)
 }
-
