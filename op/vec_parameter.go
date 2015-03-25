@@ -57,3 +57,8 @@ func (s *sliceParameter) IndexIterator() IndexIterator {
 func NewVecParameter(size int) Parameter {
 	return &sliceParameter{param: make([]float32, size, size)}
 }
+
+// This creates a new pre-allocated vec based parameter.
+func NewVecParameter(slice []float32) Parameter {
+	return &sliceParameter{param: slice}
+}
