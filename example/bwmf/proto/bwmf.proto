@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package proto;
+
+// block-wise matrix data service
+service BlockData {
+  rpc GetTShard(Request) returns (Response) {}
+  rpc GetDShard(Request) returns (Response) {}
+}
+
+// Request for block matrix data at a given epoch.
+message Request {
+  uint64 epoch = 1;
+}
+
+// Response of the block matrix data, with the associated block id.
+message Response {
+  int32 id = 1;
+  MatrixShard shard = 2;
+}
+
+// sharded matrix data
+message MatrixShard {
+  repeated Row rows = 1;
+}
+
+message Row {
+  map<uint32, float> row = 1;
+}
+
+
