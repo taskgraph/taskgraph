@@ -26,9 +26,9 @@ type KLDivLoss struct {
 //
 //    $$ D_{KL} = \Sum_{ij} ( V_{ij} log \frac{V_{ij}}{(WH)_{ij}} - V_{ij} + (WH_{ij} )
 //
-//  After removing the redundant constant factor, it becomes:
+//  After removing the redundant constant factor and adding the smooth factor, it becomes:
 //
-//    $$ L_{kl} = \Sum{ij} ( -V_{ij} log((WH)_{ij}) + (WH)_{ij} )
+//    $$ L_{kl} = \Sum{ij} ( -V_{ij} log((WH)_{ij} + smooth) + (WH)_{ij} )
 //
 //  The gradient is:
 //
@@ -67,7 +67,7 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 		value += <-accum
 	}
 
-	// now another pass for grad calculation
+	// now, another pass for grad calculation
 	var wg sync.WaitGroup
 	for i := 0; i < l.k; i++ {
 		for j := 0; j < l.n; j++ {
