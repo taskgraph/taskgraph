@@ -3,8 +3,9 @@ package filesystem
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
-	// "os"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,8 +13,8 @@ import (
 )
 
 var (
-	cnt, blob, TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion string
-	useHttps                                                                                      bool
+	containerName, blobName, TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion string
+	useHttps                                                                                                    bool
 )
 
 // Example :
@@ -29,23 +30,26 @@ func init() {
 	TestAzureBlobServiceBaseUrl = os.Getenv("TestAzureBlobServiceBaseUrl")
 	apiVersion = "2014-02-14"
 	useHttps = true
-	blob = "textForExamination"
+	blobName = "textForExamination"
 }
 
 func TestAzureClientWriteAndReadCloser(t *testing.T) {
 	cli := setupAzureTest(t)
-	cnt = randString(32)
-	_, err := cli.blobClient.CreateContainerIfNotExists(cnt, storage.ContainerAccessTypeBlob)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(cnt)
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteContainer(containerName)
 
-	writeCloser, err := cli.OpenWriteCloser(cnt + "/" + blob)
+	writeCloser, err := cli.OpenWriteCloser(containerName + "/" + blobName)
 	if err != nil {
 		t.Fatalf("OpenWriteCloser failed: %v", err)
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob)
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
 
 	data := []byte("some data")
 	_, err = writeCloser.Write(data)
@@ -54,7 +58,7 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 	}
 	writeCloser.Close()
 
-	readCloser, err := cli.OpenReadCloser(cnt + "/" + blob)
+	readCloser, err := cli.OpenReadCloser(containerName + "/" + blobName)
 	if err != nil {
 		t.Fatalf("OpenReadCloser failed: %v", err)
 	}
@@ -72,32 +76,34 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 func TestAzureClientGlob(t *testing.T) {
 	cli := setupAzureTest(t)
-	cnt = randString(32)
-
-	_, err := cli.blobClient.CreateContainerIfNotExists(cnt, storage.ContainerAccessTypeBlob)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(cnt)
-
-	err = cli.blobClient.PutBlockBlob(cnt, "1", strings.NewReader("Glob!"))
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob)
+	defer cli.blobClient.DeleteContainer(containerName)
 
-	err = cli.blobClient.PutBlockBlob(cnt, "1.txt", strings.NewReader("Glob!"))
+	err = cli.blobClient.PutBlockBlob(containerName, "1", strings.NewReader("Glob!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob)
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
 
-	err = cli.blobClient.PutBlockBlob(cnt, "2.txt", strings.NewReader("Glob!"))
+	err = cli.blobClient.PutBlockBlob(containerName, "1.txt", strings.NewReader("Glob!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob)
-	globPath := cnt + "/*.txt"
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+
+	err = cli.blobClient.PutBlockBlob(containerName, "2.txt", strings.NewReader("Glob!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	globPath := containerName + "/*.txt"
 	names, err := cli.Glob(globPath)
 	if err != nil {
 		t.Fatalf("Glob(%s) failed: %v", globPath, err)
@@ -108,61 +114,67 @@ func TestAzureClientGlob(t *testing.T) {
 		nameMap[name] += 1
 	}
 	if len(names) != 2 ||
-		nameMap[cnt+"/1.txt"] != 1 || nameMap[cnt+"/2.txt"] != 1 {
+		nameMap[containerName+"/1.txt"] != 1 || nameMap[containerName+"/2.txt"] != 1 {
 		t.Fatalf("Glob result isn't correct. Get = %v, Want = %v", nameMap, []string{"/tmp/testing/1.txt", "/tmp/testing/2.txt"})
 	}
 }
 
 func TestAzureClientRename(t *testing.T) {
 	cli := setupAzureTest(t)
-	cnt = randString(32)
-	_, err := cli.blobClient.CreateContainerIfNotExists(cnt, storage.ContainerAccessTypeBlob)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(cnt)
-	err = cli.blobClient.PutBlockBlob(cnt, blob, strings.NewReader("Rename!"))
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli.Rename(cnt+"/"+blob, cnt+"/"+blob+"-Rename")
-	exist, _ := cli.Exists(cnt + "/" + blob + "-Rename")
+	defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Rename!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli.Rename(containerName+"/"+blobName, containerName+"/"+blobName+"-Rename")
+	exist, _ := cli.Exists(containerName + "/" + blobName + "-Rename")
 	if !exist {
 		t.Fatalf("Rename failed")
 	}
-	exist, _ = cli.Exists(cnt + "/" + blob)
+	exist, _ = cli.Exists(containerName + "/" + blobName)
 	if exist {
 		t.Fatalf("Rename failed")
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob+"-Rename")
+	defer cli.blobClient.DeleteBlob(containerName, blobName+"-Rename")
 }
 
 func TestAzureClientExist(t *testing.T) {
 	cli := setupAzureTest(t)
-	cnt = randString(32)
-	_, err := cli.blobClient.CreateContainerIfNotExists(cnt, storage.ContainerAccessTypeBlob)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(cnt)
-	err = cli.blobClient.PutBlockBlob(cnt, blob, strings.NewReader("Exist!"))
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(cnt, blob)
-	ok, err := cli.Exists(cnt + "/" + blob + ".foo")
+	defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Exist!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	ok, err := cli.Exists(containerName + "/" + blobName + ".foo")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ok {
-		t.Errorf("Non-existing blob returned as existing: %s/%s", cnt, blob)
+		t.Errorf("Non-existing blob returned as existing: %s/%s", containerName, blobName)
 	}
-	ok, err = cli.Exists(cnt + "/" + blob)
+	ok, err = cli.Exists(containerName + "/" + blobName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ok {
-		t.Errorf("Existing blob returned as non-existing: %s/%s", cnt, blob)
+		t.Errorf("Existing blob returned as non-existing: %s/%s", containerName, blobName)
 	}
 }
 
@@ -178,9 +190,9 @@ func setupAzureTest(t *testing.T) *AzureClient {
 	return client
 }
 
-func randString(n int) string {
+func randString(n int) (string, error) {
 	if n <= 0 {
-		panic("negative number")
+		return "", fmt.Errorf("negative number")
 	}
 	const alphanum = "0123456789abcdefghijklmnopqrstuvwxyz"
 	var bytes = make([]byte, n)
@@ -188,5 +200,5 @@ func randString(n int) string {
 	for i, b := range bytes {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
 	}
-	return string(bytes)
+	return string(bytes), nil
 }

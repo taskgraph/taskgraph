@@ -182,19 +182,20 @@ func (c *AzureClient) Glob(pattern string) (matches []string, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if matched {
-			resp, err := c.blobClient.ListBlobs(cnt.Name, storage.ListBlobsParameters{Marker: ""})
+		if !matched {
+			continue
+		}
+		resp, err := c.blobClient.ListBlobs(cnt.Name, storage.ListBlobsParameters{Marker: ""})
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range resp.Blobs {
+			matched, err := path.Match(blobPattern, v.Name)
 			if err != nil {
 				return nil, err
 			}
-			for _, v := range resp.Blobs {
-				matched, err := path.Match(blobPattern, v.Name)
-				if err != nil {
-					return nil, err
-				}
-				if matched {
-					matches = append(matches, cnt.Name+"/"+v.Name)
-				}
+			if matched {
+				matches = append(matches, cnt.Name+"/"+v.Name)
 			}
 		}
 	}
