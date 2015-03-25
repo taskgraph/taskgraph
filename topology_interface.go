@@ -6,7 +6,7 @@ a. At beginning of the framework initialization for each task, framework
    call the SetTaskID so that the singleton Topology knows which taskID it
    represents.
 b. At beginning of each epoch, the framework implementation (on each task)
-   will call GetParents and GetChildren with given epoch, so that it knows
+   will call GetLinkTypes and GetNeighbors with given epoch, so that it knows
    how to setup watcher for node failures.
 */
 package taskgraph
@@ -19,11 +19,9 @@ type Topology interface {
 	// we can get the local topology for each epoch later.
 	SetTaskID(taskID uint64)
 
-	// GetParents returns the parents' IDs of this task at the
-	// given epoch.
-	GetParents(epoch uint64) []uint64
+	// This returns the type of links this topology supports
+	GetLinkTypes() []string
 
-	// GetChlidren returns the children's IDs of this task at the
-	// given epoch.
-	GetChildren(epoch uint64) []uint64
+	// This returns the neighbors of given link for this node at this epoch.
+	GetNeighbors(linkType string, epoch uint64) []uint64
 }

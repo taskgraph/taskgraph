@@ -10,16 +10,8 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
-)
-
-type taskRole int
-
-const (
-	roleNone taskRole = iota
-	roleParent
-	roleChild
+	"golang.org/x/net/context"
 )
 
 // One need to pass in at least these two for framework to start.
@@ -71,8 +63,6 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	go f.startHTTP()
-
 	f.heartbeat()
 	f.setupChannels()
 	f.task.Init(f.taskID, f)
@@ -85,15 +75,16 @@ func (f *framework) setupChannels() {
 	f.httpStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataResponse, 100)
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+	f.dataRespChan = make(chan *dataResponse, 100)
+	f.epochCheckChan = make(chan *epochCheck, 100)
 }
 
 func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
+	// We need put off starting server here after task#SetEpoch is called.
+	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
@@ -117,33 +108,25 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.createContext(), meta.who, meta.from, meta.meta)
+			f.handleMetaChange(f.createContext(), meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
 				break
 			}
 			go f.sendRequest(req)
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				req.notifyEpochMismatch()
-				break
-			}
-			f.handleDataReq(req)
-		case resp := <-f.dataRespToSendChan:
-			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				resp.notifyEpochMismatch()
-				break
-			}
-			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
-			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+			if resp.epoch != f.epoch {
+				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.epoch, f.epoch)
 				break
 			}
 			f.handleDataResp(f.createContext(), resp)
+		case ec := <-f.epochCheckChan:
+			if ec.epoch != f.epoch {
+				ec.fail()
+				break
+			}
+			ec.pass()
 		}
 	}
 }
@@ -158,8 +141,9 @@ func (f *framework) setEpochStarted() {
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
-	f.watchMeta(roleParent, f.topology.GetParents(f.epoch))
-	f.watchMeta(roleChild, f.topology.GetChildren(f.epoch))
+	for _, linkType := range f.topology.GetLinkTypes() {
+		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
+	}
 }
 
 func (f *framework) releaseEpochResource() {
@@ -195,29 +179,18 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
+func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
 
 	for i, taskID := range taskIDs {
 		stop := make(chan bool, 1)
 		stops[i] = stop
 
-		var watchPath string
-		switch who {
-		case roleParent:
-			// Watch parent's child-meta.
-			watchPath = etcdutil.ChildMetaPath(f.name, taskID)
-		case roleChild:
-			// Watch child's parent-meta.
-			watchPath = etcdutil.ParentMetaPath(f.name, taskID)
-		default:
-			f.log.Panic("unexpected role")
-		}
+		watchPath := etcdutil.MetaPath(linkType, f.name, taskID)
 
 		// When a node working for a task crashed, a new node will take over
 		// the task and continue what's left. It assumes that progress is stalled
 		// until the new node comes (i.e. epoch won't change).
-
 		responseHandler := func(resp *etcd.Response, taskID uint64) {
 			if resp.Action != "set" && resp.Action != "get" {
 				return
@@ -232,7 +205,7 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 			}
 			f.metaChan <- &metaChange{
 				from:  taskID,
-				who:   who,
+				who:   linkType,
 				epoch: ep,
 				meta:  values[1],
 			}
@@ -247,7 +220,7 @@ func (f *framework) watchMeta(who taskRole, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID uint64, meta string) {
+func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {
@@ -255,12 +228,8 @@ func (f *framework) handleMetaChange(ctx taskgraph.Context, who taskRole, taskID
 	}
 	f.metaNotified[tm] = true
 
-	switch who {
-	case roleParent:
-		f.task.ParentMetaReady(ctx, taskID, meta)
-	case roleChild:
-		f.task.ChildMetaReady(ctx, taskID, meta)
-	}
+	f.task.MetaReady(ctx, taskID, linkType, meta)
+
 }
 
 func taskMeta(taskID uint64, meta string) string {

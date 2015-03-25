@@ -7,9 +7,10 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"golang.org/x/net/context"
 )
 
 const exitEpoch = math.MaxUint64
@@ -45,36 +46,48 @@ type framework struct {
 	epochPassed chan struct{}
 
 	// event loop
-	epochChan          chan uint64
-	metaChan           chan *metaChange
-	dataReqtoSendChan  chan *dataRequest
-	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataResponse
-	dataRespChan       chan *frameworkhttp.DataResponse
+	epochChan         chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataRespChan      chan *dataResponse
+	epochCheckChan    chan *epochCheck
 }
 
-func (f *framework) flagMetaToParent(meta string, epoch uint64) {
-	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.ParentMetaPath(f.name, f.GetTaskID()), value, 0)
-	if err != nil {
-		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.ParentMetaPath(f.name, f.GetTaskID()), value, err)
+// The key type is unexported to prevent collisions with context keys defined in
+// other packages.
+type contextKey int
+
+// epochkey is the context key for the epoch.  Its value of zero is
+// arbitrary.  If this package defined other context keys, they would have
+// different integer values.
+const epochKey contextKey = 1
+
+// Now use google context, for we simply create a barebone and attach the epoch to it.
+func (f *framework) createContext() context.Context {
+	return context.WithValue(context.Background(), epochKey, f.epoch)
+}
+
+func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
-}
-
-func (f *framework) flagMetaToChild(meta string, epoch uint64) {
 	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.ChildMetaPath(f.name, f.GetTaskID()), value, 0)
+	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.ChildMetaPath(f.name, f.GetTaskID()), value, err)
+			etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, err)
 	}
 }
 
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) incEpoch(epoch uint64) {
+func (f *framework) IncEpoch(ctx context.Context) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey in IncEpoch")
+	}
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
@@ -82,15 +95,22 @@ func (f *framework) incEpoch(epoch uint64) {
 	}
 }
 
-func (f *framework) dataRequest(toID uint64, req string, epoch uint64) {
+func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
+	}
+
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
 	f.dataReqtoSendChan <- &dataRequest{
+		ctx:    ctx,
 		taskID: toID,
 		epoch:  epoch,
-		req:    req,
+		input:  input,
+		method: method,
 	}
 }
 

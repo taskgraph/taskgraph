@@ -90,34 +90,6 @@ type StopCriteria interface {
 	Done(param Parameter, value float32, gradient Parameter) bool
 }
 
-// This stop criteria stop after some fix iterations.
-type fixCountStopCriteria struct {
-	maxIter, curIter int
-}
-
-func (f *fixCountStopCriteria) Done(param Parameter, value float32, gradient Parameter) bool {
-	f.curIter += 1
-	return f.curIter >= f.maxIter
-}
-
-func MakeFixCountStopCriteria(iter int) StopCriteria {
-	return &fixCountStopCriteria{maxIter: iter, curIter: 0}
-}
-
-// This criteria stop the iteration when the norm of gradient below some predefined threshold
-type gradNormStopCriteria struct {
-	grad_norm_thres float32
-}
-
-func (g *gradNormStopCriteria) Done(param Parameter, value float32, gradient Parameter) bool {
-	norm := Sum(param, func(x float32) float32 { return x * x })
-	return norm < g.grad_norm_thres
-}
-
-func MakeGradientNormStopCriteria(thres float32) StopCriteria {
-	return &gradNormStopCriteria{grad_norm_thres: thres}
-}
-
 // High level interface for minimization. This assume that we start
 // with one point in the parameter space, and end with an optimal
 // point. Return true if we find optimal point.

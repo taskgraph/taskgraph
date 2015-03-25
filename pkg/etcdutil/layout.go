@@ -19,18 +19,16 @@ import (
 //   /{app}/FreeTasks/{taskID}
 
 const (
-	TasksDir       = "tasks"
-	NodesDir       = "nodes"
-	ConfigDir      = "config"
-	FreeDir        = "freeTasks"
-	Epoch          = "epoch"
-	Status         = "status"
-	TaskMaster     = "0"
-	TaskParentMeta = "parentMeta"
-	TaskChildMeta  = "childMeta"
-	NodeAddr       = "address"
-	NodeTTL        = "ttl"
-	Healthy        = "healthy"
+	TasksDir   = "tasks"
+	NodesDir   = "nodes"
+	ConfigDir  = "config"
+	FreeDir    = "freeTasks"
+	Epoch      = "epoch"
+	Status     = "status"
+	TaskMaster = "0"
+	NodeAddr   = "address"
+	NodeTTL    = "ttl"
+	Healthy    = "healthy"
 )
 
 func EpochPath(appName string) string {
@@ -63,18 +61,10 @@ func TaskMasterPath(appName string, taskID uint64) string {
 	return path.Join("/", appName, TasksDir, strconv.FormatUint(taskID, 10), TaskMaster)
 }
 
-func ParentMetaPath(appName string, taskID uint64) string {
+func MetaPath(linkType, appName string, taskID uint64) string {
 	return path.Join("/",
 		appName,
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
-		TaskParentMeta)
-}
-
-func ChildMetaPath(appName string, taskID uint64) string {
-	return path.Join("/",
-		appName,
-		TasksDir,
-		strconv.FormatUint(taskID, 10),
-		TaskChildMeta)
+		linkType)
 }

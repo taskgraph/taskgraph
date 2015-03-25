@@ -1,6 +1,11 @@
 package taskgraph
 
-import "log"
+import (
+	"log"
+
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+)
 
 // This interface is used by application during taskgraph configuration phase.
 type Bootstrap interface {
@@ -35,22 +40,18 @@ type Framework interface {
 
 	// This is used to figure out taskid for current node
 	GetTaskID() uint64
-}
 
-// Context is used in task callbacks. It provides APIs for tasks to ask framework
-// to do work in certain context.
-type Context interface {
-	// These two are useful for task to inform the framework their status change.
+	// This is useful for task to inform the framework their status change.
 	// metaData has to be really small, since it might be stored in etcd.
-	// Set meta flag to notify parent/child of the change.
-	FlagMetaToParent(meta string)
-	FlagMetaToChild(meta string)
+	// Set meta flag to notify meta to all nodes of linkType to this node.
+	FlagMeta(ctx context.Context, linkType, meta string)
 
 	// Some task can inform all participating tasks to new epoch
-	IncEpoch()
+	IncEpoch(ctx context.Context)
 
-	// Request data from parent or children.
-	DataRequest(toID uint64, meta string)
+	// Request data from task toID with specified linkType and meta.
+	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
+	CheckEpoch(epoch uint64) error
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
