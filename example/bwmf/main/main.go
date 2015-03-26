@@ -17,6 +17,10 @@ func main() {
 	job := flag.String("job", "", "job name")
 	rowShardPath := flag.String("row_file", "", "HDFS path to the row shard matrix.")
 	columnShardPath := flag.String("column_file", "", "HDFS path to the column shard matrix.")
+	namenodeAddr := flag.String("namenode", "", "HDFS namenode address.")
+	webHdfsAddr := flag.String("web_hdfs", "", "HDFS web interface address.")
+	hdfsUser := flag.String("hdfs_user", "", "HDFS user.")
+	latentDim := flag.Int("latent_dim", 1, "Latent dimension.")
 	blockId := flag.Int("block_id", 0, "ID of the sharded data block. 0 ~ num_tasks-1")
 	numIters := flag.Int("num_iters", 10, "Num of iterations")
 	alpha := flag.Float64("alpha", 0.5, "Parameter alpha in rojected gradient method.")
@@ -38,14 +42,18 @@ func main() {
 		log.Printf("task")
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
 		taskBuilder := &bwmf.BWMFTaskBuilder{
-			NumOfIters:      10,
-			PGMsigma:        *sigma,
-			PGMalpha:        *alpha,
-			PGMbeta:         *beta,
-			PGMtol:          *tolerance,
+			numOfIters:      10,
+			numOfTasks:      ntask,
+			pgmSigma:        *sigma,
+			pgmAlpha:        *alpha,
+			pgmBeta:         *beta,
+			pgmTol:          *tolerance,
 			blockId:         *blockId,
 			rowShardPath:    *rowShardPath,
 			columnShardPath: *columnShardPath,
+			namenodeAddr:    *namenodeAddr,
+			webHdfsAddr:     *webHdfsAddr,
+			hdfsUser:        *hdfsUser,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
 		bootstrap.SetTopology(topo.NewFullTopology(ntask))
