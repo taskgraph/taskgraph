@@ -24,7 +24,9 @@ func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *lo
 	}
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) { f.taskBuilder = taskBuilder }
+func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
+	f.taskBuilder = taskBuilder
+}
 
 func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
@@ -83,7 +85,6 @@ func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
-	// We need put off starting server here after task#SetEpoch is called.
 	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
@@ -91,7 +92,6 @@ func (f *framework) run() {
 		case nextEpoch, ok := <-f.epochChan:
 			f.releaseEpochResource()
 			if !ok { // single task exit
-				nextEpoch = exitEpoch
 				return
 			}
 			f.epoch = nextEpoch
@@ -152,7 +152,6 @@ func (f *framework) releaseEpochResource() {
 		c <- true
 	}
 	f.metaStops = nil
-	f.task.ExitEpoch(f.createContext(), f.epoch)
 }
 
 // release resources: heartbeat, epoch watch.

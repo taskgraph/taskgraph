@@ -22,8 +22,6 @@ type Task interface {
 	// This give the task an opportunity to cleanup and regroup.
 	EnterEpoch(ctx context.Context, epoch uint64)
 
-	ExitEpoch(ctx context.Context, epoch uint64)
-
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.
 	// TODO: one can also get this from channel.

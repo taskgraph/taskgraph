@@ -289,7 +289,6 @@ func (t *testableTask) Init(taskID uint64, framework taskgraph.Framework) {
 }
 func (t *testableTask) Exit()                                        {}
 func (t *testableTask) EnterEpoch(ctx context.Context, epoch uint64) {}
-func (t *testableTask) ExitEpoch(ctx context.Context, epoch uint64)  {}
 
 func (t *testableTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	if t.dataChan != nil {

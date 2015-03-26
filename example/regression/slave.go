@@ -68,8 +68,6 @@ func (t *dummySlave) EnterEpoch(ctx context.Context, epoch uint64) {
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 }
 
-func (t *dummySlave) ExitEpoch(ctx context.Context, epoch uint64) {}
-
 func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
 	err := t.framework.CheckEpoch(input.Epoch)
 	if err != nil {
