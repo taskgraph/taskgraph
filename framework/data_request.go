@@ -49,6 +49,7 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 	}
 }
 
+// encode metadata to context in grpc specific way
 func (f *framework) makeGRPCContext(ctx context.Context) context.Context {
 	md := metadata.MD{
 		"taskID": strconv.FormatUint(f.taskID, 10),
@@ -110,9 +111,11 @@ func (f *framework) retrySendRequest(dr *dataRequest) {
 // On success, it should respond with requested data in http body.
 func (f *framework) startHTTP() {
 	f.log.Printf("serving grpc on %s\n", f.ln.Addr())
-	err := f.task.CreateServer().Serve(f.ln)
+	server := f.task.CreateServer()
+	err := server.Serve(f.ln)
 	select {
 	case <-f.httpStop:
+		server.Stop()
 		f.log.Printf("grpc stops serving")
 	default:
 		if err != nil {
