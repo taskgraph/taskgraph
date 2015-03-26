@@ -34,9 +34,7 @@ type dummyMaster struct {
 
 	epochChange    chan *event
 	getP           chan *event
-	getG           chan *event
 	childDataReady chan *event
-	getGReqs       []*event
 	exitChan       chan struct{}
 }
 
@@ -59,7 +57,6 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 
 	t.epochChange = make(chan *event, 1)
 	t.getP = make(chan *event, 1)
-	t.getG = make(chan *event, 1)
 	t.childDataReady = make(chan *event, 1)
 	t.exitChan = make(chan struct{})
 	go t.run()
@@ -68,12 +65,8 @@ func (t *dummyMaster) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *dummyMaster) run() {
 	for {
 		select {
-		case et := <-t.epochChange:
-			for _, gG := range t.getGReqs {
-				close(gG.retG)
-			}
-			t.getGReqs = nil
-			t.enterEpoch(et.ctx, et.epoch)
+		case ec := <-t.epochChange:
+			t.enterEpoch(ec.ctx, ec.epoch)
 		case gP := <-t.getP:
 			// We have to check epoch here in user level because grpc doesn't
 			// allow use to intercept messages. This should be fixed later.
@@ -82,18 +75,6 @@ func (t *dummyMaster) run() {
 				close(gP.retP)
 			}
 			gP.retP <- t.param
-		case gG := <-t.getG:
-			err := t.framework.CheckEpoch(gG.input.Epoch)
-			if err != nil {
-				close(gG.retG)
-			}
-			if t.gradient != nil {
-				gG.retG <- t.gradient
-				break
-			}
-			// Waiting queue. Requests will get notified later. The number of request
-			// won't be huge presumingly.
-			t.getGReqs = append(t.getGReqs, gG)
 		case cr := <-t.childDataReady:
 			t.ChildDataReady(cr.ctx, cr.fromID, cr.output)
 		case <-t.exitChan:
@@ -108,7 +89,6 @@ func (t *dummyMaster) Exit() {
 
 // This give the task an opportunity to cleanup and regroup.
 func (t *dummyMaster) EnterEpoch(ctx context.Context, epoch uint64) {
-	t.logger.Printf("master SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	if t.testablyFail("SetEpoch", strconv.FormatUint(epoch, 10)) {
 		return
 	}
@@ -116,18 +96,17 @@ func (t *dummyMaster) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
+	t.logger.Printf("master EnterEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
 	t.param = new(pb.Parameter)
-	t.gradient = nil
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
 	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
-		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{t.epoch})
+		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{epoch})
 	}
 }
 
-// These are payload rpc for application purpose.
 func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
 	retP := make(chan *pb.Parameter, 1)
 	t.getP <- &event{ctx: ctx, input: input, retP: retP}
@@ -139,13 +118,7 @@ func (t *dummyMaster) GetParameter(ctx context.Context, input *pb.Input) (*pb.Pa
 }
 
 func (t *dummyMaster) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
-	retG := make(chan *pb.Gradient, 1)
-	t.getP <- &event{ctx: ctx, input: input, retG: retG}
-	g, ok := <-retG
-	if !ok {
-		return nil, fmt.Errorf("epoch changed")
-	}
-	return g, nil
+	panic("")
 }
 func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	if method == "/proto.Regression/GetGradient" {
@@ -156,10 +129,6 @@ func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, method strin
 }
 
 func (t *dummyMaster) gradientReady(ctx context.Context) {
-	for _, gG := range t.getGReqs {
-		gG.retG <- t.gradient
-	}
-	t.getGReqs = nil
 	// In testing, we need to make sure dataChan has enough space and don't block.
 	t.dataChan <- t.gradient.Value
 	// In real ML, we modify the gradient first. But here it is noop.
