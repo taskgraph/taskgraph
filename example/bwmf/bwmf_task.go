@@ -6,7 +6,9 @@ import (
 	"math/rand"
 	"os"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
+	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/op"
 	"github.com/taskgraph/taskgraph/pkg/common"
 )
@@ -33,29 +35,10 @@ Topology: the topology is different from task to task. Each task will consider i
 and all others children.
 */
 
-// bwmfData is used to carry indexes and values associated with each index. Index here
-// can be row or column id, and value can be K wide, one for each topic;
-type bwmfData struct {
-	Index  int
-	Values []float64
-}
-
-type Shard []*bwmfData
-
-func newShard(m, n, startIndex int) *Shard {
-	var res Shard
-	res = make([]*bwmfData, m)
-	for i := 0; i < m; i++ {
-		res[i].Index = startIndex + i
-		res[i].Values = make([]float64, n)
-	}
-	return &res
-}
-
 // TODO: load matrix data
 //
-// Via DFS interface or directly loaded by each task?
 func loadShardedMatrix(path string) (*[]sparseVec, bool) {
+
 	panic("")
 }
 
@@ -85,15 +68,16 @@ type bwmfTask struct {
 	logger     *log.Logger
 	numOfTasks uint64
 
-	// The original data.
-	rowShard, columnShard *[]sparseVec
+	dtReady    *common.CountdownLatch
+	fromOthers map[uint64]bool
 
-	dtReady       *common.CountdownLatch
-	childrenReady map[uint64]bool
+	// The original data.
+	rowShardPath, columnShardPath string
+	rowShard, columnShard         *MatrixShard
 
 	// XXX(baigang): store matrix data directly as `Parameter`?
-	shardedD, shardedT *Shard
-	fullD, fullT       *Shard
+	shardedD, shardedT *MatrixShard
+	fullD, fullT       []*MatrixShard
 
 	// shardedD is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
 	// fullD is size of M*k, fullT is size of k*N (dittu, layout N*k)
@@ -102,11 +86,11 @@ type bwmfTask struct {
 	// parameters for projected gradient methods
 	sigma, alpha, beta, tol float32
 
-	// intermidiate data
+	// parameter data
 	shardedDParam, shardedTParam, dParam, tParam taskgraph_op.Parameter
 
 	// objective function, parameters and minimizer to solve bwmf
-	loss         *KLDivLoss
+	tLoss, dLoss *KLDivLoss
 	optimizer    *taskgraph_op.ProjectedGradient
 	stopCriteria taskgraph_op.StopCriteria
 }
@@ -114,11 +98,11 @@ type bwmfTask struct {
 // These two function carry out actual optimization.
 func (this *bwmfTask) updateDShard() {
 
-	this.loss.W = this.tParam
-	this.loss.m = this.m
-	this.loss.n = this.N
+	this.dLoss.W = this.tParam
+	this.dLoss.m = this.m
+	this.dLoss.n = this.N
 
-	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.shardedDParam)
+	ok := this.optimizer.Minimize(this.dLoss, this.stopCriteria, this.shardedDParam)
 	if !ok {
 		// TODO report error
 	}
@@ -128,12 +112,12 @@ func (this *bwmfTask) updateDShard() {
 func (this *bwmfTask) updateTShard() {
 
 	// TODO initialized the loss
-	this.loss.W = this.dParam
-	this.loss.m = this.n
-	this.loss.n = this.M
+	this.tLoss.W = this.dParam
+	this.tLoss.m = this.n
+	this.tLoss.n = this.M
 
 	//
-	ok := this.optimizer.Minimize(this.loss, this.stopCriteria, this.shardedTParam)
+	ok := this.optimizer.Minimize(this.tLoss, this.stopCriteria, this.shardedTParam)
 	if !ok {
 		// TODO report error
 	}
@@ -141,28 +125,18 @@ func (this *bwmfTask) updateTShard() {
 	// TODO copy data from shardedTParam to shardedT
 }
 
-// Initialization: We need to read row and column shards of A.
-func (this *bwmfTask) readShardsFromDisk() bool {
-	return false
-}
-
-// Read shardedD and shardedT from last checkpoint if any.
-func (this *bwmfTask) readLastCheckpoint() bool {
-	return false
-}
-
-// Compute shardedT/shardedD
-
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (this *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	this.taskID = taskID
 	this.framework = framework
 	this.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Use some unique identifier to set Index "in the future".
-	// We can use taskID now.
-	// TODO: We need a DFS interface to load parts for each task. Or we load it directly from paths on local disk.
+	// TODO get arguments from etcd
+
+	hdfsClient, hcOk := filesystem.NewHdfsClient("namenodeAddr", "webHdfsAddr", "user")
+
 	var rowShardedOk, columnShardOk bool
+
 	this.rowShard, rowShardedOk = loadShardedMatrix("TODO/some/path/for/rowShard")
 	this.columnShard, columnShardOk = loadShardedMatrix("TODO/some/path/for/columnShard")
 
