@@ -20,12 +20,13 @@ message Response {
 }
 
 // sharded matrix data
+// with row and Row, accessing an element will be `mat.Row[i].At[j]`
 message MatrixShard {
-  repeated Row rows = 1;
+  repeated Row row = 1;
 }
 
 message Row {
-  map<uint32, float> row = 1;
+  map<uint32, float> at = 1;
 }
 
 

@@ -48,32 +48,33 @@ func (m *Response) GetShard() *MatrixShard {
 }
 
 // sharded matrix data
+// with row and Row, accessing an element will be `mat.Row[i].At[j]`
 type MatrixShard struct {
-	Rows []*Row `protobuf:"bytes,1,rep,name=rows" json:"rows,omitempty"`
+	Row []*Row `protobuf:"bytes,1,rep,name=row" json:"row,omitempty"`
 }
 
 func (m *MatrixShard) Reset()         { *m = MatrixShard{} }
 func (m *MatrixShard) String() string { return proto1.CompactTextString(m) }
 func (*MatrixShard) ProtoMessage()    {}
 
-func (m *MatrixShard) GetRows() []*Row {
+func (m *MatrixShard) GetRow() []*Row {
 	if m != nil {
-		return m.Rows
+		return m.Row
 	}
 	return nil
 }
 
 type Row struct {
-	Row map[uint32]float32 `protobuf:"bytes,1,rep,name=row" json:"row,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	At map[uint32]float32 `protobuf:"bytes,1,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
 }
 
 func (m *Row) Reset()         { *m = Row{} }
 func (m *Row) String() string { return proto1.CompactTextString(m) }
 func (*Row) ProtoMessage()    {}
 
-func (m *Row) GetRow() map[uint32]float32 {
+func (m *Row) GetAt() map[uint32]float32 {
 	if m != nil {
-		return m.Row
+		return m.At
 	}
 	return nil
 }
