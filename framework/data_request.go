@@ -75,6 +75,8 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		return
 	}
 	// TODO: save ClientConn creation steps.
+	// The grpc.WithTimeout would help detect any disconnection in failfast.
+	// Otherwise grpc.Invoke will keep retrying.
 	cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
