@@ -3,7 +3,6 @@ package framework
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -65,7 +64,6 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		go f.retrySendRequest(dr)
 		return
 	}
-
 	// TODO: save ClientConn creation steps.
 	cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 	// we need to retry if some task failed and there is a temporary Get request failure.
@@ -76,24 +74,19 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		return
 	}
 	defer cc.Close()
-
 	if dr.retry {
 		f.log.Printf("retry data request %s to task %d, addr %s", dr.method, dr.taskID, addr)
 	} else {
 		f.log.Printf("data request %s to task %d, addr %s", dr.method, dr.taskID, addr)
 	}
-
 	reply := f.task.CreateOutputMessage(dr.method)
 	err = grpc.Invoke(dr.ctx, dr.method, dr.input, reply, cc)
 	if err != nil {
-		if strings.Contains(err.Error(), "server epoch mismatch") {
-			// It's out of date. Should abort this data request.
-			return
-		}
 		f.log.Printf("grpc.Invoke from task %d (addr: %s), method: %s, failed: %v", dr.taskID, addr, dr.method, err)
 		go f.retrySendRequest(dr)
 		return
 	}
+
 	f.dataRespChan <- &dataResponse{
 		epoch:  dr.epoch,
 		taskID: dr.taskID,

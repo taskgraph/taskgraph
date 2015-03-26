@@ -24,11 +24,13 @@ type framework struct {
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 
-	task       taskgraph.Task
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	ln         net.Listener
+	task          taskgraph.Task
+	taskID        uint64
+	epoch         uint64
+	etcdClient    *etcd.Client
+	ln            net.Listener
+	userCtx       context.Context
+	userCtxCancel context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -60,11 +62,6 @@ type contextKey int
 // arbitrary.  If this package defined other context keys, they would have
 // different integer values.
 const epochKey contextKey = 1
-
-// Now use google context, for we simply create a barebone and attach the epoch to it.
-func (f *framework) createContext() context.Context {
-	return context.WithValue(context.Background(), epochKey, f.epoch)
-}
 
 func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 	epoch, ok := ctx.Value(epochKey).(uint64)

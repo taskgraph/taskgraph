@@ -94,10 +94,8 @@ func (t *dummySlave) run() {
 			t.getGReqs = append(t.getGReqs, gG)
 		case pr := <-t.pDataReady:
 			t.ParentDataReady(pr.ctx, pr.fromID, pr.output)
-			t.checkGradReady(pr.ctx)
 		case gr := <-t.gDataReady:
 			t.ChildDataReady(gr.ctx, gr.fromID, gr.output)
-			t.checkGradReady(gr.ctx)
 		case <-t.exitChan:
 			return
 		}
@@ -201,6 +199,7 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, outpu
 	// We need to carry out local compuation.
 	t.gradient = new(pb.Gradient)
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
+	t.checkGradReady(ctx)
 }
 
 func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, output proto.Message) {
@@ -212,6 +211,7 @@ func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, output 
 
 	t.logger.Printf("slave ChildDataReady, task %d, epoch %d, child %d, ready %d\n",
 		t.taskID, t.epoch, childID, len(t.fromChildren))
+	t.checkGradReady(ctx)
 }
 
 func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
