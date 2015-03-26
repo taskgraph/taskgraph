@@ -16,17 +16,30 @@ message Request {
 // Response of the block matrix data, with the associated block id.
 message Response {
   int32 id = 1;
-  MatrixShard shard = 2;
+  DenseMatrixShard shard = 2;
+}
+
+// Matrix encapsulation. With row and Row, accessing an element will be `mat.Row[i].At[j]`
+
+// sharded dense matrix data
+// In bwmf, this message is for full D/T and sharded D/T data blocks.
+message DenseMatrixShard {
+  message DenseRow {
+    repeated float at = 1;
+  }
+
+  repeated DenseRow row = 1;
 }
 
 // sharded matrix data
-// with row and Row, accessing an element will be `mat.Row[i].At[j]`
-message MatrixShard {
-  repeated Row row = 1;
+// In bwmf, this message is for sharded row/column data.
+message SparseMatrixShard {
+  message SparseRow {
+    map<uint32, float> at = 1;
+  } 
+
+  repeated SparseRow row = 1;
 }
 
-message Row {
-  map<uint32, float> at = 1;
-}
 
 
