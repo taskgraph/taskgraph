@@ -66,32 +66,32 @@ func (t *dummySlave) run() {
 			t.getGReqs = nil
 
 			t.enterEpoch(ec.ctx, ec.epoch)
-		case gP := <-t.getP:
+		case req := <-t.getP:
 			// We have to check epoch here in user level because grpc doesn't
 			// allow use to intercept messages. This should be fixed later.
-			err := t.framework.CheckEpoch(gP.input.Epoch)
+			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
-				close(gP.retP)
+				close(req.retP)
 			}
 			if t.param != nil {
-				gP.retP <- t.param
+				req.retP <- t.param
 				break
 			}
 			// Waiting queue. Requests will get notified later. The number of request
 			// won't be huge presumingly.
-			t.getPReqs = append(t.getPReqs, gP)
-		case gG := <-t.getG:
-			err := t.framework.CheckEpoch(gG.input.Epoch)
+			t.getPReqs = append(t.getPReqs, req)
+		case req := <-t.getG:
+			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
-				close(gG.retG)
+				close(req.retG)
 			}
 			if t.gradient != nil {
-				gG.retG <- t.gradient
+				req.retG <- t.gradient
 				break
 			}
 			// Waiting queue. Requests will get notified later. The number of request
 			// won't be huge presumingly.
-			t.getGReqs = append(t.getGReqs, gG)
+			t.getGReqs = append(t.getGReqs, req)
 		case pr := <-t.pDataReady:
 			t.ParentDataReady(pr.ctx, pr.fromID, pr.output)
 		case gr := <-t.gDataReady:

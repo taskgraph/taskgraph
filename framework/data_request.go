@@ -16,13 +16,22 @@ var (
 	ErrEpochMismatch = fmt.Errorf("server epoch mismatch")
 )
 
-func (f *framework) CheckEpoch(epoch uint64) error {
+func (f *framework) CheckGRPCContext(ctx context.Context) error {
+	md, ok := metadata.FromContext(ctx)
+	if !ok {
+		return fmt.Errorf("Can't get grpc.Metadata from context: %v", ctx)
+	}
+	epoch, err := strconv.ParseUint(md["epoch"], 10, 64)
+	if err != nil {
+		return err
+	}
+	// send it to framework central select and check epoch.
 	resChan := make(chan bool, 1)
 	f.epochCheckChan <- &epochCheck{
 		epoch:   epoch,
 		resChan: resChan,
 	}
-	ok := <-resChan
+	ok = <-resChan
 	if ok {
 		return nil
 	} else {

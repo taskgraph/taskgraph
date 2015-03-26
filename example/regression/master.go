@@ -67,14 +67,14 @@ func (t *dummyMaster) run() {
 		select {
 		case ec := <-t.epochChange:
 			t.enterEpoch(ec.ctx, ec.epoch)
-		case gP := <-t.getP:
+		case req := <-t.getP:
 			// We have to check epoch here in user level because grpc doesn't
 			// allow use to intercept messages. This should be fixed later.
-			err := t.framework.CheckEpoch(gP.input.Epoch)
+			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
-				close(gP.retP)
+				close(req.retP)
 			}
-			gP.retP <- t.param
+			req.retP <- t.param
 		case cr := <-t.childDataReady:
 			t.ChildDataReady(cr.ctx, cr.fromID, cr.output)
 		case <-t.exitChan:
