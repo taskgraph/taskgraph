@@ -48,7 +48,6 @@ type bwmfTask struct {
 	numOfTasks uint64
 	numOfIters uint64
 
-	dtReady    *common.CountdownLatch
 	fromOthers map[uint64]bool
 
 	// The original data.
@@ -206,8 +205,6 @@ func (bt *bwmfTask) Exit() {
 func (bt *bwmfTask) SetEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", bt.taskID, epoch)
 	bt.epoch = epoch
-	bt.childrenReady = make(map[uint64]bool)
-	bt.dtReady = common.NewCountdownLatch(int(bt.numOfTasks))
 
 	// Afterwards:
 	// We need to get all D/T from last epoch so that we can carry out local
@@ -227,8 +224,6 @@ func (bt *bwmfTask) SetEpoch(ctx context.Context, epoch uint64) {
 	}
 
 	go func() {
-		// Wait for all shards (either D or T, depending on the epoch) to be ready.
-		bt.dtReady.Await()
 
 		// We can compute local shard result from A and D/T.
 		if bt.epoch%2 == 0 {
@@ -240,8 +235,18 @@ func (bt *bwmfTask) SetEpoch(ctx context.Context, epoch uint64) {
 	}()
 }
 
+// XXX(baigang): This is to signal that
 func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-
+	if linkType == "dReady" {
+		// to update t, we fetch d
+		bt.logger.Printf("D meta ready, task: %d, epoch: %d\n", bt.taskID, bt.epoch)
+		bt.framework.DataRequest(ctx, fromID, "/proto.DataBlock/GetDShard", &pb.Reqest{Epoch: bt.epoch})
+	}
+	if linkType == "tReady" {
+		// to update d, we fetch t
+		bt.logger.Printf("T meta ready, task: %d, epoch: %d\n", bt.taskID, bt.epoch)
+		bt.framework.DataRequest(ctx, fromID, "/proto.DataBlock/GetTShard", &pb.Reqest{Epoch: bt.epoch})
+	}
 }
 
 func (bt *bwmfTask) DataReady(ctx context.Context, parentID uint64, output proto.Message) {
