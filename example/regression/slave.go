@@ -119,10 +119,10 @@ func (t *dummySlave) enterEpoch(ctx context.Context, epoch uint64) {
 	t.epoch = epoch
 
 	parent := t.framework.GetTopology().GetNeighbors("Parents", epoch)[0]
-	t.framework.DataRequest(ctx, parent, "/proto.Regression/GetParameter", &pb.Input{epoch})
+	t.framework.DataRequest(ctx, parent, "/proto.Regression/GetParameter", &pb.Input{})
 
 	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
-		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{epoch})
+		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
 	}
 }
 

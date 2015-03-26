@@ -103,7 +103,7 @@ func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
 	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
-		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{epoch})
+		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
 	}
 }
 
