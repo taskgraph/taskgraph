@@ -177,6 +177,8 @@ func (t *dummySlave) gradientReady(ctx context.Context) {
 func (t *dummySlave) checkGradReady(ctx context.Context) {
 	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
 	if t.param != nil && len(t.fromChildren) == len(children) {
+		t.gradient = new(pb.Gradient)
+		t.gradient.Value = t.param.Value * int32(t.taskID)
 		// In real ML, we add the gradient first.
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
@@ -196,9 +198,6 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, outpu
 	}
 	t.param = d
 	t.parameterReady()
-	// We need to carry out local compuation.
-	t.gradient = new(pb.Gradient)
-	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
 	t.checkGradReady(ctx)
 }
 
