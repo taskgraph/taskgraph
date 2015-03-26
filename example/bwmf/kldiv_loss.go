@@ -1,9 +1,11 @@
 package bwmf
 
 import (
-	"github.com/taskgraph/taskgraph/op"
 	"math"
 	"sync"
+
+	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	"github.com/taskgraph/taskgraph/op"
 )
 
 // `KLDivLoss` is a `Function` that evaluates Kullback-Leibler Divergence and the corresponding gradient at the given `Parameter`.
@@ -14,11 +16,11 @@ import (
 //  So actually H is H^T, but it saves code by using identical routine when alternatively optimize over H and W.
 //
 type KLDivLoss struct {
-	V       []map[int]float32 // write once, read concurrently multiple times
-	WH      [][]float32       // temporary storage for the intermediate result W*H
-	W       taskgraph_op.Parameter
-	m, n, k int // dimensions
-	smooth  float64
+	V       *pb.SparseMatrixShard
+	W       *pb.DenseMatrixShard
+	WH      [][]float32 // temporary storage for the intermediate result W*H
+	m, n, k int         // dimensions
+	smooth  float32
 }
 
 // This function evaluates the Kullback-Leibler Divergence given $\mathbf{V} the matrix to fact and $\mathbf{W}$ the fixed factor.
@@ -32,8 +34,8 @@ type KLDivLoss struct {
 //
 //  The gradient is:
 //
-//  $$ \divsymb \frac{D_{KL}}{H} = -W*Z^T + W^T*\bar{Z} $$
-//  , where $Z_{ij} = \frac{V_{ij}}{(WH)_{ij}}$
+//  $$ \divsymb \frac{D_{KL}}{H} = -W^T*Z + W^T*\bar{Z} $$
+//  , where $Z_{ij} = \frac{V_{ij}}{(WH)_{ij}}$ and \bar{Z}_{ij}=1
 //
 //  This implementation consists of two pass of visiting the full matrix, each of
 //  which goes parallel. One pass is for evaluating W*H and accumulate kl-divergence
@@ -41,22 +43,22 @@ type KLDivLoss struct {
 //
 func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op.Parameter) float32 {
 	H := param
-	accum := make(chan float32, 8)
+	lossAccum := make(chan float32, 8)
 	for i := 0; i < l.m; i++ {
 		for j := 0; j < l.n; j++ {
 			l.WH[i][j] = 0.0
 			go func(i, j int) {
 				for k := 0; k < l.k; k++ {
-					l.WH[i][j] += l.W.Get(i*l.k+k) * H.Get(j*l.k+k)
+					l.WH[i][j] += l.W.GetRow()[i].At[k] * H.Get(j*l.k+k)
 				}
 
 				// evaluate element-wise KL-divergence
-				v, ok := l.V[i][j]
+				v, ok := l.V.GetRow()[i].At[j]
 				wh := l.WH[i][j]
 				if ok {
-					accum <- -v*float32(math.Log(l.smooth+float64(wh))) + wh
+					lossAccum <- -v*float32(math.Log(l.smooth+float64(wh))) + wh
 				} else {
-					accum <- wh
+					lossAccum <- wh
 				}
 			}(i, j)
 		}
@@ -64,24 +66,23 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 
 	var value float32
 	for c := 0; c < l.m*l.n; c++ {
-		value += <-accum
+		value += <-lossAccum
 	}
 
 	// now, another pass for grad calculation
 	var wg sync.WaitGroup
-	for i := 0; i < l.k; i++ {
-		for j := 0; j < l.n; j++ {
+	for j := 0; j < l.n; j++ {
+		for k := 0; k < l.k; k++ {
 			wg.Add(1)
-			grad_index := j*l.k + i
+			grad_index := j*l.k + k
 			gradient.Set(grad_index, 0.0)
-			go func(grad_index, i, j int) {
+			go func(grad_index, j, k int) {
 				defer wg.Done()
-				for k := 0; k < l.m; k++ {
-					w_index := k*l.k + i
-					grad_val := l.W.Get(w_index) * (l.WH[k][j] - l.V[k][j]) / l.WH[k][j]
+				for i := 0; i < l.m; i++ {
+					grad_val := l.W.GetRow()[i].At[k] * (l.WH[i][j] - l.V[i][j]) / l.WH[i][j]
 					gradient.Add(grad_index, grad_val)
 				}
-			}(grad_index, i, j)
+			}(grad_index, j, k)
 		}
 	}
 	wg.Wait()
