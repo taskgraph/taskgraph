@@ -35,7 +35,6 @@ type dummyMaster struct {
 	epochChange    chan *event
 	getP           chan *event
 	getG           chan *event
-	gradientReady  chan *event
 	childDataReady chan *event
 	getGReqs       []*event
 	exitChan       chan struct{}
@@ -95,10 +94,6 @@ func (t *dummyMaster) run() {
 			// Waiting queue. Requests will get notified later. The number of request
 			// won't be huge presumingly.
 			t.getGReqs = append(t.getGReqs, gG)
-		case <-t.gradientReady:
-			for _, gG := range t.getGReqs {
-				gG.retG <- t.gradient
-			}
 		case cr := <-t.childDataReady:
 			t.ChildDataReady(cr.ctx, cr.fromID, cr.output)
 		case <-t.exitChan:
@@ -124,7 +119,6 @@ func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
 	t.param = new(pb.Parameter)
 	t.gradient = nil
 	t.fromChildren = make(map[uint64]*pb.Gradient)
-	t.gradientReady = make(chan *event, 1)
 
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
@@ -161,8 +155,11 @@ func (t *dummyMaster) DataReady(ctx context.Context, fromID uint64, method strin
 	panic("")
 }
 
-func (t *dummyMaster) gradReady() {
-	close(t.gradientReady)
+func (t *dummyMaster) gradientReady(ctx context.Context) {
+	for _, gG := range t.getGReqs {
+		gG.retG <- t.gradient
+	}
+	t.getGReqs = nil
 	// In testing, we need to make sure dataChan has enough space and don't block.
 	t.dataChan <- t.gradient.Value
 	// In real ML, we modify the gradient first. But here it is noop.
@@ -196,7 +193,7 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, output
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value
 		}
-		t.gradReady()
+		t.gradientReady(ctx)
 	}
 }
 
