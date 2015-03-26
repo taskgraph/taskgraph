@@ -57,7 +57,7 @@ type bwmfTask struct {
 	rowShard, columnShard               *MatrixShard
 
 	shardedD, shardedT *MatrixShard
-	fullD, fullT       []*MatrixShard
+	fullD, fullT       *MatrixShard // appended shards
 
 	// shardedD is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
 	// fullD is size of M*k, fullT is size of k*N (dittu, layout N*k)
@@ -182,11 +182,28 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	// Task 0 will start the iterations.
 }
 
-func (bt *bwmfTask) Exit() {
-	// Shall we dump the temporary results here?
+func (bt *bwmfTask) CreateServer() *grpc.Server {
+	server := grpc.NewServer()
+	pb.RegisterBlockDataServer(server, bt)
+	return server
 }
 
-func (bt *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
+func (bt *bwmfTask) CreateOutputMessage(methodName string) proto.Message {
+	switch methodName {
+	case "/proto.DataBlock/GetTShard":
+		// TODO: shardedT
+	case "/proto.DataBlock/GetDShard":
+		// TODO: shardedD
+	default:
+		t.logger.Panicf("Unknown method: %s", methodName)
+	}
+}
+
+func (bt *bwmfTask) Exit() {
+	// XXX Shall we dump the temporary results here or the last epoch?
+}
+
+func (bt *bwmfTask) SetEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", bt.taskID, epoch)
 	bt.epoch = epoch
 	bt.childrenReady = make(map[uint64]bool)
@@ -220,7 +237,13 @@ func (bt *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
 			bt.updateDShard()
 		}
 
-		// Notify task 0 about the result.
-		ctx.FlagMetaToParent("computed")
 	}()
+}
+
+func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+
+}
+
+func (bt *bwmfTask) DataReady(ctx context.Context, parentID uint64, output proto.Message) {
+
 }
