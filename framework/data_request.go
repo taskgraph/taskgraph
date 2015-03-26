@@ -2,12 +2,15 @@ package framework
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
@@ -28,20 +31,42 @@ func (f *framework) CheckEpoch(epoch uint64) error {
 	}
 }
 
+func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
+	if !ok {
+		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
+	}
+
+	// assumption here:
+	// Event driven task will call this in a synchronous way so that
+	// the epoch won't change at the time task sending this request.
+	// Epoch may change, however, before the request is actually being sent.
+	f.dataReqtoSendChan <- &dataRequest{
+		ctx:    f.makeGRPCContext(ctx),
+		taskID: toID,
+		epoch:  epoch,
+		input:  input,
+		method: method,
+	}
+}
+
+func (f *framework) makeGRPCContext(ctx context.Context) context.Context {
+	md := metadata.MD{
+		"taskID": strconv.FormatUint(f.taskID, 10),
+		"epoch":  strconv.FormatUint(f.epoch, 10),
+	}
+	return metadata.NewContext(ctx, md)
+}
+
 func (f *framework) sendRequest(dr *dataRequest) {
 	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
 	if err != nil {
-		// TODO: We should handle network faults later by retrying
-		f.log.Panicf("getAddress(%d) failed: %v", dr.taskID, err)
+		f.log.Printf("getAddress(%d) failed: %v", dr.taskID, err)
+		go f.retrySendRequest(dr)
 		return
 	}
 
-	if dr.retry {
-		f.log.Printf("retry request data from task %d, addr %s", dr.taskID, addr)
-	} else {
-		f.log.Printf("request data from task %d, addr %s", dr.taskID, addr)
-	}
-
+	// TODO: save ClientConn creation steps.
 	cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
@@ -51,6 +76,13 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		return
 	}
 	defer cc.Close()
+
+	if dr.retry {
+		f.log.Printf("retry data request %s to task %d, addr %s", dr.method, dr.taskID, addr)
+	} else {
+		f.log.Printf("data request %s to task %d, addr %s", dr.method, dr.taskID, addr)
+	}
+
 	reply := f.task.CreateOutputMessage(dr.method)
 	err = grpc.Invoke(dr.ctx, dr.method, dr.input, reply, cc)
 	if err != nil {

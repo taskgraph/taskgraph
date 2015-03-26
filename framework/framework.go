@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
@@ -92,25 +91,6 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
 			f.taskID, epoch+1, epoch, err)
-	}
-}
-
-func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
-	epoch, ok := ctx.Value(epochKey).(uint64)
-	if !ok {
-		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
-	}
-
-	// assumption here:
-	// Event driven task will call this in a synchronous way so that
-	// the epoch won't change at the time task sending this request.
-	// Epoch may change, however, before the request is actually being sent.
-	f.dataReqtoSendChan <- &dataRequest{
-		ctx:    ctx,
-		taskID: toID,
-		epoch:  epoch,
-		input:  input,
-		method: method,
 	}
 }
 

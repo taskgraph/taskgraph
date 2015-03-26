@@ -10,6 +10,7 @@ import (
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // dummySlave is an prototype for data shard in machine learning applications.
@@ -113,7 +114,7 @@ func (t *dummySlave) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *dummySlave) enterEpoch(ctx context.Context, epoch uint64) {
-	t.logger.Printf("slave EnterEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+	t.logger.Printf("slave EnterEpoch, task %d, epoch %d\n", t.taskID, epoch)
 	t.param = nil
 	t.gradient = nil
 	t.fromChildren = make(map[uint64]*pb.Gradient)
@@ -134,16 +135,20 @@ func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Par
 	if !ok {
 		return nil, fmt.Errorf("epoch changed")
 	}
+	md, _ := metadata.FromContext(ctx)
+	t.logger.Printf("slave serve GetParameter, task %d, from %s, epoch %s", t.taskID, md["taskID"], md["epoch"])
 	return p, nil
 }
 
 func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
 	retG := make(chan *pb.Gradient, 1)
-	t.getP <- &event{ctx: ctx, input: input, retG: retG}
+	t.getG <- &event{ctx: ctx, input: input, retG: retG}
 	g, ok := <-retG
 	if !ok {
 		return nil, fmt.Errorf("epoch changed")
 	}
+	md, _ := metadata.FromContext(ctx)
+	t.logger.Printf("slave serve GetGradient, task %d, from %s, epoch %s", t.taskID, md["taskID"], md["epoch"])
 	return g, nil
 }
 
@@ -154,6 +159,7 @@ func (t *dummySlave) parameterReady() {
 	t.getPReqs = nil
 }
 func (t *dummySlave) gradientReady(ctx context.Context) {
+	t.logger.Printf("slave gradient ready, task %d, epoch %d, gradient %d", t.taskID, t.epoch, t.gradient.Value)
 	// If this failure happens, a new node will redo computing again.
 	if t.testablyFail("ChildDataReady") {
 		return
@@ -182,7 +188,7 @@ func (t *dummySlave) checkGradReady(ctx context.Context) {
 }
 
 func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, output proto.Message) {
-	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
+	t.logger.Printf("slave ParentDataReady, task %d, epoch %d, parent %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
 		return
 	}
@@ -193,6 +199,7 @@ func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, outpu
 	t.param = d
 	t.parameterReady()
 	// We need to carry out local compuation.
+	t.gradient = new(pb.Gradient)
 	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
 }
 
@@ -203,7 +210,7 @@ func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, output 
 	}
 	t.fromChildren[childID] = d
 
-	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+	t.logger.Printf("slave ChildDataReady, task %d, epoch %d, child %d, ready %d\n",
 		t.taskID, t.epoch, childID, len(t.fromChildren))
 }
 
@@ -226,6 +233,7 @@ func (t *dummySlave) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("slave task %d testably fail, method: %s\n", t.taskID, method)
+	// Very hack. Need some internal knowledge. Don't change this.
 	t.framework.Kill()
 	t.NodeProducer <- true
 	return true

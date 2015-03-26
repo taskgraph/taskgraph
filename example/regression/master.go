@@ -96,7 +96,7 @@ func (t *dummyMaster) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
-	t.logger.Printf("master EnterEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+	t.logger.Printf("master EnterEpoch, task %d, epoch %d\n", t.taskID, epoch)
 	t.param = new(pb.Parameter)
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 
@@ -134,12 +134,12 @@ func (t *dummyMaster) gradientReady(ctx context.Context) {
 	// In real ML, we modify the gradient first. But here it is noop.
 	if t.epoch == t.numberOfIterations {
 		if t.config["writefile"] != "" {
-			data := []byte(fmt.Sprintf("Finished job. Gradient value: %v\n", t.gradient.Value))
+			data := []byte(fmt.Sprintf("Finished job. Gradient value %v\n", t.gradient.Value))
 			ioutil.WriteFile(t.config["writefile"], data, 0644)
 		}
 		t.framework.ShutdownJob()
 	} else {
-		t.logger.Printf("master finished current epoch, task: %d, epoch: %d", t.taskID, t.epoch)
+		t.logger.Printf("master finished current epoch, task %d, epoch %d", t.taskID, t.epoch)
 		t.framework.IncEpoch(ctx)
 	}
 }
@@ -151,7 +151,7 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, output
 	}
 	t.fromChildren[childID] = d
 
-	t.logger.Printf("master ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+	t.logger.Printf("master ChildDataReady, task %d, epoch %d, child %d, ready %d\n",
 		t.taskID, t.epoch, childID, len(t.fromChildren))
 
 	// This is a weak form of checking. We can also check the task ids.
@@ -200,9 +200,8 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 	if !probablyFail(t.config["faillevel"]) {
 		return false
 	}
-	t.logger.Printf("master task %d testably fail, method: %s\n", t.taskID, method)
+	t.logger.Printf("master task %d testably fail, method %s\n", t.taskID, method)
 	// Very hack. Need some internal knowledge. Don't change this.
-	t.Exit()
 	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
