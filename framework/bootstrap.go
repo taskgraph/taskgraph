@@ -111,13 +111,13 @@ func (f *framework) run() {
 			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("abort data request because epoch mismatch, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
+				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
 			if resp.epoch != f.epoch {
-				f.log.Printf("abort data response because epoch mismatch, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
+				f.log.Printf("abort data response, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
 			f.handleDataResp(f.userCtx, resp)
