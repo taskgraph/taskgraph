@@ -1,15 +1,16 @@
 package regression
 
 import (
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
-	"github.com/taskgraph/taskgraph/pkg/common"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // dummySlave is an prototype for data shard in machine learning applications.
@@ -22,11 +23,18 @@ type dummySlave struct {
 	NodeProducer  chan bool
 	config        map[string]string
 
-	param          *pb.Parameter
-	gradient       *pb.Gradient
-	fromChildren   map[uint64]*pb.Gradient
-	gradientReady  *common.CountdownLatch
-	parameterReady *common.CountdownLatch
+	param        *pb.Parameter
+	gradient     *pb.Gradient
+	fromChildren map[uint64]*pb.Gradient
+
+	epochChange chan *event
+	getP        chan *event
+	getG        chan *event
+	pDataReady  chan *event
+	gDataReady  chan *event
+	getPReqs    []*event
+	getGReqs    []*event
+	exitChan    chan struct{}
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -34,136 +42,184 @@ func (t *dummySlave) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-}
-func (t *dummySlave) Exit() {}
 
-// Ideally, we should also have the following
-func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	if linkType == "Parents" {
-		t.logger.Printf("slave ParentMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		t.framework.DataRequest(ctx, fromID, "/proto.Regression/GetParameter", &pb.Input{t.epoch})
+	t.epochChange = make(chan *event, 1)
+	t.getP = make(chan *event, 1)
+	t.getG = make(chan *event, 1)
+	t.pDataReady = make(chan *event, 1)
+	t.gDataReady = make(chan *event, 1)
+	t.exitChan = make(chan struct{})
+	go t.run()
+}
+
+func (t *dummySlave) run() {
+	for {
+		select {
+		case ec := <-t.epochChange:
+			for _, req := range t.getPReqs {
+				close(req.retP)
+			}
+			t.getPReqs = nil
+			for _, req := range t.getGReqs {
+				close(req.retG)
+			}
+			t.getGReqs = nil
+
+			t.enterEpoch(ec.ctx, ec.epoch)
+		case req := <-t.getP:
+			// We have to check epoch here in user level because grpc doesn't
+			// allow use to intercept messages. This should be fixed later.
+			err := t.framework.CheckGRPCContext(req.ctx)
+			if err != nil {
+				close(req.retP)
+				break
+			}
+			if t.param != nil {
+				req.retP <- t.param
+				break
+			}
+			// Waiting queue. Requests will get notified later. The number of request
+			// won't be huge presumingly.
+			t.getPReqs = append(t.getPReqs, req)
+		case req := <-t.getG:
+			err := t.framework.CheckGRPCContext(req.ctx)
+			if err != nil {
+				close(req.retG)
+				break
+			}
+			if t.gradient != nil {
+				req.retG <- t.gradient
+				break
+			}
+			// Waiting queue. Requests will get notified later. The number of request
+			// won't be huge presumingly.
+			t.getGReqs = append(t.getGReqs, req)
+		case pr := <-t.pDataReady:
+			t.ParentDataReady(pr.ctx, pr.fromID, pr.output)
+		case gr := <-t.gDataReady:
+			t.ChildDataReady(gr.ctx, gr.fromID, gr.output)
+		case <-t.exitChan:
+			return
+		}
 	}
-	if linkType == "Children" {
-		t.logger.Printf("slave ChildMetaReady, task: %d, epoch: %d\n", t.taskID, t.epoch)
-		go func() {
-			// If a new node restart and find out both parent and child meta ready, it will
-			// simultaneously request both data. We need to wait until gradient data is there.
-			t.gradientReady.Await()
-			t.framework.DataRequest(ctx, fromID, "/proto.Regression/GetGradient", &pb.Input{t.epoch})
-		}()
-	}
+}
+
+func (t *dummySlave) Exit() {
+	close(t.exitChan)
 }
 
 // This give the task an opportunity to cleanup and regroup.
-func (t *dummySlave) SetEpoch(ctx context.Context, epoch uint64) {
-	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+func (t *dummySlave) EnterEpoch(ctx context.Context, epoch uint64) {
+	t.epochChange <- &event{ctx: ctx, epoch: epoch}
+}
 
-	t.param = new(pb.Parameter)
-	t.gradient = new(pb.Gradient)
-	t.gradientReady = common.NewCountdownLatch(1)
-	t.parameterReady = common.NewCountdownLatch(1)
-
-	t.epoch = epoch
-	// Make sure we have a clean slate.
+func (t *dummySlave) enterEpoch(ctx context.Context, epoch uint64) {
+	t.logger.Printf("slave EnterEpoch, task %d, epoch %d\n", t.taskID, epoch)
+	t.param = nil
+	t.gradient = nil
 	t.fromChildren = make(map[uint64]*pb.Gradient)
+	t.epoch = epoch
+
+	parent := t.framework.GetTopology().GetNeighbors("Parents", epoch)[0]
+	t.framework.DataRequest(ctx, parent, "/proto.Regression/GetParameter", &pb.Input{})
+
+	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
+		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
+	}
 }
 
 func (t *dummySlave) GetParameter(ctx context.Context, input *pb.Input) (*pb.Parameter, error) {
-	err := t.framework.CheckEpoch(input.Epoch)
-	if err != nil {
-		return nil, err
+	retP := make(chan *pb.Parameter, 1)
+	t.getP <- &event{ctx: ctx, input: input, retP: retP}
+	p, ok := <-retP
+	if !ok {
+		return nil, fmt.Errorf("epoch changed")
 	}
-	// There is a race:
-	//   A -> B -> C (parent -> child)
-	//   B has flagged "parameter Ready"
-	//   Now B crashed, and C crashed. C restarted and found B has flagged "parameter Ready".
-	//   C requested B. B needs to await until it actually has the data.
-	t.parameterReady.Await()
-	return t.param, nil
+	md, _ := metadata.FromContext(ctx)
+	t.logger.Printf("slave serve GetParameter, task %d, from %s, epoch %s", t.taskID, md["taskID"], md["epoch"])
+	return p, nil
 }
 
 func (t *dummySlave) GetGradient(ctx context.Context, input *pb.Input) (*pb.Gradient, error) {
-	err := t.framework.CheckEpoch(input.Epoch)
-	if err != nil {
-		return nil, err
+	retG := make(chan *pb.Gradient, 1)
+	t.getG <- &event{ctx: ctx, input: input, retG: retG}
+	g, ok := <-retG
+	if !ok {
+		return nil, fmt.Errorf("epoch changed")
 	}
-	return t.gradient, nil
+	md, _ := metadata.FromContext(ctx)
+	t.logger.Printf("slave serve GetGradient, task %d, from %s, epoch %s", t.taskID, md["taskID"], md["epoch"])
+	return g, nil
+}
+
+func (t *dummySlave) parameterReady() {
+	for _, req := range t.getPReqs {
+		req.retP <- t.param
+	}
+	t.getPReqs = nil
+}
+func (t *dummySlave) gradientReady(ctx context.Context) {
+	t.logger.Printf("slave gradient ready, task %d, epoch %d, gradient %d", t.taskID, t.epoch, t.gradient.Value)
+	// If this failure happens, a new node will redo computing again.
+	if t.testablyFail("ChildDataReady") {
+		return
+	}
+	for _, req := range t.getGReqs {
+		req.retG <- t.gradient
+	}
+	t.getGReqs = nil
+	// if this failure happens, the parent could
+	// 1. not get the data. DataRequest shall retry.
+	// 2. already get the data. Where everything will continue and some work will drop
+	//    if epoch bumps up.
+	if t.testablyFail("ChildDataReady") {
+		return
+	}
+}
+func (t *dummySlave) checkGradReady(ctx context.Context) {
+	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
+	if t.param != nil && len(t.fromChildren) == len(children) {
+		t.gradient = new(pb.Gradient)
+		t.gradient.Value = t.param.Value * int32(t.taskID)
+		// In real ML, we add the gradient first.
+		for _, g := range t.fromChildren {
+			t.gradient.Value += g.Value
+		}
+		t.gradientReady(ctx)
+	}
 }
 
 func (t *dummySlave) ParentDataReady(ctx context.Context, parentID uint64, output proto.Message) {
-	t.logger.Printf("slave ParentDataReady, task: %d, epoch: %d, parent: %d\n", t.taskID, t.epoch, parentID)
+	t.logger.Printf("slave ParentDataReady, task %d, epoch %d, parent %d\n", t.taskID, t.epoch, parentID)
 	if t.testablyFail("ParentDataReady") {
-		return
-	}
-	if t.gradientReady.Count() == 0 {
 		return
 	}
 	d, ok := output.(*pb.Parameter)
 	if !ok {
-		panic("")
+		t.logger.Fatalf("Can't convert proto message to Gradient: %v", output)
 	}
 	t.param = d
-	t.parameterReady.CountDown()
-	// We need to carry out local compuation.
-	t.gradient.Value = t.param.Value * int32(t.framework.GetTaskID())
-	t.gradientReady.CountDown()
-
-	// If this task has children, flag meta so that children can start pull
-	// parameter.
-	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
-	if len(children) != 0 {
-		t.framework.FlagMeta(ctx, "Parents", "ParamReady")
-	} else {
-		// On leaf node, we can immediately return by and flag parent
-		// that this node is ready.
-		t.framework.FlagMeta(ctx, "Children", "GradientReady")
-	}
+	t.parameterReady()
+	t.checkGradReady(ctx)
 }
 
 func (t *dummySlave) ChildDataReady(ctx context.Context, childID uint64, output proto.Message) {
 	d, ok := output.(*pb.Gradient)
 	if !ok {
-		panic("")
+		t.logger.Fatalf("Can't convert proto message to Gradient: %v", output)
 	}
 	t.fromChildren[childID] = d
 
-	t.logger.Printf("slave ChildDataReady, task: %d, epoch: %d, child: %d, ready: %d\n",
+	t.logger.Printf("slave ChildDataReady, task %d, epoch %d, child %d, ready %d\n",
 		t.taskID, t.epoch, childID, len(t.fromChildren))
-
-	// This is a weak form of checking. We can also check the task ids.
-	// But this really means that we get all the events from children, we
-	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
-		// In real ML, we add the gradient first.
-		for _, g := range t.fromChildren {
-			t.gradient.Value += g.Value
-		}
-
-		// If this failure happens, a new node will redo computing again.
-		if t.testablyFail("ChildDataReady") {
-			return
-		}
-
-		t.framework.FlagMeta(ctx, "Children", "GradientReady")
-
-		// if this failure happens, the parent could
-		// 1. not have the data yet. In such case, the parent could
-		//   1.1 not request the data before a new node restarts. This will cause
-		//       double requests since we provide at-least-once semantics (!outdated).
-		//   1.2 request the data with a failed host (request should fail or be
-		//       responded with error message).
-		// 2. already get the data.
-		if t.testablyFail("ChildDataReady") {
-			return
-		}
-	}
+	t.checkGradReady(ctx)
 }
 
 func (t *dummySlave) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	if method == "/proto.Regression/GetParameter" {
-		t.ParentDataReady(ctx, fromID, output)
+		t.pDataReady <- &event{ctx: ctx, fromID: fromID, output: output}
 	} else {
-		t.ChildDataReady(ctx, fromID, output)
+		t.gDataReady <- &event{ctx: ctx, fromID: fromID, output: output}
 	}
 }
 
@@ -178,6 +234,7 @@ func (t *dummySlave) testablyFail(method string, args ...string) bool {
 		return false
 	}
 	t.logger.Printf("slave task %d testably fail, method: %s\n", t.taskID, method)
+	// Very hack. Need some internal knowledge. Don't change this.
 	t.framework.Kill()
 	t.NodeProducer <- true
 	return true
@@ -199,3 +256,5 @@ func (t *dummySlave) CreateServer() *grpc.Server {
 	pb.RegisterRegressionServer(server, t)
 	return server
 }
+
+func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}

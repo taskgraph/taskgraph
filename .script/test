@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 ETCDTESTDIR=".tmp/etcd-testdir"
 

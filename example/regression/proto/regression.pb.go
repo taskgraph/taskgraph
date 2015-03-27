@@ -30,7 +30,6 @@ var _ grpc.ClientConn
 var _ = proto1.Marshal
 
 type Input struct {
-	Epoch uint64 `protobuf:"varint,1,opt,name=epoch" json:"epoch,omitempty"`
 }
 
 func (m *Input) Reset()         { *m = Input{} }
@@ -100,7 +99,7 @@ func RegisterRegressionServer(s *grpc.Server, srv RegressionServer) {
 	s.RegisterService(&_Regression_serviceDesc, srv)
 }
 
-func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, buf []byte) (proto1.Message, error) {
+func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
 	in := new(Input)
 	if err := proto1.Unmarshal(buf, in); err != nil {
 		return nil, err
@@ -112,7 +111,7 @@ func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, buf 
 	return out, nil
 }
 
-func _Regression_GetGradient_Handler(srv interface{}, ctx context.Context, buf []byte) (proto1.Message, error) {
+func _Regression_GetGradient_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
 	in := new(Input)
 	if err := proto1.Unmarshal(buf, in); err != nil {
 		return nil, err

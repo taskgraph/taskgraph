@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
@@ -25,11 +24,13 @@ type framework struct {
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 
-	task       taskgraph.Task
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	ln         net.Listener
+	task          taskgraph.Task
+	taskID        uint64
+	epoch         uint64
+	etcdClient    *etcd.Client
+	ln            net.Listener
+	userCtx       context.Context
+	userCtxCancel context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -62,11 +63,6 @@ type contextKey int
 // different integer values.
 const epochKey contextKey = 1
 
-// Now use google context, for we simply create a barebone and attach the epoch to it.
-func (f *framework) createContext() context.Context {
-	return context.WithValue(context.Background(), epochKey, f.epoch)
-}
-
 func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
@@ -92,25 +88,6 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
 			f.taskID, epoch+1, epoch, err)
-	}
-}
-
-func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
-	epoch, ok := ctx.Value(epochKey).(uint64)
-	if !ok {
-		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
-	}
-
-	// assumption here:
-	// Event driven task will call this in a synchronous way so that
-	// the epoch won't change at the time task sending this request.
-	// Epoch may change, however, before the request is actually being sent.
-	f.dataReqtoSendChan <- &dataRequest{
-		ctx:    ctx,
-		taskID: toID,
-		epoch:  epoch,
-		input:  input,
-		method: method,
 	}
 }
 

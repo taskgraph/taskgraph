@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - 1.4
+
+install:
+  - .script/dep.sh
+
+before_script:
+  - mkdir .tmp
+
+script:
+  - .script/test
