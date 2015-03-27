@@ -73,6 +73,7 @@ func (t *dummyMaster) run() {
 			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
 				close(req.retP)
+				break
 			}
 			req.retP <- t.param
 		case cr := <-t.childDataReady:
