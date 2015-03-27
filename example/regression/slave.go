@@ -72,6 +72,7 @@ func (t *dummySlave) run() {
 			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
 				close(req.retP)
+				break
 			}
 			if t.param != nil {
 				req.retP <- t.param
@@ -84,6 +85,7 @@ func (t *dummySlave) run() {
 			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
 				close(req.retG)
+				break
 			}
 			if t.gradient != nil {
 				req.retG <- t.gradient
