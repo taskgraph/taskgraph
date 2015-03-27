@@ -24,7 +24,9 @@ func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *lo
 	}
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) { f.taskBuilder = taskBuilder }
+func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
+	f.taskBuilder = taskBuilder
+}
 
 func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
@@ -64,14 +66,14 @@ func (f *framework) Start() {
 	f.topology.SetTaskID(f.taskID)
 
 	f.heartbeat()
-	f.setupChannels()
+	f.setup()
 	f.task.Init(f.taskID, f)
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
 }
 
-func (f *framework) setupChannels() {
+func (f *framework) setup() {
 	f.httpStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 100)
 	f.dataReqtoSendChan = make(chan *dataRequest, 100)
@@ -83,7 +85,6 @@ func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
-	// We need put off starting server here after task#SetEpoch is called.
 	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
@@ -91,7 +92,6 @@ func (f *framework) run() {
 		case nextEpoch, ok := <-f.epochChan:
 			f.releaseEpochResource()
 			if !ok { // single task exit
-				nextEpoch = exitEpoch
 				return
 			}
 			f.epoch = nextEpoch
@@ -108,19 +108,19 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.createContext(), meta.from, meta.who, meta.meta)
+			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				f.log.Printf("abort data request because epoch mismatch, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
 			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.epoch, f.epoch)
+				f.log.Printf("abort data response because epoch mismatch, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
-			f.handleDataResp(f.createContext(), resp)
+			f.handleDataResp(f.userCtx, resp)
 		case ec := <-f.epochCheckChan:
 			if ec.epoch != f.epoch {
 				ec.fail()
@@ -136,7 +136,10 @@ func (f *framework) setEpochStarted() {
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
-	f.task.SetEpoch(f.createContext(), f.epoch)
+	f.userCtx = context.WithValue(context.Background(), epochKey, f.epoch)
+	f.userCtx, f.userCtxCancel = context.WithCancel(f.userCtx)
+
+	f.task.EnterEpoch(f.userCtx, f.epoch)
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
@@ -147,6 +150,7 @@ func (f *framework) setEpochStarted() {
 }
 
 func (f *framework) releaseEpochResource() {
+	f.userCtxCancel()
 	close(f.epochPassed)
 	for _, c := range f.metaStops {
 		c <- true
@@ -170,7 +174,10 @@ func (f *framework) occupyTask() error {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		ok, err := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		if err != nil {
+			return err
+		}
 		if ok {
 			f.taskID = freeTask
 			return nil
