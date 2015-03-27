@@ -50,7 +50,6 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
 	}
-
 	// assumption here:
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
