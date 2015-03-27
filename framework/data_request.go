@@ -34,7 +34,7 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 		epoch:   epoch,
 		resChan: resChan,
 	}:
-	case <-f.heartbeatStop:
+	case <-f.globalStop:
 		return fmt.Errorf("framework stopped")
 	}
 	ok = <-resChan
@@ -142,7 +142,7 @@ func (f *framework) startHTTP() {
 	server := f.task.CreateServer()
 	err := server.Serve(f.ln)
 	select {
-	case <-f.httpStop:
+	case <-f.globalStop:
 		server.Stop()
 		f.log.Printf("grpc stops serving")
 	default:
@@ -150,13 +150,6 @@ func (f *framework) startHTTP() {
 			f.log.Fatalf("grpc.Serve returns error: %v\n", err)
 		}
 	}
-}
-
-// Close listener, stop HTTP server;
-// Write error message back to under-serving responses.
-func (f *framework) stopHTTP() {
-	close(f.httpStop)
-	f.ln.Close()
 }
 
 func (f *framework) handleDataResp(ctx context.Context, resp *dataResponse) {

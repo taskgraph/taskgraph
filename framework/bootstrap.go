@@ -45,16 +45,16 @@ func (f *framework) Start() {
 
 	f.log.SetPrefix(fmt.Sprintf("task %d: ", f.taskID))
 
-	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
-	f.epochStop = make(chan bool, 1)   // stop etcd watch
+	f.epochWatcher = make(chan uint64, 1) // grab epoch from etcd
+	f.epochWatchStop = make(chan bool, 1) // stop etcd watch
 	// meta will have epoch prepended so we must get epoch before any watch on meta
-	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
+	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochWatcher, f.epochWatchStop)
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
 	if f.epoch == exitEpoch {
 		f.log.Printf("found that job has finished\n")
-		f.epochStop <- true
+		f.epochWatchStop <- true
 		return
 	}
 	f.log.Printf("starting at epoch %d\n", f.epoch)
@@ -74,11 +74,11 @@ func (f *framework) Start() {
 }
 
 func (f *framework) setup() {
-	f.httpStop = make(chan struct{})
-	f.metaChan = make(chan *metaChange, 100)
-	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataRespChan = make(chan *dataResponse, 100)
-	f.epochCheckChan = make(chan *epochCheck, 100)
+	f.globalStop = make(chan struct{})
+	f.metaChan = make(chan *metaChange, 1)
+	f.dataReqtoSendChan = make(chan *dataRequest, 1)
+	f.dataRespChan = make(chan *dataResponse, 1)
+	f.epochCheckChan = make(chan *epochCheck, 1)
 }
 
 func (f *framework) run() {
@@ -89,7 +89,7 @@ func (f *framework) run() {
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
-		case nextEpoch, ok := <-f.epochChan:
+		case nextEpoch, ok := <-f.epochWatcher:
 			f.releaseEpochResource()
 			if !ok { // single task exit
 				return
@@ -132,7 +132,6 @@ func (f *framework) run() {
 }
 
 func (f *framework) setEpochStarted() {
-	f.epochPassed = make(chan struct{})
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
@@ -151,7 +150,6 @@ func (f *framework) setEpochStarted() {
 
 func (f *framework) releaseEpochResource() {
 	f.userCtxCancel()
-	close(f.epochPassed)
 	for _, c := range f.metaStops {
 		c <- true
 	}
@@ -161,9 +159,9 @@ func (f *framework) releaseEpochResource() {
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
-	f.epochStop <- true
-	close(f.heartbeatStop)
-	f.stopHTTP()
+	f.epochWatchStop <- true
+	close(f.globalStop)
+	f.ln.Close() // stop grpc server
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
