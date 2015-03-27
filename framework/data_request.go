@@ -27,9 +27,15 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 	}
 	// send it to framework central select and check epoch.
 	resChan := make(chan bool, 1)
-	f.epochCheckChan <- &epochCheck{
+	// The select loop might stop running but we still need to return error to user.
+	// We can't use the ctx here because it's the grpc context.
+	select {
+	case f.epochCheckChan <- &epochCheck{
 		epoch:   epoch,
 		resChan: resChan,
+	}:
+	case <-f.heartbeatStop:
+		return fmt.Errorf("framework stopped")
 	}
 	ok = <-resChan
 	if ok {
@@ -49,12 +55,16 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
-	f.dataReqtoSendChan <- &dataRequest{
+	select {
+	case f.dataReqtoSendChan <- &dataRequest{
 		ctx:    f.makeGRPCContext(ctx),
 		taskID: toID,
 		epoch:  epoch,
 		input:  input,
 		method: method,
+	}:
+	case <-ctx.Done():
+		f.log.Printf("abort data request, to %d, epoch %d, method %s", toID, epoch, method)
 	}
 }
 
@@ -74,13 +84,13 @@ func (f *framework) sendRequest(dr *dataRequest) {
 		go f.retrySendRequest(dr)
 		return
 	}
-	// TODO: save ClientConn creation steps.
+	// TODO: reuse ClientConn and reply message.
 	// The grpc.WithTimeout would help detect any disconnection in failfast.
 	// Otherwise grpc.Invoke will keep retrying.
 	cc, err := grpc.Dial(addr, grpc.WithTimeout(heartbeatInterval))
 	// we need to retry if some task failed and there is a temporary Get request failure.
 	if err != nil {
-		f.log.Printf("grpc.Dial from task %d (addr: %s) failed: %v", dr.taskID, addr, err)
+		f.log.Printf("grpc.Dial to task %d (addr: %s) failed: %v", dr.taskID, addr, err)
 		// Should retry for other errors.
 		go f.retrySendRequest(dr)
 		return
@@ -94,17 +104,21 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	reply := f.task.CreateOutputMessage(dr.method)
 	err = grpc.Invoke(dr.ctx, dr.method, dr.input, reply, cc)
 	if err != nil {
-		f.log.Printf("grpc.Invoke from task %d (addr: %s), method: %s, failed: %v", dr.taskID, addr, dr.method, err)
+		f.log.Printf("grpc.Invoke to task %d (addr: %s), method: %s, failed: %v", dr.taskID, addr, dr.method, err)
 		go f.retrySendRequest(dr)
 		return
 	}
 
-	f.dataRespChan <- &dataResponse{
+	select {
+	case f.dataRespChan <- &dataResponse{
 		epoch:  dr.epoch,
 		taskID: dr.taskID,
 		method: dr.method,
 		input:  dr.input,
 		output: reply,
+	}:
+	case <-dr.ctx.Done():
+		f.log.Printf("abort data response, to %d, epoch %d, method %s", dr.taskID, dr.epoch, dr.method)
 	}
 }
 
@@ -113,7 +127,11 @@ func (f *framework) retrySendRequest(dr *dataRequest) {
 	// gets up and running.
 	time.Sleep(2 * heartbeatInterval)
 	dr.retry = true
-	f.dataReqtoSendChan <- dr
+	select {
+	case f.dataReqtoSendChan <- dr:
+	case <-dr.ctx.Done():
+		f.log.Printf("abort data request, to %d, epoch %d, method %s", dr.taskID, dr.epoch, dr.method)
+	}
 }
 
 // Framework http server for data request.
