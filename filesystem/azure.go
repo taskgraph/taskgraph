@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -98,8 +99,6 @@ func (c *AzureClient) OpenReadCloser(name string) (io.ReadCloser, error) {
 
 //AzureClient -> OpenWriteCloser function
 // If not exist, Create corresponding Container and blob.
-// At present, AzureFile.Write has a capacity restriction(10 * 1024 * 1024 bytes).
-// I will implent unlimited version in the future.
 func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 	exist, err := c.Exists(name)
 	if err != nil {
@@ -135,12 +134,32 @@ func (f *AzureFile) Write(b []byte) (int, error) {
 	if err != nil {
 		return 0, nil
 	}
+
 	blocksLen := len(blockList.CommittedBlocks) + len(blockList.UncommittedBlocks)
-	blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen-1)))
-	err = f.client.PutBlock(cnt, blob, blockId, b)
-	if err != nil {
+	var chunkSize int = storage.MaxBlobBlockSize
+	inputSourceReader := bytes.NewReader(b)
+	chunk := make([]byte, chunkSize)
+	n, err := inputSourceReader.Read(chunk)
+	if err != nil && err != io.EOF {
 		return 0, err
 	}
+	if err == io.EOF {
+		return 0, fmt.Errorf("Need blob content")
+	}
+	for err != io.EOF {
+		blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen-1)))
+		data := chunk[:n]
+		err = f.client.PutBlock(cnt, blob, blockId, data)
+		if err != nil {
+			return 0, err
+		}
+		blocksLen++
+		n, err = inputSourceReader.Read(chunk)
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
+	}
+
 	blockList, err = f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
 	if err != nil {
 		return 0, err
