@@ -90,14 +90,14 @@ func (m *SparseMatrixShard) GetRow() []*SparseMatrixShard_SparseRow {
 }
 
 type SparseMatrixShard_SparseRow struct {
-	At map[uint32]float32 `protobuf:"bytes,1,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
+	At map[int32]float32 `protobuf:"bytes,1,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
 }
 
 func (m *SparseMatrixShard_SparseRow) Reset()         { *m = SparseMatrixShard_SparseRow{} }
 func (m *SparseMatrixShard_SparseRow) String() string { return proto1.CompactTextString(m) }
 func (*SparseMatrixShard_SparseRow) ProtoMessage()    {}
 
-func (m *SparseMatrixShard_SparseRow) GetAt() map[uint32]float32 {
+func (m *SparseMatrixShard_SparseRow) GetAt() map[int32]float32 {
 	if m != nil {
 		return m.At
 	}

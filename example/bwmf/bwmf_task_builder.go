@@ -6,14 +6,14 @@ import (
 
 // TaskBuilder with task specific configs.
 type BWMFTaskBuilder struct {
-	numOfTasks uint32
-	numOfIters uint32
+	numOfTasks uint64
+	numOfIters uint64
 	pgmSigma   float32
 	pgmAlpha   float32
 	pgmBeta    float32
 	pgmTol     float32
 	blockId    uint32
-	K          uint32
+	K          int
 
 	rowShardPath, columnShardPath string
 
@@ -29,7 +29,7 @@ func (btb *BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		beta:            btb.pgmBeta,
 		tol:             btb.pgmTol,
 		blockId:         btb.blockId,
-		K:               btb.K,
+		k:               btb.K,
 		rowShardPath:    btb.rowShardPath,
 		columnShardPath: btb.columnShardPath,
 		namenodeAddr:    btb.namenodeAddr,

@@ -35,7 +35,7 @@ message DenseMatrixShard {
 // In bwmf, this message is for sharded row/column data.
 message SparseMatrixShard {
   message SparseRow {
-    map<uint32, float> at = 1;
+    map<int32, float> at = 1;
   } 
 
   repeated SparseRow row = 1;
