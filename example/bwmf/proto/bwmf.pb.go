@@ -18,6 +18,15 @@ package proto
 
 import proto1 "github.com/golang/protobuf/proto"
 
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto1.Marshal
 
@@ -105,4 +114,88 @@ func (m *SparseMatrixShard_SparseRow) GetAt() map[int32]float32 {
 }
 
 func init() {
+}
+
+// Client API for BlockData service
+
+type BlockDataClient interface {
+	GetTShard(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	GetDShard(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+}
+
+type blockDataClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewBlockDataClient(cc *grpc.ClientConn) BlockDataClient {
+	return &blockDataClient{cc}
+}
+
+func (c *blockDataClient) GetTShard(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := grpc.Invoke(ctx, "/proto.BlockData/GetTShard", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *blockDataClient) GetDShard(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := grpc.Invoke(ctx, "/proto.BlockData/GetDShard", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for BlockData service
+
+type BlockDataServer interface {
+	GetTShard(context.Context, *Request) (*Response, error)
+	GetDShard(context.Context, *Request) (*Response, error)
+}
+
+func RegisterBlockDataServer(s *grpc.Server, srv BlockDataServer) {
+	s.RegisterService(&_BlockData_serviceDesc, srv)
+}
+
+func _BlockData_GetTShard_Handler(srv interface{}, ctx context.Context, buf []byte) (proto1.Message, error) {
+	in := new(Request)
+	if err := proto1.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(BlockDataServer).GetTShard(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _BlockData_GetDShard_Handler(srv interface{}, ctx context.Context, buf []byte) (proto1.Message, error) {
+	in := new(Request)
+	if err := proto1.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(BlockDataServer).GetDShard(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+var _BlockData_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.BlockData",
+	HandlerType: (*BlockDataServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetTShard",
+			Handler:    _BlockData_GetTShard_Handler,
+		},
+		{
+			MethodName: "GetDShard",
+			Handler:    _BlockData_GetDShard_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{},
 }
