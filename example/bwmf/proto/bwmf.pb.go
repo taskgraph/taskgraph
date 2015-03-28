@@ -41,8 +41,8 @@ func (*Request) ProtoMessage()    {}
 
 // Response of the block matrix data, with the associated block id.
 type Response struct {
-	Id    int32             `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
-	Shard *DenseMatrixShard `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	BlockId uint32            `protobuf:"varint,1,opt,name=blockId" json:"blockId,omitempty"`
+	Shard   *DenseMatrixShard `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
 }
 
 func (m *Response) Reset()         { *m = Response{} }

@@ -1,6 +1,8 @@
 package bwmf
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	// "math/rand"
 	"os"
@@ -80,12 +82,15 @@ type bwmfTask struct {
 	epochChange chan *event
 	getD        chan *event
 	getT        chan *event
-	dataReady   chan *event
+	tDataReady  chan *event
+	dDataReady  chan *event
 	exitChan    chan struct{}
 }
 
 // These two function carry out actual optimization.
 func (bt *bwmfTask) updateDShard() {
+
+	// TODO(baigang): set dLoss
 
 	ok := bt.optimizer.Minimize(bt.dLoss, bt.stopCriteria, bt.shardedDParam)
 	if !ok {
@@ -95,6 +100,8 @@ func (bt *bwmfTask) updateDShard() {
 }
 
 func (bt *bwmfTask) updateTShard() {
+
+	// TODO(baigang): set tLoss
 
 	ok := bt.optimizer.Minimize(bt.tLoss, bt.stopCriteria, bt.shardedTParam)
 	if !ok {
@@ -116,12 +123,25 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	}
 	rowShardReader, rsrOk := hdfsClient.OpenReadCloser(bt.rowShardPath)
 	if rsrOk != nil {
-		bt.logger.Fatalf("Failed load matrix data on task: %d", bt.taskID)
+		bt.logger.Fatalf("Failed load matrix data on task: %d, form path %s", bt.taskID, bt.rowShardPath)
 	}
 	columnShardReader, csrOk := hdfsClient.OpenReadCloser(bt.columnShardPath)
 	if csrOk != nil {
-		bt.logger.Fatalf("Failed load matrix data on task: %d", bt.taskID)
+		bt.logger.Fatalf("Failed load matrix data on task: %d, from path %s", bt.taskID, bt.columnShardPath)
 	}
+
+	rowBuf, rbOk := ioutil.ReadAll(rowShardReader)
+	if rbOk != nil {
+		bt.logger.Fatalf("Failed read rowSharded data on task: %d", bt.taskID)
+	}
+
+	columnBuf, cbOk := ioutil.ReadAll(columnShardReader)
+	if cbOk != nil {
+		bt.logger.Fatalf("Failed load columnSharded data on task: %d", bt.taskID)
+	}
+
+	rowUnmashalErr := proto.Unmarshal(rowBuf, bt.rowShard)
+	columnUnmashalErr := proto.Unmarshal(columnBuf, bt.rowShard)
 
 	// XXX(baigang) We set M and N via collecting all sharded D and T.
 	// XXX(baigang) K is set in the task builder.
@@ -184,18 +204,80 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	)
 
 	// channels for event-based `run()`
+	bt.epochChange = make(chan *event, 1)
+	bt.getD = make(chan *event, 1)
+	bt.getT = make(chan *event, 1)
+	bt.tDataReady = make(chan *event, 1)
+	bt.dDataReady = make(chan *event, 1)
+	bt.exitChan = make(chan struct{})
 
-	// At initialization:
-	// Task 0 will start the iterations.
+	// Now we have
+	go bt.run()
 }
 
 type event struct {
-	ctx     context.Context
-	epoch   uint64
-	request *pb.Request
-	retT    chan *pb.Response
-	retD    chan *pb.Response
+	ctx      context.Context
+	epoch    uint64
+	fromID   uint64
+	request  *pb.Request
+	retT     chan *pb.DenseMatrixShard
+	retD     chan *pb.DenseMatrixShard
+	response proto.Message
 	// to be extended
+}
+
+func (bt *bwmfTask) run() {
+	for {
+		select {
+		case ec := <-bt.epochChange:
+			bt.doEnterEpoch(ec.ctx, ec.epoch)
+		case reqT := <-bt.getT:
+			// do getT here, should be synchronous so we won't arrive at race condition
+			// also we assume that all D shards are ready here
+			bt.updateTShard()
+			reqT.retT <- bt.shardedT
+		case reqD := <-bt.getD:
+			// do getD here. Dittu as reqT
+			bt.updateDShard()
+			reqD.retD <- bt.shardedD
+
+		case dr := <-bt.tDataReady:
+			// each event comes as one shard is ready
+			// TODO: we need organize all the shards according to blockIds
+			// In other words, put each Response into fullT
+
+		case dr := <-bt.dDataReady:
+			// Dittu. Put response into fullD
+
+		case <-bt.exitChan:
+			return
+		}
+	}
+}
+
+func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
+	bt.epochChange <- &event{ctx: ctx, epoch: epoch}
+}
+func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
+	bt.epoch = epoch
+
+}
+
+// XXX(baigang): We do not have to get notified. We just send the request and wait for the response via grpc.
+func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	// XXX intentional empty
+}
+
+func (bt *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	switch method {
+	case "/proto.BlockData/GetTShard":
+		bt.tDataReady <- &event{ctx: ctx, fromID: fromID, response: output}
+	case "/proto.BlockData/GetDShard":
+		bt.dDataReady <- &event{ctx: ctx, fromID: fromID, response: output}
+	default:
+		bt.logger.Panicf("Unknow data method: %s", method)
+	}
 }
 
 func (bt *bwmfTask) CreateServer() *grpc.Server {
@@ -204,12 +286,13 @@ func (bt *bwmfTask) CreateServer() *grpc.Server {
 	return server
 }
 
+// NOTE: what's thsi
 func (bt *bwmfTask) CreateOutputMessage(methodName string) proto.Message {
 	switch methodName {
 	case "/proto.DataBlock/GetTShard":
-		// TODO: shardedT
+		return &pb.Response{BlockId: bt.blockId, Shard: bt.shardedT}
 	case "/proto.DataBlock/GetDShard":
-		// TODO: shardedD
+		return &pb.Response{BlockId: bt.blockId, Shard: bt.shardedD}
 	default:
 		bt.logger.Panicf("Unknown method: %s", methodName)
 	}
@@ -219,64 +302,40 @@ func (bt *bwmfTask) CreateOutputMessage(methodName string) proto.Message {
 }
 
 func (bt *bwmfTask) Exit() {
+	close(bt.exitChan)
 	// XXX Shall we dump the temporary results here or the last epoch?
 }
 
-func (bt *bwmfTask) run() {
-	for {
-		select {
-		case ec := <-bt.epochChange:
-
-		case reqT := <-bt.getT:
-
-		case reqD := <-bt.getD:
-
-		case dr := <-bt.dataReady:
-
-		case <-bt.exitChan:
-			return
-		}
-	}
-}
-
-func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
-	bt.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", bt.taskID, epoch)
-	bt.epoch = epoch
-
-	// Afterwards:
-	// We need to get all D/T from last epoch so that we can carry out local
-	// update on T/D.
-	// Even epochs: Fix D, calculate T;
-	// Odd epochs: Fix T, calculate D;
-
-}
-
-// XXX(baigang): We do not have to get notified. We just send the request and wait for the response via grpc.
-func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	// XXX intentional empty
-}
-
-func (bt *bwmfTask) DataReady(ctx context.Context, parentID uint64, method string, output proto.Message) {
-
-}
-
 // Implement of the DataBlock service described in proto.
-func (bt *bwmfTask) GetTShard(ctx context.Context, input *pb.Request) (*pb.Response, error) {
+func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
 	// XXX(baigang): here suppose tShard has already been optimized and stored in it
 
 	// Here basically we send a getT request to the event channel. Then the `Run()` will handle it and
 	// calculates the tShard, during which we just wait here. The result will be sent back to channel
 	// retT, and we fetch it here and respond it via grpc.
 
-	// make the compiler happy
-	panic("")
+	retT := make(chan *pb.DenseMatrixShard, 1)
+	bt.getT <- &event{ctx: ctx, request: request, retT: retT}
+
+	resT, ok := <-retT
+	if !ok {
+		return nil, fmt.Errorf("Failed getting T.")
+	}
+
+	// TODO & NOTE: create it here or use the one returned by CreateOutputMessage
+	return &pb.Response{BlockId: bt.blockId, Shard: resT}, nil
 }
 
-func (bt *bwmfTask) GetDShard(ctx context.Context, input *pb.Request) (*pb.Response, error) {
+func (bt *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
 	// XXX(baigang): here suppose tShard has already been optimized and stored in it
 
 	// same as GetTShard
+	retD := make(chan *pb.DenseMatrixShard, 1)
+	bt.getD <- &event{ctx: ctx, request: request, retD: retD}
 
-	// make the compiler happy
-	panic("")
+	resD, ok := <-retD
+	if !ok {
+		return nil, fmt.Errorf("Failed getting D.")
+	}
+	return &pb.Response{BlockId: bt.blockId, Shard: resD}, nil
 }

@@ -15,7 +15,7 @@ message Request {
 
 // Response of the block matrix data, with the associated block id.
 message Response {
-  int32 id = 1;
+  uint32 blockId = 1;
   DenseMatrixShard shard = 2;
 }
 
