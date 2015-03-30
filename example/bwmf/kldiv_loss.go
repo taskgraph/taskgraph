@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
-	"github.com/taskgraph/taskgraph/op"
+	op "github.com/taskgraph/taskgraph/op"
 )
 
 // `KLDivLoss` is a `Function` that evaluates Kullback-Leibler Divergence and the corresponding gradient at the given `Parameter`.
@@ -17,9 +17,9 @@ import (
 //
 type KLDivLoss struct {
 	V       *pb.SparseMatrixShard
-	W       *pb.DenseMatrixShard
-	WH      [][]float32 // temporary storage for the intermediate result W*H
-	m, n, k int         // dimensions
+	W       op.Parameter // blockParameter. An op.Parameter wrapper with map[uint32]*DenseMatrixShard as underlying storage
+	WH      [][]float32  // temporary storage for the intermediate result W*H
+	m, n, k int          // dimensions
 	smooth  float32
 }
 
@@ -41,7 +41,7 @@ type KLDivLoss struct {
 //  which goes parallel. One pass is for evaluating W*H and accumulate kl-divergence
 //  value and the other is for evalutating the matrix gradient of kl-div.
 //
-func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op.Parameter) float32 {
+func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 {
 	H := param
 	lossAccum := make(chan float32, 8)
 	for i := 0; i < l.m; i++ {
@@ -49,7 +49,7 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 			l.WH[i][j] = 0.0
 			go func(i, j int) {
 				for k := 0; k < l.k; k++ {
-					l.WH[i][j] += l.W.GetRow()[i].At[k] * H.Get(j*l.k+k)
+					l.WH[i][j] += l.W.Get(i*l.k+k) * H.Get(j*l.k+k)
 				}
 
 				// evaluate element-wise KL-divergence
@@ -79,7 +79,7 @@ func (l *KLDivLoss) Evaluate(param taskgraph_op.Parameter, gradient taskgraph_op
 			go func(grad_index, j, k int) {
 				defer wg.Done()
 				for i := 0; i < l.m; i++ {
-					grad_val := l.W.GetRow()[i].At[k] * (l.WH[i][j] - l.V.GetRow()[i].At[int32(j)]) / l.WH[i][j]
+					grad_val := l.W.Get(i*l.k+k) * (l.WH[i][j] - l.V.GetRow()[i].At[int32(j)]) / l.WH[i][j]
 					gradient.Add(grad_index, grad_val)
 				}
 			}(grad_index, j, k)
