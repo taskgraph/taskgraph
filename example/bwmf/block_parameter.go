@@ -15,7 +15,7 @@ type blockParameter struct {
 	size   int
 }
 
-func NewBlockParameter(matrices *map[uint32]*pb.DenseMatrixShard) op.Parameter {
+func NewBlocksParameter(matrices *map[uint32]*pb.DenseMatrixShard) op.Parameter {
 	stt := make([]int, len(*matrices)+1)
 	ost := 0
 	for i := 0; i < len(*matrices); i++ {
