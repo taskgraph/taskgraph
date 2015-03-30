@@ -177,8 +177,8 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		bt.shardedT.Row[i].At = make([]float32, bt.k)
 	}
 
-	bt.shardedDParam = NewBlockParameter(bt.shardedD)
-	bt.shardedTParam = NewBlockParameter(bt.shardedT)
+	bt.shardedDParam = NewSingleBlockParameter(bt.shardedD)
+	bt.shardedTParam = NewSingleBlockParameter(bt.shardedT)
 
 	// TODO set tLoss and dLoss
 	bt.tLoss = &KLDivLoss{
