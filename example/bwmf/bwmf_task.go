@@ -92,6 +92,8 @@ type bwmfTask struct {
 // These two function carry out actual optimization.
 func (bt *bwmfTask) updateDShard() {
 
+	// fullT is ready here
+
 	// TODO(baigang): set dLoss
 
 	ok := bt.optimizer.Minimize(bt.dLoss, bt.stopCriteria, bt.shardedDParam)
@@ -99,9 +101,12 @@ func (bt *bwmfTask) updateDShard() {
 		// TODO report error
 	}
 
+	// signal that dShard has already been evaluated
+	bt.dDone <- &event{epoch: bt.epoch}
 }
 
 func (bt *bwmfTask) updateTShard() {
+	// fullD is ready here
 
 	// TODO(baigang): set tLoss
 
@@ -110,7 +115,8 @@ func (bt *bwmfTask) updateTShard() {
 		// TODO report error
 	}
 
-	// TODO copy data from shardedTParam to shardedT
+	// signal that tShard has already been evaluated
+	bt.tDone <- &event{epoch: bt.epoch}
 }
 
 func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
@@ -247,6 +253,11 @@ func (bt *bwmfTask) run() {
 			// XXX wait for shardedT for current epoch
 			ee := <-bt.tDone
 			if ee.epoch == reqT.epoch {
+				err := bt.framework.CheckGRPCContext(reqT.ctx)
+				if err != nil {
+					close(reqT.retT)
+					break
+				}
 				reqT.retT <- bt.shardedT
 			}
 
@@ -254,6 +265,11 @@ func (bt *bwmfTask) run() {
 			// XXX Dittu, wait for shardedD for current epoch
 			ee := <-bt.dDone
 			if ee.epoch == reqD.epoch {
+				err := bt.framework.CheckGRPCContext(reqD.ctx)
+				if err != nil {
+					close(reqD.retD)
+					break
+				}
 				reqD.retD <- bt.shardedD
 			}
 
@@ -273,10 +289,8 @@ func (bt *bwmfTask) run() {
 
 			// if all tShards have arrived
 			if len(bt.fullT) == int(bt.numOfTasks) {
-				// optimize to evaluate dShard
-				bt.updateDShard()
-				// signal that dShard has already been evaluated
-				bt.dDone <- &event{epoch: bt.epoch}
+				// optimize to evaluate dShard. It will signals via bt.dDone at completion.
+				go bt.updateDShard()
 			}
 
 		case dr := <-bt.dDataReady:
@@ -293,10 +307,8 @@ func (bt *bwmfTask) run() {
 
 			// if all tShards have arrived
 			if len(bt.fullD) == int(bt.numOfTasks) {
-				// optimize to evaluate dShard
-				bt.updateTShard()
-				// signal that dShard has already been evaluated
-				bt.tDone <- &event{epoch: bt.epoch}
+				// optimize to evaluate dShard. It will signals via bt.tDone at completion.
+				go bt.updateTShard()
 			}
 
 		case <-bt.exitChan:
@@ -316,8 +328,21 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.fullD = make(map[uint32]*pb.DenseMatrixShard)
 	bt.fullT = make(map[uint32]*pb.DenseMatrixShard)
 
-	// TODO should we reset tLoss and dLoss here?
+	// ask for
+	var method string
+	if epoch%2 == 0 {
+		method = "/proto.BlockData/GetDShard"
+		// XXX: Add own block to it because neighbors doesn't include self.
+		bt.fullD[bt.blockId] = bt.shardedD
+	} else {
+		method = "proto.BlockData/GetTShard"
+		// dittu XXX.
+		bt.fullT[bt.blockId] = bt.shardedT
+	}
 
+	for _, c := range bt.framework.GetTopology().GetNeighbors("Children", epoch) {
+		bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
+	}
 }
 
 // XXX(baigang): We do not have to get notified. We just send the request and wait for the response via grpc.
@@ -342,18 +367,17 @@ func (bt *bwmfTask) CreateServer() *grpc.Server {
 	return server
 }
 
-// NOTE: what's thsi
 func (bt *bwmfTask) CreateOutputMessage(methodName string) proto.Message {
 	switch methodName {
-	case "/proto.DataBlock/GetTShard":
-		return &pb.Response{BlockId: bt.blockId, Shard: bt.shardedT}
-	case "/proto.DataBlock/GetDShard":
-		return &pb.Response{BlockId: bt.blockId, Shard: bt.shardedD}
+	case "/proto.BlockData/GetTShard":
+		return new(pb.Response)
+	case "/proto.BlockData/GetDShard":
+		return new(pb.Response)
 	default:
 		bt.logger.Panicf("Unknown method: %s", methodName)
 	}
 
-	// XXX make the compiler happy
+	// make the compiler happy
 	panic("")
 }
 
@@ -362,7 +386,7 @@ func (bt *bwmfTask) Exit() {
 	// XXX Shall we dump the temporary results here or the last epoch?
 }
 
-// Implement of the DataBlock service described in proto.
+// Implement of the BlockData service described in proto.
 func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
 	// XXX(baigang): here suppose tShard has already been optimized and stored in it
 
@@ -378,7 +402,6 @@ func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Res
 		return nil, fmt.Errorf("Failed getting T.")
 	}
 
-	// TODO & NOTE: create it here or use the one returned by CreateOutputMessage
 	return &pb.Response{BlockId: bt.blockId, Shard: resT}, nil
 }
 
