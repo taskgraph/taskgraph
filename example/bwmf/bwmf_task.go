@@ -30,7 +30,7 @@ factorization for a variety of criteria (loss function) and constraints (nonnega
 for example).
 
 The main idea behind the bwmf is following:
-We will have K tasks that handle both row task and column task in alternation. Each task
+We will have `numOfTasks` tasks that handle both row task and column task in alternation. Each task
 will read two copies of the data: one row shard and one column shard of A. It either hosts
 one shard of D and a full copy of T, or one shard of T and a full copy of D, depending on
 the epoch of iteration. "A full copy" consists of computation results from itself and
@@ -60,7 +60,7 @@ type bwmfTask struct {
 	rowShard, columnShard               *pb.SparseMatrixShard
 
 	shardedD, shardedT *pb.DenseMatrixShard
-	fullD, fullT       *pb.DenseMatrixShard // appended shards
+	fullD, fullT       map[uint32]*pb.DenseMatrixShard // blockId to Shard
 
 	// shardedD is size of m*k, t shard is size of k*n (but still its layed-out as n*k)
 	// fullD is size of M*k, fullT is size of k*N (dittu, layout N*k)
@@ -70,7 +70,7 @@ type bwmfTask struct {
 	// parameters for projected gradient methods
 	sigma, alpha, beta, tol float32
 
-	// Parameter data. They actually shares the underlying storage (buffer) with shardedD/T and fullD/T.
+	// Parameter data. They actually shares the underlying storage (buffer) with shardedD/T.
 	shardedDParam, shardedTParam taskgraph_op.Parameter
 
 	// objective function, parameters and minimizer to solve bwmf
@@ -84,6 +84,8 @@ type bwmfTask struct {
 	getT        chan *event
 	tDataReady  chan *event
 	dDataReady  chan *event
+	tDone       chan *event
+	dDone       chan *event
 	exitChan    chan struct{}
 }
 
@@ -142,6 +144,13 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 
 	rowUnmashalErr := proto.Unmarshal(rowBuf, bt.rowShard)
 	columnUnmashalErr := proto.Unmarshal(columnBuf, bt.rowShard)
+
+	if rowUnmashalErr != nil {
+		bt.logger.Fatalf("Failed unmarshalling row shard data on task: %d", bt.taskID)
+	}
+	if columnUnmashalErr != nil {
+		bt.logger.Fatalf("Failed unmarshalling column shard data on task: %d", bt.taskID)
+	}
 
 	// XXX(baigang) We set M and N via collecting all sharded D and T.
 	// XXX(baigang) K is set in the task builder.
@@ -209,6 +218,8 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.getT = make(chan *event, 1)
 	bt.tDataReady = make(chan *event, 1)
 	bt.dDataReady = make(chan *event, 1)
+	bt.tDone = make(chan *event, 1)
+	bt.dDone = make(chan *event, 1)
 	bt.exitChan = make(chan struct{})
 
 	// Now we have
@@ -231,23 +242,62 @@ func (bt *bwmfTask) run() {
 		select {
 		case ec := <-bt.epochChange:
 			bt.doEnterEpoch(ec.ctx, ec.epoch)
+
 		case reqT := <-bt.getT:
-			// do getT here, should be synchronous so we won't arrive at race condition
-			// also we assume that all D shards are ready here
-			bt.updateTShard()
-			reqT.retT <- bt.shardedT
+			// XXX wait for shardedT for current epoch
+			ee := <-bt.tDone
+			if ee.epoch == reqT.epoch {
+				reqT.retT <- bt.shardedT
+			}
+
 		case reqD := <-bt.getD:
-			// do getD here. Dittu as reqT
-			bt.updateDShard()
-			reqD.retD <- bt.shardedD
+			// XXX Dittu, wait for shardedD for current epoch
+			ee := <-bt.dDone
+			if ee.epoch == reqD.epoch {
+				reqD.retD <- bt.shardedD
+			}
 
 		case dr := <-bt.tDataReady:
 			// each event comes as one shard is ready
 			// TODO: we need organize all the shards according to blockIds
 			// In other words, put each Response into fullT
+			resp, bOk := dr.response.(*pb.Response)
+			if !bOk {
+				bt.logger.Fatalf("Cannot convert proto message to Response: %v", dr.response)
+			}
+			_, exists := bt.fullT[resp.BlockId]
+			if exists {
+				bt.logger.Fatalf("Duplicated response from block %d for full T shard  with response: %v", resp.BlockId, dr.response)
+			}
+			bt.fullT[resp.BlockId] = resp.Shard
+
+			// if all tShards have arrived
+			if len(bt.fullT) == int(bt.numOfTasks) {
+				// optimize to evaluate dShard
+				bt.updateDShard()
+				// signal that dShard has already been evaluated
+				bt.dDone <- &event{epoch: bt.epoch}
+			}
 
 		case dr := <-bt.dDataReady:
 			// Dittu. Put response into fullD
+			resp, bOk := dr.response.(*pb.Response)
+			if !bOk {
+				bt.logger.Fatalf("Cannot convert proto message to Response: %v", dr.response)
+			}
+			_, exists := bt.fullD[resp.BlockId]
+			if exists {
+				bt.logger.Fatalf("Duplicated response from block %d for full D shard  with response: %v", resp.BlockId, dr.response)
+			}
+			bt.fullD[resp.BlockId] = resp.Shard
+
+			// if all tShards have arrived
+			if len(bt.fullD) == int(bt.numOfTasks) {
+				// optimize to evaluate dShard
+				bt.updateTShard()
+				// signal that dShard has already been evaluated
+				bt.tDone <- &event{epoch: bt.epoch}
+			}
 
 		case <-bt.exitChan:
 			return
@@ -261,6 +311,12 @@ func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
 	bt.epoch = epoch
+
+	// reset the data blocks
+	bt.fullD = make(map[uint32]*pb.DenseMatrixShard)
+	bt.fullT = make(map[uint32]*pb.DenseMatrixShard)
+
+	// TODO should we reset tLoss and dLoss here?
 
 }
 
@@ -315,7 +371,7 @@ func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Res
 	// retT, and we fetch it here and respond it via grpc.
 
 	retT := make(chan *pb.DenseMatrixShard, 1)
-	bt.getT <- &event{ctx: ctx, request: request, retT: retT}
+	bt.getT <- &event{ctx: ctx, epoch: request.Epoch, request: request, retT: retT}
 
 	resT, ok := <-retT
 	if !ok {
@@ -331,7 +387,7 @@ func (bt *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Res
 
 	// same as GetTShard
 	retD := make(chan *pb.DenseMatrixShard, 1)
-	bt.getD <- &event{ctx: ctx, request: request, retD: retD}
+	bt.getD <- &event{ctx: ctx, epoch: request.Epoch, request: request, retD: retD}
 
 	resD, ok := <-retD
 	if !ok {
