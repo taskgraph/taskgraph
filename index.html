@@ -1,23 +1,85 @@
----
-layout: default
----
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Taskgraph by taskgraph</title>
 
-<div class="home">
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
-  <h1 class="page-heading">Posts</h1>
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Taskgraph</h1>
+        <p>A fault tolerant, distributed task driven framework</p>
+        <p class="view"><a href="https://github.com/taskgraph/taskgraph">View the Project on GitHub <small>taskgraph/taskgraph</small></a></p>
+        <ul>
+          <li><a href="https://github.com/taskgraph/taskgraph/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/taskgraph/taskgraph/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/taskgraph/taskgraph">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a id="taskgraph" class="anchor" href="#taskgraph" aria-hidden="true"><span class="octicon octicon-link"></span></a>TaskGraph</h1>
 
-  <ul class="post-list">
-    {% for post in site.posts %}
-      <li>
-        <span class="post-meta">{{ post.date | date: "%b %-d, %Y" }}</span>
+<p>TaskGraph is a framework for writing fault tolerent distributed applications. It
+assumes that application consists of a network of tasks, which are inter-connected
+based on certain topology (hence graph). TaskGraph assume for each task (logical
+unit of work), there are one primary node, and zero or more backup nodes. TaskGraph
+then help with two types of node failure: failure happens to nodes from different
+task, failure happens to the nodes from the same task. Framework monitors the
+task/node's health, and take care of restarting the failed tasks, and also pass
+on a standard set of events (typed neighbors fail/restart, primary/backup switch)
+to task implementation so that it can do application dependent recovery.</p>
 
-        <h2>
-          <a class="post-link" href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a>
-        </h2>
-      </li>
-    {% endfor %}
-  </ul>
+<p>TaskGrpah supports an event driven pull model for communication. When one task
+want to talk to some other task, it set a flag via framework, and framework will
+notify recipient, which can decide whether or when to fetch data via Framework.
+Framework will handle communication failures via automatic retry, reconnect to
+new task node, etc. In another word, it provides exactly-once semantic on data
+request.</p>
 
-  <p class="rss-subscribe">subscribe <a href="{{ "/feed.xml" | prepend: site.baseurl }}">via RSS</a></p>
+<p>An TaskGraph application usually has three layers. And application implementation
+need to configure TaskGraph in driver layer and also implement Task/TaskBuilder/Topology
+based on application logic.</p>
 
-</div>
+<ol>
+<li><p>In driver (main function), applicaiton need to configure the task graph. This
+include setting up TaskBuilder, which specify what task need to run as each node.
+One also need to specify the network topology which specify who connect to whom
+at each iteration. Then FrameWork.Start is called so that every node will get into
+event loop.</p></li>
+<li><p>TaskGraph framework handles fault tolerency within the framework. It uses etcd
+and/or kubernetes for this purpose. It should also handle the communication between
+logic task so that it can hide the communication between master and hot standby.</p></li>
+<li><p>Application need to implement Task interface, to specify how they should react
+to parent/child dia/restart event to carry out the correct application logic. Note
+that application developer need to implement TaskBuilder/Topology that suit their
+need (implementaion of these three interface are wired together in the driver).</p></li>
+</ol>
+
+<p>For an example of driver and task implementation, check <code>example/regression</code>.</p>
+
+<p>Note, for now, the completion of TaskGraph is not defined explicitly. Instead, each
+application will have their way of exit based on application dependent logic. As
+an example, the above application can stop if task 0 stops. We have the hooks in
+Framework so any node can potentially exit the entire TaskGraph. We also have hook
+in Task so that task implementation get a change to save the work.</p>
+      </section>
+    </div>
+    <footer>
+      <p>Project maintained by <a href="https://github.com/taskgraph">taskgraph</a></p>
+      <p>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></p>
+    </footer>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
