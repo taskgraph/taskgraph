@@ -123,7 +123,7 @@ func (it *blockParameterIterator) Next() bool {
 		it.column = 0
 	}
 
-	return it.block >= len(it.bp.starts) // exceeded when equals
+	return it.block < len(it.bp.starts)-1 // exceeded when equals
 }
 
 func (it *blockParameterIterator) Rewind() {

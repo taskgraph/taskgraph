@@ -1,6 +1,7 @@
 package bwmf
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -13,6 +14,7 @@ func TestBSearch(t *testing.T) {
 	v := []int{0, 10, 100, 101, 200, 299, 300, 399, 400, 499, 500}
 	r := []int{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5}
 
+	fmt.Println("Testing binary search of blockId...")
 	for i, _ := range v {
 		ra, err := bsearch(a, v[i])
 		if ra != r[i] || err != nil {
@@ -29,4 +31,5 @@ func TestBSearch(t *testing.T) {
 	if ra2 != 0 || err2 != nil {
 		reportError(10, ra2, 0, "BSearch", t)
 	}
+	fmt.Println("BSearching of blockId Done.")
 }
