@@ -94,8 +94,22 @@ func (bt *bwmfTask) updateDShard() {
 
 	// fullT is ready here
 
-	// TODO(baigang): set dLoss
+	// if dLoss is not initialized
+	if bt.dLoss.n == -1 {
+		bt.dLoss.n = 0
+		for _, m := range bt.fullT {
+			bt.dLoss.n += len(m.Row)
+		}
+		bt.N = bt.dLoss.n
+		wh := make([][]float32, bt.N)
+		for i, _ := range wh {
+			wh[i] = make([]float32, bt.m)
+		}
+		bt.dLoss.WH = wh
+	}
+	bt.dLoss.W = NewBlocksParameter(&bt.fullT)
 
+	// all set. Start the optimizing routine.
 	ok := bt.optimizer.Minimize(bt.dLoss, bt.stopCriteria, bt.shardedDParam)
 	if !ok {
 		// TODO report error
@@ -106,16 +120,24 @@ func (bt *bwmfTask) updateDShard() {
 }
 
 func (bt *bwmfTask) updateTShard() {
-	// fullD is ready here
-
-	// TODO(baigang): set tLoss
-
+	// Symmetric as updateDShard
+	if bt.tLoss.m == -1 {
+		bt.tLoss.m = 0
+		for _, m := range bt.fullD {
+			bt.tLoss.m += len(m.Row)
+		}
+		bt.M = bt.tLoss.m
+		wh := make([][]float32, bt.M)
+		for i, _ := range wh {
+			wh[i] = make([]float32, bt.n)
+		}
+		bt.tLoss.WH = wh
+	}
+	bt.tLoss.W = NewBlocksParameter(&bt.fullD)
 	ok := bt.optimizer.Minimize(bt.tLoss, bt.stopCriteria, bt.shardedTParam)
 	if !ok {
 		// TODO report error
 	}
-
-	// signal that tShard has already been evaluated
 	bt.tDone <- &event{epoch: bt.epoch}
 }
 
@@ -163,7 +185,6 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.m = len(bt.rowShard.Row)
 	bt.n = len(bt.columnShard.Row)
 
-	// TODO we also need start indices for sharded D and T.
 	bt.shardedD = &pb.DenseMatrixShard{
 		Row: make([]*pb.DenseMatrixShard_DenseRow, bt.m),
 	}
@@ -172,9 +193,11 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	}
 	for i, _ := range bt.shardedD.Row {
 		bt.shardedD.Row[i].At = make([]float32, bt.k)
+		// TODO random fill
 	}
 	for i, _ := range bt.shardedT.Row {
 		bt.shardedT.Row[i].At = make([]float32, bt.k)
+		// TODO random fill
 	}
 
 	bt.shardedDParam = NewSingleBlockParameter(bt.shardedD)
@@ -182,22 +205,22 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 
 	// TODO set tLoss and dLoss
 	bt.tLoss = &KLDivLoss{
-		V:      nil,
+		V:      bt.columnShard,
 		WH:     nil,
 		W:      nil,
-		m:      bt.m,
+		m:      -1, // should be bt.M
 		n:      bt.n,
 		k:      bt.k,
-		smooth: 1e-3,
+		smooth: 1e-4,
 	}
 	bt.dLoss = &KLDivLoss{
-		V:      nil,
+		V:      bt.rowShard,
 		WH:     nil,
 		W:      nil,
 		m:      bt.m,
-		n:      bt.n,
+		n:      -1, // should be bt.N
 		k:      bt.k,
-		smooth: 1e-3,
+		smooth: 1e-4,
 	}
 
 	bt.stopCriteria = taskgraph_op.MakeFixCountStopCriteria(int(bt.numOfIters))
@@ -208,7 +231,6 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		proj_len = bt.n * bt.k
 	}
 
-	fmt.Println("Started..")
 	bt.optimizer = taskgraph_op.NewProjectedGradient(
 		taskgraph_op.NewProjection(
 			taskgraph_op.NewAllTheSameParameter(1e20, proj_len),
