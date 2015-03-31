@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	// "math/rand"
+	"math/rand"
 	"os"
 
 	"github.com/golang/protobuf/proto"
@@ -193,11 +193,15 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	}
 	for i, _ := range bt.shardedD.Row {
 		bt.shardedD.Row[i].At = make([]float32, bt.k)
-		// TODO random fill
+		for j, _ := range bt.shardedD.Row[i].At {
+			bt.shardedD.Row[i].At[j] = rand.Float32()
+		}
 	}
 	for i, _ := range bt.shardedT.Row {
 		bt.shardedT.Row[i].At = make([]float32, bt.k)
-		// TODO random fill
+		for j, _ := range bt.shardedT.Row[i].At {
+			bt.shardedT.Row[i].At[j] = rand.Float32()
+		}
 	}
 
 	bt.shardedDParam = NewSingleBlockParameter(bt.shardedD)
