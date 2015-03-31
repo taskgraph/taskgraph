@@ -6,5 +6,5 @@ import (
 )
 
 func TestLocalComputation(t *testing.T) {
-
+	fmt.Println("Started.")
 }

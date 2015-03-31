@@ -208,6 +208,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		proj_len = bt.n * bt.k
 	}
 
+	fmt.Println("Started..")
 	bt.optimizer = taskgraph_op.NewProjectedGradient(
 		taskgraph_op.NewProjection(
 			taskgraph_op.NewAllTheSameParameter(1e20, proj_len),

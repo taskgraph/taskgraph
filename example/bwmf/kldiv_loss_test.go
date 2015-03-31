@@ -5,25 +5,27 @@ import (
 	"math"
 	"testing"
 
-	"github.com/taskgraph/taskgraph/op"
+	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	op "github.com/taskgraph/taskgraph/op"
 )
 
 func TestEvaluation(t *testing.T) {
-	h := taskgraph_op.NewVecParameter(2)
-	w := taskgraph_op.NewVecParameter(3)
-	g := taskgraph_op.NewVecParameter(2)
-	v := make([]map[int]float32, 3)
+	h := op.NewVecParameter(2)
+	w := op.NewVecParameter(3)
+	g := op.NewVecParameter(2)
+	v := &pb.SparseMatrixShard{Row: make([]*pb.SparseMatrixShard_SparseRow, 3)}
 	wh := make([][]float32, 3)
-	for i, _ := range v {
-		v[i] = make(map[int]float32)
+
+	for i, _ := range v.Row {
+		v.Row[i] = &pb.SparseMatrixShard_SparseRow{At: make(map[int32]float32)}
 		wh[i] = make([]float32, 2)
 	}
 
 	// matrix v
-	v[0][0] = 0.5
-	v[0][1] = 0.5
-	v[1][0] = 1.0
-	v[2][1] = 1.0
+	v.Row[0].At[0] = 0.5
+	v.Row[0].At[1] = 0.5
+	v.Row[1].At[0] = 1.0
+	v.Row[2].At[1] = 1.0
 
 	// fixed factor
 	w.Set(0, 0.33)
