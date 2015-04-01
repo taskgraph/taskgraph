@@ -6,34 +6,29 @@ import (
 
 // TaskBuilder with task specific configs.
 type BWMFTaskBuilder struct {
-	numOfTasks uint64
-	numOfIters uint64
-	pgmSigma   float32
-	pgmAlpha   float32
-	pgmBeta    float32
-	pgmTol     float32
-	blockId    uint32
-	K          int
-
-	rowShardPath, columnShardPath string
-
-	namenodeAddr, webHdfsAddr, hdfsUser string
+	NumOfTasks     uint64
+	NumOfIters     uint64
+	PgmSigma       float32
+	PgmAlpha       float32
+	PgmBeta        float32
+	PgmTol         float32
+	BlockId        uint32
+	K              int
+	RowShardBuf    []byte
+	ColumnShardBuf []byte
 }
 
 func (btb *BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 	return &bwmfTask{
-		numOfIters:      btb.numOfIters,
-		numOfTasks:      btb.numOfTasks,
-		sigma:           btb.pgmSigma,
-		alpha:           btb.pgmAlpha,
-		beta:            btb.pgmBeta,
-		tol:             btb.pgmTol,
-		blockId:         btb.blockId,
-		k:               btb.K,
-		rowShardPath:    btb.rowShardPath,
-		columnShardPath: btb.columnShardPath,
-		namenodeAddr:    btb.namenodeAddr,
-		webHdfsAddr:     btb.webHdfsAddr,
-		hdfsUser:        btb.hdfsUser,
+		numOfIters: btb.NumOfIters,
+		numOfTasks: btb.NumOfTasks,
+		sigma:      btb.PgmSigma,
+		alpha:      btb.PgmAlpha,
+		beta:       btb.PgmBeta,
+		tol:        btb.PgmTol,
+		blockId:    btb.BlockId,
+		k:          btb.K,
+		rowBuf:     btb.RowShardBuf,
+		columnBuf:  btb.ColumnShardBuf,
 	}
 }

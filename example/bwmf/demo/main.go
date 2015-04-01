@@ -1,9 +1,10 @@
-package main
+package demo
 
 import (
 	"flag"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
@@ -17,9 +18,7 @@ func main() {
 	job := flag.String("job", "", "job name")
 	rowShardPath := flag.String("row_file", "", "HDFS path to the row shard matrix.")
 	columnShardPath := flag.String("column_file", "", "HDFS path to the column shard matrix.")
-	namenodeAddr := flag.String("namenode", "", "HDFS namenode address.")
-	webHdfsAddr := flag.String("web_hdfs", "", "HDFS web interface address.")
-	hdfsUser := flag.String("hdfs_user", "", "HDFS user.")
+	// XXX(baigang): We will be dealing with local fs first.
 	latentDim := flag.Int("latent_dim", 1, "Latent dimension.")
 	blockId := flag.Int("block_id", 0, "ID of the sharded data block. 0 ~ num_tasks-1")
 	numIters := flag.Int("num_iters", 10, "Num of iterations")
@@ -31,32 +30,66 @@ func main() {
 	ntask := flag.Int("num_tasks", 1, "Num of task nodes.")
 
 	flag.Parse()
+	numTasks := uint64(*ntask)
+
+	var rowShardBuf, columnShardBuf []byte
 
 	switch *programType {
 	case "c":
 		log.Printf("controller")
-		controller := controller.New(*job, etcd.NewClient(etcdURLs), ntask)
+		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"", "test1"})
 		controller.Start()
 		controller.WaitForJobDone()
 	case "t":
 		log.Printf("task")
+
+		// load sharded matrix data here
+		if false {
+			shardLoader := bwmf.NewLocalBufLoader()
+			lslErr := shardLoader.Init()
+			if lslErr != nil {
+				log.Panicf("Initializing shardLoader failed: %s", lslErr)
+			}
+			rShardBuf, rbErr := shardLoader.ReadAll(*rowShardPath)
+			if rbErr != nil {
+				log.Panicf("Failed reading rowShardBuf: %s", rbErr)
+			}
+			cShardBuf, cbErr := shardLoader.ReadAll(*columnShardPath)
+			if cbErr != nil {
+				log.Panicf("Failed reading columnShardBuf: %s", cbErr)
+			}
+			rowShardBuf = rShardBuf
+			columnShardBuf = cShardBuf
+		} else {
+			// NOTE(baigang): We use fake data for local test/demo.
+			rowShardBuf0, columnShardBuf0, rowShardBuf1, columnShardBuf1, bufErr := getBufs()
+			if bufErr != nil {
+				log.Fatalf("Failed getting fake bufs")
+			}
+			if *blockId == 0 {
+				rowShardBuf = rowShardBuf0
+				columnShardBuf = columnShardBuf0
+			} else {
+				rowShardBuf = rowShardBuf1
+				columnShardBuf = columnShardBuf1
+			}
+		}
+
 		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
 		taskBuilder := &bwmf.BWMFTaskBuilder{
-			numOfIters:      10,
-			numOfTasks:      ntask,
-			pgmSigma:        *sigma,
-			pgmAlpha:        *alpha,
-			pgmBeta:         *beta,
-			pgmTol:          *tolerance,
-			blockId:         *blockId,
-			rowShardPath:    *rowShardPath,
-			columnShardPath: *columnShardPath,
-			namenodeAddr:    *namenodeAddr,
-			webHdfsAddr:     *webHdfsAddr,
-			hdfsUser:        *hdfsUser,
+			NumOfIters:     uint64(*numIters),
+			NumOfTasks:     numTasks,
+			PgmSigma:       float32(*sigma),
+			PgmAlpha:       float32(*alpha),
+			PgmBeta:        float32(*beta),
+			PgmTol:         float32(*tolerance),
+			BlockId:        uint32(*blockId),
+			K:              *latentDim,
+			RowShardBuf:    rowShardBuf,
+			ColumnShardBuf: columnShardBuf,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(topo.NewFullTopology(ntask))
+		bootstrap.SetTopology(topo.NewFullTopology(numTasks))
 		bootstrap.Start()
 	default:
 		log.Fatal("Please choose a type: (c) controller or (t) task.")

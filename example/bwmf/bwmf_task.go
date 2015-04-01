@@ -2,7 +2,6 @@ package bwmf
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -13,16 +12,8 @@ import (
 
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
-	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"
 )
-
-/* TODO:
-- SetEpoch 0...
-- Topology should be pushed to user. FlagMeta, Meta/Data Ready..
-- Test Data. (Simple, real)
-- FileSystem (hdfs, s3).. run real data.
-*/
 
 /*
 The block wise matrix factorization task is designed for carry out block wise matrix
@@ -51,13 +42,13 @@ type bwmfTask struct {
 	logger     *log.Logger
 	numOfTasks uint64
 	numOfIters uint64
+	curIter    uint64
 
 	fromOthers map[uint64]bool
 
 	// The original data.
-	namenodeAddr, webHdfsAddr, hdfsUser string
-	rowShardPath, columnShardPath       string
-	rowShard, columnShard               *pb.SparseMatrixShard
+	rowBuf, columnBuf     []byte
+	rowShard, columnShard *pb.SparseMatrixShard
 
 	shardedD, shardedT *pb.DenseMatrixShard
 	fullD, fullT       map[uint32]*pb.DenseMatrixShard // blockId to Shard
@@ -84,6 +75,8 @@ type bwmfTask struct {
 	getT        chan *event
 	tDataReady  chan *event
 	dDataReady  chan *event
+	tMetaReady  chan *event
+	dMetaReady  chan *event
 	tDone       chan *event
 	dDone       chan *event
 	exitChan    chan struct{}
@@ -138,6 +131,7 @@ func (bt *bwmfTask) updateTShard() {
 	if !ok {
 		// TODO report error
 	}
+	// checkpoint it
 	bt.tDone <- &event{epoch: bt.epoch}
 }
 
@@ -145,33 +139,10 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.taskID = taskID
 	bt.framework = framework
 	bt.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+	bt.curIter = 0
 
-	// Below is loading the file. NOTE: this should be moved to a separate function.
-	hdfsClient, hcOk := filesystem.NewHdfsClient(bt.namenodeAddr, bt.webHdfsAddr, bt.hdfsUser)
-	if hcOk != nil {
-		bt.logger.Fatal("Failed connecting to HDFS at ", bt.namenodeAddr, bt.webHdfsAddr, ", with account ", bt.hdfsUser)
-	}
-	rowShardReader, rsrOk := hdfsClient.OpenReadCloser(bt.rowShardPath)
-	if rsrOk != nil {
-		bt.logger.Fatalf("Failed load matrix data on task: %d, form path %s", bt.taskID, bt.rowShardPath)
-	}
-	columnShardReader, csrOk := hdfsClient.OpenReadCloser(bt.columnShardPath)
-	if csrOk != nil {
-		bt.logger.Fatalf("Failed load matrix data on task: %d, from path %s", bt.taskID, bt.columnShardPath)
-	}
-
-	rowBuf, rbOk := ioutil.ReadAll(rowShardReader)
-	if rbOk != nil {
-		bt.logger.Fatalf("Failed read rowSharded data on task: %d", bt.taskID)
-	}
-
-	columnBuf, cbOk := ioutil.ReadAll(columnShardReader)
-	if cbOk != nil {
-		bt.logger.Fatalf("Failed load columnSharded data on task: %d", bt.taskID)
-	}
-
-	rowUnmashalErr := proto.Unmarshal(rowBuf, bt.rowShard)
-	columnUnmashalErr := proto.Unmarshal(columnBuf, bt.rowShard)
+	rowUnmashalErr := proto.Unmarshal(bt.rowBuf, bt.rowShard)
+	columnUnmashalErr := proto.Unmarshal(bt.columnBuf, bt.rowShard)
 
 	if rowUnmashalErr != nil {
 		bt.logger.Fatalf("Failed unmarshalling row shard data on task: %d", bt.taskID)
@@ -180,7 +151,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		bt.logger.Fatalf("Failed unmarshalling column shard data on task: %d", bt.taskID)
 	}
 
-	// XXX(baigang) We set M and N via collecting all sharded D and T.
+	// XXX(baigang) We set M and N via collecting all sharded D and T later.
 	// XXX(baigang) K is set in the task builder.
 	bt.m = len(bt.rowShard.Row)
 	bt.n = len(bt.columnShard.Row)
@@ -277,33 +248,24 @@ func (bt *bwmfTask) run() {
 			bt.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case reqT := <-bt.getT:
-			// XXX wait for shardedT for current epoch
-			ee := <-bt.tDone
-			if ee.epoch == reqT.epoch {
-				err := bt.framework.CheckGRPCContext(reqT.ctx)
-				if err != nil {
-					close(reqT.retT)
-					break
-				}
-				reqT.retT <- bt.shardedT
+			// tShard is guaranteed to be updated here
+			err := bt.framework.CheckGRPCContext(reqT.ctx)
+			if err != nil {
+				bt.logger.Panicf("GetTShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
+				close(reqT.retT)
 			}
-
+			reqT.retT <- bt.shardedT
 		case reqD := <-bt.getD:
-			// XXX Dittu, wait for shardedD for current epoch
-			ee := <-bt.dDone
-			if ee.epoch == reqD.epoch {
-				err := bt.framework.CheckGRPCContext(reqD.ctx)
-				if err != nil {
-					close(reqD.retD)
-					break
-				}
-				reqD.retD <- bt.shardedD
+			// tShard is guaranteed to be updated here
+			err := bt.framework.CheckGRPCContext(reqD.ctx)
+			if err != nil {
+				bt.logger.Panicf("GetDShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
+				close(reqD.retD)
+				break
 			}
-
+			reqD.retD <- bt.shardedD
 		case dr := <-bt.tDataReady:
-			// each event comes as one shard is ready
-			// TODO: we need organize all the shards according to blockIds
-			// In other words, put each Response into fullT
+			// each event comes as the shard is ready
 			resp, bOk := dr.response.(*pb.Response)
 			if !bOk {
 				bt.logger.Fatalf("Cannot convert proto message to Response: %v", dr.response)
@@ -313,13 +275,11 @@ func (bt *bwmfTask) run() {
 				bt.logger.Fatalf("Duplicated response from block %d for full T shard  with response: %v", resp.BlockId, dr.response)
 			}
 			bt.fullT[resp.BlockId] = resp.Shard
-
 			// if all tShards have arrived
 			if len(bt.fullT) == int(bt.numOfTasks) {
 				// optimize to evaluate dShard. It will signals via bt.dDone at completion.
 				go bt.updateDShard()
 			}
-
 		case dr := <-bt.dDataReady:
 			// Dittu. Put response into fullD
 			resp, bOk := dr.response.(*pb.Response)
@@ -331,13 +291,34 @@ func (bt *bwmfTask) run() {
 				bt.logger.Fatalf("Duplicated response from block %d for full D shard  with response: %v", resp.BlockId, dr.response)
 			}
 			bt.fullD[resp.BlockId] = resp.Shard
-
 			// if all tShards have arrived
 			if len(bt.fullD) == int(bt.numOfTasks) {
 				// optimize to evaluate dShard. It will signals via bt.tDone at completion.
 				go bt.updateTShard()
 			}
-
+		case mr := <-bt.tMetaReady:
+			// in master we check the completion of the epoch
+			if bt.framework.GetTaskID() == 0 {
+				_, exists := bt.fromOthers[mr.fromID]
+				if exists {
+					bt.logger.Panicf("Duplicated meta `tReady` from task %d.", mr.fromID)
+				}
+				bt.fromOthers[mr.fromID] = true
+				if len(bt.fromOthers) == int(bt.numOfTasks) {
+					bt.framework.IncEpoch(mr.ctx)
+				}
+			}
+		case mr := <-bt.dMetaReady:
+			if bt.framework.GetTaskID() == 0 {
+				_, exists := bt.fromOthers[mr.fromID]
+				if exists {
+					bt.logger.Panicf("Duplicated meta `dReady` from task %d.", mr.fromID)
+				}
+				bt.fromOthers[mr.fromID] = true
+				if len(bt.fromOthers) == int(bt.numOfTasks) {
+					bt.framework.IncEpoch(mr.ctx)
+				}
+			}
 		case <-bt.exitChan:
 			return
 		}
@@ -347,6 +328,7 @@ func (bt *bwmfTask) run() {
 func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 	bt.epochChange <- &event{ctx: ctx, epoch: epoch}
 }
+
 func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
 	bt.epoch = epoch
@@ -354,8 +336,10 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	// reset the data blocks
 	bt.fullD = make(map[uint32]*pb.DenseMatrixShard)
 	bt.fullT = make(map[uint32]*pb.DenseMatrixShard)
+	bt.fromOthers = make(map[uint64]bool)
 
-	// ask for
+	bt.fromOthers[bt.taskID] = true
+
 	var method string
 	if epoch%2 == 0 {
 		method = "/proto.BlockData/GetDShard"
@@ -363,7 +347,6 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 		bt.fullD[bt.blockId] = bt.shardedD
 	} else {
 		method = "proto.BlockData/GetTShard"
-		// dittu XXX.
 		bt.fullT[bt.blockId] = bt.shardedT
 	}
 
@@ -372,9 +355,16 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	}
 }
 
-// XXX(baigang): We do not have to get notified. We just send the request and wait for the response via grpc.
+// XXX(baigang): Master task will check this for invoking IncEpoch
 func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	// XXX intentional empty
+	switch meta {
+	case "tReady":
+		bt.tMetaReady <- &event{ctx: ctx, fromID: fromID}
+	case "dReady":
+		bt.dMetaReady <- &event{ctx: ctx, fromID: fromID}
+	default:
+		bt.logger.Panicf("Unknow meta: %s", meta)
+	}
 }
 
 func (bt *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
@@ -417,8 +407,8 @@ func (bt *bwmfTask) Exit() {
 func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
 	// XXX(baigang): here suppose tShard has already been optimized and stored in it
 
-	// Here basically we send a getT request to the event channel. Then the `Run()` will handle it and
-	// calculates the tShard, during which we just wait here. The result will be sent back to channel
+	// Here basically we send a getT request to the event channel. Then
+	// the `Run()` will handle it.  The result will be sent back to channel
 	// retT, and we fetch it here and respond it via grpc.
 
 	retT := make(chan *pb.DenseMatrixShard, 1)

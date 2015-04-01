@@ -120,13 +120,12 @@ func (it *blockParameterIterator) Next() bool {
 	it.column += 1
 	if it.column >= it.bp.k {
 		it.row += 1
-		if it.row >= it.bp.starts[it.block+1] {
+		if it.row >= it.bp.starts[it.block+1]-it.bp.starts[it.block] {
 			it.block += 1
 			it.row = 0
 		}
 		it.column = 0
 	}
-
 	return it.block < len(it.bp.starts)-1 // exceeded when equals
 }
 
