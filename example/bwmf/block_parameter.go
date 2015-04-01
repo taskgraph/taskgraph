@@ -22,7 +22,7 @@ func NewBlocksParameter(matrices *map[uint32]*pb.DenseMatrixShard) op.Parameter 
 		stt[i] = ost
 		ost += len((*matrices)[uint32(i)].Row)
 	}
-	stt[len(*matrices)+1] = ost
+	stt[len(*matrices)] = ost
 	k := len((*matrices)[0].Row[0].At)
 	return &blockParameter{k: k, data: matrices, starts: stt, size: k * ost}
 }
@@ -54,13 +54,23 @@ func bsearch(s []int, v int) (int, error) {
 	return r, nil
 }
 
-func (bp *blockParameter) Get(index int) float32 {
-	b, e := bsearch(bp.starts, index)
+func (bp *blockParameter) indexToBlockRC(index int) (b, r, c int, ok bool) {
+	ir := index / bp.k
+	b, e := bsearch(bp.starts, ir)
 	if e != nil {
-		// TODO report error
+		// exceeded.
+		return -1, -1, -1, false
 	}
-	r := index/bp.k - bp.starts[b]
-	c := index % bp.k
+	r = ir - bp.starts[b]
+	c = index % bp.k
+	return b, r, c, true
+}
+
+func (bp *blockParameter) Get(index int) float32 {
+	b, r, c, ok := bp.indexToBlockRC(index)
+	if !ok {
+		return 0.0
+	}
 	return (*bp.data)[uint32(b)].Row[r].At[c]
 }
 
@@ -81,24 +91,18 @@ func (bp *blockParameter) IndexIterator() op.IndexIterator {
 
 // `Set` and `Add` are made panic to make blockParamter immutable.
 func (bp *blockParameter) Set(index int, value float32) {
-	b, e := bsearch(bp.starts, index)
-	if e != nil {
-		// TODO report error
+	b, r, c, ok := bp.indexToBlockRC(index)
+	if !ok {
+		return
 	}
-	r := index/bp.k - bp.starts[b]
-	c := index % bp.k
-
 	(*bp.data)[uint32(b)].Row[r].At[c] = value
 }
 
 func (bp *blockParameter) Add(index int, value float32) {
-	b, e := bsearch(bp.starts, index)
-	if e != nil {
-		// TODO report error
+	b, r, c, ok := bp.indexToBlockRC(index)
+	if !ok {
+		return
 	}
-	r := index/bp.k - bp.starts[b]
-	c := index % bp.k
-
 	(*bp.data)[uint32(b)].Row[r].At[c] += value
 }
 
