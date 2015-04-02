@@ -1,7 +1,7 @@
 package topo
 
 //The full structure is basically assume that every one is also parent for every else.
-//And everyone else is communicating to get the data they need.
+//And everyone else is communicating to get the data they need. Task 0 is forced/assumed to be the master.
 //
 //Also the star structure stays the same between epochs.
 type FullTopology struct {
@@ -23,7 +23,7 @@ func (t *FullTopology) SetTaskID(taskID uint64) {
 }
 
 func (t *FullTopology) GetLinkTypes() []string {
-	return []string{"Neighbors"}
+	return []string{"Neighbors", "toMaster"}
 }
 
 func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
@@ -31,6 +31,8 @@ func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	switch {
 	case linkType == "Neighbors":
 		res = t.neighbors
+	case linkType == "toMaster":
+		res = []uint64{0}
 	}
 	return res
 }
