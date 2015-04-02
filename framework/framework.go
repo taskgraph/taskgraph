@@ -38,16 +38,13 @@ type framework struct {
 	metaNotified map[string]bool
 
 	// etcd stops
-	metaStops []chan bool
-	epochStop chan bool
+	metaStops      []chan bool
+	epochWatchStop chan bool
 
-	httpStop      chan struct{}
-	heartbeatStop chan struct{}
-
-	epochPassed chan struct{}
+	globalStop chan struct{}
 
 	// event loop
-	epochChan         chan uint64
+	epochWatcher      chan uint64
 	metaChan          chan *metaChange
 	dataReqtoSendChan chan *dataRequest
 	dataRespChan      chan *dataResponse
@@ -93,13 +90,10 @@ func (f *framework) IncEpoch(ctx context.Context) {
 
 func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
 
-// this will shutdown local node instead of global job.
-func (f *framework) stop() {
-	close(f.epochChan)
-}
-
 func (f *framework) Kill() {
-	f.stop()
+	// framework select loop will quit and end like getting a exit epoch, except that
+	// it won't set exit epoch across cluster.
+	close(f.epochWatcher)
 }
 
 // When node call this on framework, it simply set epoch to exitEpoch,
