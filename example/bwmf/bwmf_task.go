@@ -73,20 +73,15 @@ type bwmfTask struct {
 	epochChange chan *event
 	getD        chan *event
 	getT        chan *event
-	tDataReady  chan *event
-	dDataReady  chan *event
-	tMetaReady  chan *event
-	dMetaReady  chan *event
-	tDone       chan *event
-	dDone       chan *event
+	dataReady   chan *event
+	metaReady   chan *event
+	updateDone  chan *event
 	exitChan    chan struct{}
 }
 
 // These two function carry out actual optimization.
-func (bt *bwmfTask) updateDShard() {
-
+func (bt *bwmfTask) updateDShard(ctx context.Context) {
 	// fullT is ready here
-
 	// if dLoss is not initialized
 	if bt.dLoss.n == -1 {
 		bt.dLoss.n = 0
@@ -109,10 +104,10 @@ func (bt *bwmfTask) updateDShard() {
 	}
 
 	// signal that dShard has already been evaluated
-	bt.dDone <- &event{epoch: bt.epoch}
+	bt.updateDone <- &event{ctx: ctx, epoch: bt.epoch}
 }
 
-func (bt *bwmfTask) updateTShard() {
+func (bt *bwmfTask) updateTShard(ctx context.Context) {
 	// Symmetric as updateDShard
 	if bt.tLoss.m == -1 {
 		bt.tLoss.m = 0
@@ -131,8 +126,14 @@ func (bt *bwmfTask) updateTShard() {
 	if !ok {
 		// TODO report error
 	}
-	// checkpoint it
-	bt.tDone <- &event{epoch: bt.epoch}
+	bt.updateDone <- &event{ctx: ctx, epoch: bt.epoch}
+}
+
+// Dumping the temporary results.
+func (bt *bwmfTask) checkpoint(epoch uint64) {
+	// marshal the shard
+	// write the buffer
+	// remove the older instance
 }
 
 func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
@@ -220,13 +221,11 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.epochChange = make(chan *event, 1)
 	bt.getD = make(chan *event, 1)
 	bt.getT = make(chan *event, 1)
-	bt.tDataReady = make(chan *event, 1)
-	bt.dDataReady = make(chan *event, 1)
-	bt.tDone = make(chan *event, 1)
-	bt.dDone = make(chan *event, 1)
+	bt.dataReady = make(chan *event, 1)
+	bt.updateDone = make(chan *event, 1)
 	bt.exitChan = make(chan struct{})
 
-	// Now we have
+	// Now we have everything initialized.
 	go bt.run()
 }
 
@@ -248,7 +247,7 @@ func (bt *bwmfTask) run() {
 			bt.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case reqT := <-bt.getT:
-			// tShard is guaranteed to be updated here
+			// XXX: tShard is guaranteed to have been updated here.
 			err := bt.framework.CheckGRPCContext(reqT.ctx)
 			if err != nil {
 				bt.logger.Panicf("GetTShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
@@ -256,7 +255,7 @@ func (bt *bwmfTask) run() {
 			}
 			reqT.retT <- bt.shardedT
 		case reqD := <-bt.getD:
-			// tShard is guaranteed to be updated here
+			// XXX: tShard is guaranteed to have been updated here.
 			err := bt.framework.CheckGRPCContext(reqD.ctx)
 			if err != nil {
 				bt.logger.Panicf("GetDShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
@@ -264,55 +263,46 @@ func (bt *bwmfTask) run() {
 				break
 			}
 			reqD.retD <- bt.shardedD
-		case dr := <-bt.tDataReady:
+		case done := <-bt.updateDone:
+			go bt.checkpoint(bt.epoch)
+			bt.framework.FlagMeta(done.ctx, "Children", "metaReady")
+		case dr := <-bt.dataReady:
 			// each event comes as the shard is ready
 			resp, bOk := dr.response.(*pb.Response)
 			if !bOk {
 				bt.logger.Fatalf("Cannot convert proto message to Response: %v", dr.response)
 			}
-			_, exists := bt.fullT[resp.BlockId]
-			if exists {
-				bt.logger.Fatalf("Duplicated response from block %d for full T shard  with response: %v", resp.BlockId, dr.response)
+			// In even epoch, we fetch all D shards and update T; while in odd epoch, we fetch T and update D.
+			if bt.epoch%2 == 0 {
+				_, exists := bt.fullD[resp.BlockId]
+				if exists {
+					bt.logger.Fatalf("Duplicated response from block %d for full D shard  with response: %v", resp.BlockId, dr.response)
+				}
+				bt.fullD[resp.BlockId] = resp.Shard
+				// if all tShards have arrived
+				if len(bt.fullD) == int(bt.numOfTasks) {
+					// optimize to evaluate dShard. It will signals via bt.updateDone at completion.
+					go bt.updateTShard(dr.ctx)
+				}
+			} else {
+				_, exists := bt.fullT[resp.BlockId]
+				if exists {
+					bt.logger.Fatalf("Duplicated response from block %d for full T shard  with response: %v", resp.BlockId, dr.response)
+				}
+				bt.fullT[resp.BlockId] = resp.Shard
+				// if all tShards have arrived
+				if len(bt.fullT) == int(bt.numOfTasks) {
+					// optimize to evaluate dShard. It will signals via bt.updateDone at completion.
+					go bt.updateDShard(dr.ctx)
+				}
 			}
-			bt.fullT[resp.BlockId] = resp.Shard
-			// if all tShards have arrived
-			if len(bt.fullT) == int(bt.numOfTasks) {
-				// optimize to evaluate dShard. It will signals via bt.dDone at completion.
-				go bt.updateDShard()
-			}
-		case dr := <-bt.dDataReady:
-			// Dittu. Put response into fullD
-			resp, bOk := dr.response.(*pb.Response)
-			if !bOk {
-				bt.logger.Fatalf("Cannot convert proto message to Response: %v", dr.response)
-			}
-			_, exists := bt.fullD[resp.BlockId]
-			if exists {
-				bt.logger.Fatalf("Duplicated response from block %d for full D shard  with response: %v", resp.BlockId, dr.response)
-			}
-			bt.fullD[resp.BlockId] = resp.Shard
-			// if all tShards have arrived
-			if len(bt.fullD) == int(bt.numOfTasks) {
-				// optimize to evaluate dShard. It will signals via bt.tDone at completion.
-				go bt.updateTShard()
-			}
-		case mr := <-bt.tMetaReady:
+
+		case mr := <-bt.metaReady:
 			// in master we check the completion of the epoch
 			if bt.framework.GetTaskID() == 0 {
 				_, exists := bt.fromOthers[mr.fromID]
 				if exists {
-					bt.logger.Panicf("Duplicated meta `tReady` from task %d.", mr.fromID)
-				}
-				bt.fromOthers[mr.fromID] = true
-				if len(bt.fromOthers) == int(bt.numOfTasks) {
-					bt.framework.IncEpoch(mr.ctx)
-				}
-			}
-		case mr := <-bt.dMetaReady:
-			if bt.framework.GetTaskID() == 0 {
-				_, exists := bt.fromOthers[mr.fromID]
-				if exists {
-					bt.logger.Panicf("Duplicated meta `dReady` from task %d.", mr.fromID)
+					bt.logger.Panicf("Duplicated meta from task %d.", mr.fromID)
 				}
 				bt.fromOthers[mr.fromID] = true
 				if len(bt.fromOthers) == int(bt.numOfTasks) {
@@ -332,6 +322,12 @@ func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
 	bt.epoch = epoch
+	bt.curIter++
+
+	if bt.curIter > bt.numOfIters {
+		// Job done. Dump results and finish it.
+		// TODO(baigang) Save fullT and fullD to filesystem
+	}
 
 	// reset the data blocks
 	bt.fullD = make(map[uint32]*pb.DenseMatrixShard)
@@ -341,12 +337,13 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.fromOthers[bt.taskID] = true
 
 	var method string
+	// In even epoch even, we fetch D and update T; in odd epoch, we fetch T and update D.
 	if epoch%2 == 0 {
 		method = "/proto.BlockData/GetDShard"
 		// XXX: Add own block to it because neighbors doesn't include self.
 		bt.fullD[bt.blockId] = bt.shardedD
 	} else {
-		method = "proto.BlockData/GetTShard"
+		method = "/proto.BlockData/GetTShard"
 		bt.fullT[bt.blockId] = bt.shardedT
 	}
 
@@ -358,10 +355,8 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 // XXX(baigang): Master task will check this for invoking IncEpoch
 func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	switch meta {
-	case "tReady":
-		bt.tMetaReady <- &event{ctx: ctx, fromID: fromID}
-	case "dReady":
-		bt.dMetaReady <- &event{ctx: ctx, fromID: fromID}
+	case "metaReady":
+		bt.metaReady <- &event{ctx: ctx, fromID: fromID}
 	default:
 		bt.logger.Panicf("Unknow meta: %s", meta)
 	}
@@ -370,9 +365,9 @@ func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta
 func (bt *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	switch method {
 	case "/proto.BlockData/GetTShard":
-		bt.tDataReady <- &event{ctx: ctx, fromID: fromID, response: output}
+		bt.dataReady <- &event{ctx: ctx, fromID: fromID, response: output}
 	case "/proto.BlockData/GetDShard":
-		bt.dDataReady <- &event{ctx: ctx, fromID: fromID, response: output}
+		bt.dataReady <- &event{ctx: ctx, fromID: fromID, response: output}
 	default:
 		bt.logger.Panicf("Unknow data method: %s", method)
 	}
@@ -405,30 +400,22 @@ func (bt *bwmfTask) Exit() {
 
 // Implement of the BlockData service described in proto.
 func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
-	// XXX(baigang): here suppose tShard has already been optimized and stored in it
-
 	// Here basically we send a getT request to the event channel. Then
 	// the `Run()` will handle it.  The result will be sent back to channel
 	// retT, and we fetch it here and respond it via grpc.
-
 	retT := make(chan *pb.DenseMatrixShard, 1)
 	bt.getT <- &event{ctx: ctx, epoch: request.Epoch, request: request, retT: retT}
-
 	resT, ok := <-retT
 	if !ok {
 		return nil, fmt.Errorf("Failed getting T.")
 	}
-
 	return &pb.Response{BlockId: bt.blockId, Shard: resT}, nil
 }
 
 func (bt *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
-	// XXX(baigang): here suppose tShard has already been optimized and stored in it
-
 	// same as GetTShard
 	retD := make(chan *pb.DenseMatrixShard, 1)
 	bt.getD <- &event{ctx: ctx, epoch: request.Epoch, request: request, retD: retD}
-
 	resD, ok := <-retD
 	if !ok {
 		return nil, fmt.Errorf("Failed getting D.")
