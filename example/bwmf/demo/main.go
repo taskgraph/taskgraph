@@ -1,4 +1,4 @@
-package demo
+package main
 
 import (
 	"flag"
@@ -37,7 +37,7 @@ func main() {
 	switch *programType {
 	case "c":
 		log.Printf("controller")
-		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"", "test1"})
+		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Parents", "Children"})
 		controller.Start()
 		controller.WaitForJobDone()
 	case "t":
