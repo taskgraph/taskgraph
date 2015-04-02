@@ -265,7 +265,7 @@ func (bt *bwmfTask) run() {
 			reqD.retD <- bt.shardedD
 		case done := <-bt.updateDone:
 			go bt.checkpoint(bt.epoch)
-			bt.framework.FlagMeta(done.ctx, "Children", "metaReady")
+			bt.framework.FlagMeta(done.ctx, "toMaster", "metaReady")
 		case dr := <-bt.dataReady:
 			// each event comes as the shard is ready
 			resp, bOk := dr.response.(*pb.Response)
@@ -347,7 +347,7 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 		bt.fullT[bt.blockId] = bt.shardedT
 	}
 
-	for _, c := range bt.framework.GetTopology().GetNeighbors("Children", epoch) {
+	for _, c := range bt.framework.GetTopology().GetNeighbors("Neighbors", epoch) {
 		bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
 	}
 }
