@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"
 )
 
@@ -131,9 +133,68 @@ func (bt *bwmfTask) updateTShard(ctx context.Context) {
 
 // Dumping the temporary results.
 func (bt *bwmfTask) checkpoint(epoch uint64) {
-	// marshal the shard
+	var (
+		buf      []byte
+		err      error
+		filename string
+	)
+
+	// In even epoch, we fetch D and update T; in odd epoch, we fetch T and update D.
+	if epoch%2 == 0 {
+		filename = "./shard.t.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		buf, err = proto.Marshal(bt.shardedT)
+	} else {
+		filename = "./shard.d.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		buf, err = proto.Marshal(bt.shardedD)
+	}
+	if err != nil {
+		bt.logger.Panicf("Failed marshalling result at epoch %d in task %d", epoch, bt.taskID)
+	}
 	// write the buffer
+	writer, openErr := filesystem.NewLocalFSClient().OpenWriteCloser(filename)
+	if openErr != nil {
+		bt.logger.Panicf("Failed open")
+	}
+	_, wErr := writer.Write(buf)
+	if wErr != nil {
+		bt.logger.Panicf("Failed writing to %s", filename)
+	}
+
 	// remove the older instance
+	if int64(epoch)-2 >= 0 {
+		// TODO: No `Remove` interface for now.
+		// preEpoch := epoch - 2
+	}
+}
+
+// load the dumped result from checkpoint.
+// TODO: failure recovery using this func
+func (bt *bwmfTask) recoverFromCheckpoint(epoch uint64) {
+	var (
+		filename string
+		shard    *pb.DenseMatrixShard
+	)
+
+	// In even epoch, we fetch D and update T; in odd epoch, we fetch T and update D.
+	if epoch%2 == 0 {
+		filename = "./shard.t.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		shard = bt.shardedT
+	} else {
+		filename = "./shard.d.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		shard = bt.shardedD
+	}
+
+	// load the buffer
+	client := NewLocalBufLoader()
+	client.Init()
+	buf, err := client.ReadAll(filename)
+	if err != nil {
+		bt.logger.Panicf("Failed loading file %s", filename)
+	}
+	err = proto.Unmarshal(buf, shard)
+	if err != nil {
+		bt.logger.Panicf("Failed unmarshalling result at epoch %d in task %d", epoch, bt.taskID)
+	}
 }
 
 func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
