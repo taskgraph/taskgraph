@@ -5,44 +5,32 @@ package topo
 //
 //Also the star structure stays the same between epochs.
 type FullTopology struct {
-	numOfTasks        uint64
-	taskID            uint64
-	parents, children []uint64
+	numOfTasks uint64
+	taskID     uint64
+	neighbors  []uint64
 }
 
 // TODO, do we really need to expose this? Ideally after proper construction of StarTopology
 // we should not need to set this again.
 func (t *FullTopology) SetTaskID(taskID uint64) {
 	t.taskID = taskID
-
-	// each task is parent of every else.
-	t.parents = make([]uint64, 0, t.numOfTasks-1)
-	for index := uint64(1); index < t.numOfTasks; index++ {
+	t.neighbors = make([]uint64, 0, t.numOfTasks-1)
+	for index := uint64(0); index < t.numOfTasks; index++ {
 		if index != t.taskID {
-			t.parents = append(t.parents, index)
+			t.neighbors = append(t.neighbors, index)
 		}
 	}
-
-	t.children = make([]uint64, 0, t.numOfTasks-1)
-	for index := uint64(1); index < t.numOfTasks; index++ {
-		if index != t.taskID {
-			t.children = append(t.children, index)
-		}
-	}
-
 }
 
 func (t *FullTopology) GetLinkTypes() []string {
-	return []string{"Parents", "Children"}
+	return []string{"Neighbors"}
 }
 
 func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
-	case linkType == "Parents":
-		res = t.parents
-	case linkType == "Children":
-		res = t.children
+	case linkType == "Neighbors":
+		res = t.neighbors
 	}
 	return res
 }
