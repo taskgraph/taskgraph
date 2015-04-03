@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package proto;
+
+service Regression {
+  rpc GetParameter(Input) returns (Parameter) {}
+  rpc GetGradient(Input) returns (Gradient) {}
+}
+
+message Input {
+}
+
+message Parameter {
+  int32 value = 1;
+}
+
+message Gradient {
+  int32 value = 1;
+}

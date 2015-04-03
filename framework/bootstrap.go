@@ -10,7 +10,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -25,7 +24,9 @@ func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *lo
 	}
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) { f.taskBuilder = taskBuilder }
+func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
+	f.taskBuilder = taskBuilder
+}
 
 func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
@@ -44,16 +45,16 @@ func (f *framework) Start() {
 
 	f.log.SetPrefix(fmt.Sprintf("task %d: ", f.taskID))
 
-	f.epochChan = make(chan uint64, 1) // grab epoch from etcd
-	f.epochStop = make(chan bool, 1)   // stop etcd watch
+	f.epochWatcher = make(chan uint64, 1) // grab epoch from etcd
+	f.epochWatchStop = make(chan bool, 1) // stop etcd watch
 	// meta will have epoch prepended so we must get epoch before any watch on meta
-	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochChan, f.epochStop)
+	f.epoch, err = etcdutil.GetAndWatchEpoch(f.etcdClient, f.name, f.epochWatcher, f.epochWatchStop)
 	if err != nil {
 		f.log.Fatalf("WatchEpoch failed: %v", err)
 	}
 	if f.epoch == exitEpoch {
 		f.log.Printf("found that job has finished\n")
-		f.epochStop <- true
+		f.epochWatchStop <- true
 		return
 	}
 	f.log.Printf("starting at epoch %d\n", f.epoch)
@@ -64,36 +65,33 @@ func (f *framework) Start() {
 	f.task = f.taskBuilder.GetTask(f.taskID)
 	f.topology.SetTaskID(f.taskID)
 
-	go f.startHTTP()
-
 	f.heartbeat()
-	f.setupChannels()
+	f.setup()
 	f.task.Init(f.taskID, f)
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
 }
 
-func (f *framework) setupChannels() {
-	f.httpStop = make(chan struct{})
-	f.metaChan = make(chan *metaChange, 100)
-	f.dataReqtoSendChan = make(chan *dataRequest, 100)
-	f.dataReqChan = make(chan *dataRequest, 100)
-	f.dataRespToSendChan = make(chan *dataResponse, 100)
-	f.dataRespChan = make(chan *frameworkhttp.DataResponse, 100)
+func (f *framework) setup() {
+	f.globalStop = make(chan struct{})
+	f.metaChan = make(chan *metaChange, 1)
+	f.dataReqtoSendChan = make(chan *dataRequest, 1)
+	f.dataRespChan = make(chan *dataResponse, 1)
+	f.epochCheckChan = make(chan *epochCheck, 1)
 }
 
 func (f *framework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
+	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
 		select {
-		case nextEpoch, ok := <-f.epochChan:
+		case nextEpoch, ok := <-f.epochWatcher:
 			f.releaseEpochResource()
 			if !ok { // single task exit
-				nextEpoch = exitEpoch
 				return
 			}
 			f.epoch = nextEpoch
@@ -110,43 +108,37 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.createContext(), meta.from, meta.who, meta.meta)
+			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: req-to-send epoch: %d, current epoch: %d", req.epoch, f.epoch)
+				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
 			go f.sendRequest(req)
-		case req := <-f.dataReqChan:
-			if req.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: request epoch: %d, current epoch: %d", req.epoch, f.epoch)
-				req.notifyEpochMismatch()
-				break
-			}
-			f.handleDataReq(req)
-		case resp := <-f.dataRespToSendChan:
-			if resp.epoch != f.epoch {
-				f.log.Printf("epoch mismatch: resp-to-send epoch: %d, current epoch: %d", resp.epoch, f.epoch)
-				resp.notifyEpochMismatch()
-				break
-			}
-			go f.sendResponse(resp)
 		case resp := <-f.dataRespChan:
-			if resp.Epoch != f.epoch {
-				f.log.Printf("epoch mismatch: response epoch: %d, current epoch: %d", resp.Epoch, f.epoch)
+			if resp.epoch != f.epoch {
+				f.log.Printf("abort data response, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
-			f.handleDataResp(f.createContext(), resp)
+			f.handleDataResp(f.userCtx, resp)
+		case ec := <-f.epochCheckChan:
+			if ec.epoch != f.epoch {
+				ec.fail()
+				break
+			}
+			ec.pass()
 		}
 	}
 }
 
 func (f *framework) setEpochStarted() {
-	f.epochPassed = make(chan struct{})
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
-	f.task.SetEpoch(f.createContext(), f.epoch)
+	f.userCtx = context.WithValue(context.Background(), epochKey, f.epoch)
+	f.userCtx, f.userCtxCancel = context.WithCancel(f.userCtx)
+
+	f.task.EnterEpoch(f.userCtx, f.epoch)
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
@@ -157,7 +149,7 @@ func (f *framework) setEpochStarted() {
 }
 
 func (f *framework) releaseEpochResource() {
-	close(f.epochPassed)
+	f.userCtxCancel()
 	for _, c := range f.metaStops {
 		c <- true
 	}
@@ -167,9 +159,9 @@ func (f *framework) releaseEpochResource() {
 // release resources: heartbeat, epoch watch.
 func (f *framework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
-	f.epochStop <- true
-	close(f.heartbeatStop)
-	f.stopHTTP()
+	f.epochWatchStop <- true
+	close(f.globalStop)
+	f.ln.Close() // stop grpc server
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
@@ -180,7 +172,10 @@ func (f *framework) occupyTask() error {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
-		ok := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		ok, err := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		if err != nil {
+			return err
+		}
 		if ok {
 			f.taskID = freeTask
 			return nil

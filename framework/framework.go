@@ -8,7 +8,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/framework/frameworkhttp"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -25,11 +24,13 @@ type framework struct {
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 
-	task       taskgraph.Task
-	taskID     uint64
-	epoch      uint64
-	etcdClient *etcd.Client
-	ln         net.Listener
+	task          taskgraph.Task
+	taskID        uint64
+	epoch         uint64
+	etcdClient    *etcd.Client
+	ln            net.Listener
+	userCtx       context.Context
+	userCtxCancel context.CancelFunc
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
@@ -37,21 +38,17 @@ type framework struct {
 	metaNotified map[string]bool
 
 	// etcd stops
-	metaStops []chan bool
-	epochStop chan bool
+	metaStops      []chan bool
+	epochWatchStop chan bool
 
-	httpStop      chan struct{}
-	heartbeatStop chan struct{}
-
-	epochPassed chan struct{}
+	globalStop chan struct{}
 
 	// event loop
-	epochChan          chan uint64
-	metaChan           chan *metaChange
-	dataReqtoSendChan  chan *dataRequest
-	dataReqChan        chan *dataRequest
-	dataRespToSendChan chan *dataResponse
-	dataRespChan       chan *frameworkhttp.DataResponse
+	epochWatcher      chan uint64
+	metaChan          chan *metaChange
+	dataReqtoSendChan chan *dataRequest
+	dataRespChan      chan *dataResponse
+	epochCheckChan    chan *epochCheck
 }
 
 // The key type is unexported to prevent collisions with context keys defined in
@@ -63,13 +60,8 @@ type contextKey int
 // different integer values.
 const epochKey contextKey = 1
 
-// Now use google context, for we simply create a barebone and attach the epoch to it.
-func (f *framework) createContext() context.Context {
-	return context.WithValue(context.Background(), epochKey, f.epoch)
-}
-
-func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
@@ -84,8 +76,8 @@ func (f *framework) FlagMeta(ctxt context.Context, linkType, meta string) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctxt context.Context) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
+func (f *framework) IncEpoch(ctx context.Context) {
+	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
@@ -96,32 +88,12 @@ func (f *framework) IncEpoch(ctxt context.Context) {
 	}
 }
 
-func (f *framework) DataRequest(ctxt context.Context, toID uint64, req string) {
-	epoch, ok := ctxt.Value(epochKey).(uint64)
-	if !ok {
-		f.log.Fatalf("Can not find epochKey in DataRequest")
-	}
-
-	// assumption here:
-	// Event driven task will call this in a synchronous way so that
-	// the epoch won't change at the time task sending this request.
-	// Epoch may change, however, before the request is actually being sent.
-	f.dataReqtoSendChan <- &dataRequest{
-		taskID: toID,
-		epoch:  epoch,
-		req:    req,
-	}
-}
-
 func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
 
-// this will shutdown local node instead of global job.
-func (f *framework) stop() {
-	close(f.epochChan)
-}
-
 func (f *framework) Kill() {
-	f.stop()
+	// framework select loop will quit and end like getting a exit epoch, except that
+	// it won't set exit epoch across cluster.
+	close(f.epochWatcher)
 }
 
 // When node call this on framework, it simply set epoch to exitEpoch,

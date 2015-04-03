@@ -8,6 +8,7 @@ install:
   - go get github.com/colinmarc/hdfs
   - go get golang.org/x/net/context
   - go get github.com/MSOpenTech/azure-sdk-for-go
+  - .script/dep.sh
 
 before_script:
   - mkdir .tmp
