@@ -31,27 +31,25 @@ is_etcd_up_on_4001() {
   return 1
 }
 
-if is_etcd_up_on_4001 ; then
-  echo "existing etcd on localhost:4001"
-  exit 1
-fi
+if [ ! is_etcd_up_on_4001 ] ; then
 
-if [ -d "$ETCDTESTDIR" ]; then
-  rm -rf $ETCDTESTDIR
-fi
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    .script/bin/etcd-v2.0.8-darwin --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
-else
-    .script/bin/etcd-v2.0.8-linux --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
-fi
-
-for i in $(seq 10); do
-  sleep 1
-  if is_etcd_up_on_4001; then
-    break
+  if [ -d "$ETCDTESTDIR" ]; then
+    rm -rf $ETCDTESTDIR
   fi
-done
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    .script/bin/etcd-v2.0.8-darwin --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
+  else
+    .script/bin/etcd-v2.0.8-linux --data-dir $ETCDTESTDIR > /dev/null 2>&1 &
+  fi
+
+  for i in $(seq 10); do
+    sleep 1
+    if is_etcd_up_on_4001; then
+      break
+    fi
+  done
+fi
 
 if is_etcd_up_on_4001 ; then
   echo "etcd is running on localhost:4001"
