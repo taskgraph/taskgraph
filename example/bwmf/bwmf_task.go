@@ -1,15 +1,16 @@
 package bwmf
 
 import (
+	"bufio"
 	"fmt"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"log"
 	"math/rand"
 	"os"
 	"strconv"
-
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
+	"time"
 
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
@@ -38,10 +39,14 @@ and all others children.
 // local shard of D; 2. after it is done, it let every one knows. Vice versa for even epoch.
 // Task 0 will monitor the progress and responsible for starting the work of new epoch.
 type bwmfTask struct {
-	framework  taskgraph.Framework
-	epoch      uint64
-	taskID     uint64
-	logger     *log.Logger
+	framework taskgraph.Framework
+	epoch     uint64
+	taskID    uint64
+
+	workPath  string
+	logger    *log.Logger
+	logWriter *bufio.Writer
+
 	numOfTasks uint64
 	numOfIters uint64
 	curIter    uint64
@@ -62,9 +67,6 @@ type bwmfTask struct {
 
 	// parameters for projected gradient methods
 	sigma, alpha, beta, tol float32
-
-	// Parameter data. They actually shares the underlying storage (buffer) with shardedD/T.
-	shardedDParam, shardedTParam taskgraph_op.Parameter
 
 	// objective function, parameters and minimizer to solve bwmf
 	tLoss, dLoss *KLDivLoss
@@ -99,8 +101,10 @@ func (bt *bwmfTask) updateDShard(ctx context.Context) {
 	}
 	bt.dLoss.W = NewBlocksParameter(&bt.fullT)
 
+	param := NewSingleBlockParameter(bt.shardedD)
+
 	// all set. Start the optimizing routine.
-	ok := bt.optimizer.Minimize(bt.dLoss, bt.stopCriteria, bt.shardedDParam)
+	ok := bt.optimizer.Minimize(bt.dLoss, bt.stopCriteria, param)
 	if !ok {
 		// TODO report error
 	}
@@ -124,7 +128,8 @@ func (bt *bwmfTask) updateTShard(ctx context.Context) {
 		bt.tLoss.WH = wh
 	}
 	bt.tLoss.W = NewBlocksParameter(&bt.fullD)
-	ok := bt.optimizer.Minimize(bt.tLoss, bt.stopCriteria, bt.shardedTParam)
+	param := NewSingleBlockParameter(bt.shardedT)
+	ok := bt.optimizer.Minimize(bt.tLoss, bt.stopCriteria, param)
 	if !ok {
 		// TODO report error
 	}
@@ -200,11 +205,29 @@ func (bt *bwmfTask) recoverFromCheckpoint(epoch uint64) {
 func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.taskID = taskID
 	bt.framework = framework
-	bt.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	bt.curIter = 0
 
+	// XXX This is for exposing the io.Writer for us to constantly flush.
+	logFile, lfErr := os.Create(bt.workPath + "/task-" + strconv.FormatInt(int64(taskID), 10) + ".log")
+	if lfErr != nil {
+		panic("Failed creating logger.")
+	}
+	bt.logWriter = bufio.NewWriter(logFile)
+	bt.logger = log.New(bt.logWriter, "", log.Ldate|log.Ltime|log.Lshortfile)
+	bt.logger.Println("Start logging.")
+	go func() {
+		// constantly flushing the log messages.
+		for {
+			bt.logWriter.Flush()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	// just for mem allocation
+	bt.rowShard = &pb.SparseMatrixShard{}
+	bt.columnShard = &pb.SparseMatrixShard{}
 	rowUnmashalErr := proto.Unmarshal(bt.rowBuf, bt.rowShard)
-	columnUnmashalErr := proto.Unmarshal(bt.columnBuf, bt.rowShard)
+	columnUnmashalErr := proto.Unmarshal(bt.columnBuf, bt.columnShard)
 
 	if rowUnmashalErr != nil {
 		bt.logger.Fatalf("Failed unmarshalling row shard data on task: %d", bt.taskID)
@@ -225,20 +248,17 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		Row: make([]*pb.DenseMatrixShard_DenseRow, bt.n),
 	}
 	for i, _ := range bt.shardedD.Row {
-		bt.shardedD.Row[i].At = make([]float32, bt.k)
+		bt.shardedD.Row[i] = &pb.DenseMatrixShard_DenseRow{At: make([]float32, bt.k)}
 		for j, _ := range bt.shardedD.Row[i].At {
 			bt.shardedD.Row[i].At[j] = rand.Float32()
 		}
 	}
 	for i, _ := range bt.shardedT.Row {
-		bt.shardedT.Row[i].At = make([]float32, bt.k)
+		bt.shardedT.Row[i] = &pb.DenseMatrixShard_DenseRow{At: make([]float32, bt.k)}
 		for j, _ := range bt.shardedT.Row[i].At {
 			bt.shardedT.Row[i].At[j] = rand.Float32()
 		}
 	}
-
-	bt.shardedDParam = NewSingleBlockParameter(bt.shardedD)
-	bt.shardedTParam = NewSingleBlockParameter(bt.shardedT)
 
 	// TODO set tLoss and dLoss
 	bt.tLoss = &KLDivLoss{
@@ -286,6 +306,16 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.updateDone = make(chan *event, 1)
 	bt.exitChan = make(chan struct{})
 
+	bt.logger.Println("RowShard:", *bt.rowShard)
+	bt.logger.Println("ColumnShard:", *bt.rowShard)
+	bt.logger.Println("m: ", bt.m)
+	bt.logger.Println("n: ", bt.n)
+	bt.logger.Println("k: ", bt.k)
+	bt.logger.Println("blockId: ", bt.blockId)
+	bt.logger.Println("sharded T: ", bt.shardedT)
+	bt.logger.Println("sharded D: ", bt.shardedD)
+	bt.logWriter.Flush()
+
 	// Now we have everything initialized.
 	go bt.run()
 }
@@ -305,9 +335,11 @@ func (bt *bwmfTask) run() {
 	for {
 		select {
 		case ec := <-bt.epochChange:
+			bt.logger.Println("SELECT- Epoch change to ", ec.epoch, " at task ", bt.taskID)
 			bt.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case reqT := <-bt.getT:
+			bt.logger.Println("SELECT- GetT at epoch", bt.epoch)
 			// XXX: tShard is guaranteed to have been updated here.
 			err := bt.framework.CheckGRPCContext(reqT.ctx)
 			if err != nil {
@@ -316,6 +348,7 @@ func (bt *bwmfTask) run() {
 			}
 			reqT.retT <- bt.shardedT
 		case reqD := <-bt.getD:
+			bt.logger.Println("SELECT- GetD at epoch", bt.epoch)
 			// XXX: tShard is guaranteed to have been updated here.
 			err := bt.framework.CheckGRPCContext(reqD.ctx)
 			if err != nil {
@@ -325,9 +358,11 @@ func (bt *bwmfTask) run() {
 			}
 			reqD.retD <- bt.shardedD
 		case done := <-bt.updateDone:
+			bt.logger.Println("SELECT- update t/d is done at epoch", bt.epoch)
 			go bt.checkpoint(bt.epoch)
 			bt.framework.FlagMeta(done.ctx, "toMaster", "metaReady")
 		case dr := <-bt.dataReady:
+			bt.logger.Println("SELECT- DataReady at epoch", bt.epoch)
 			// each event comes as the shard is ready
 			resp, bOk := dr.response.(*pb.Response)
 			if !bOk {
@@ -359,6 +394,7 @@ func (bt *bwmfTask) run() {
 			}
 
 		case mr := <-bt.metaReady:
+			bt.logger.Println("SELECT- MetaReady at epoch", bt.epoch)
 			// in master we check the completion of the epoch
 			if bt.framework.GetTaskID() == 0 {
 				_, exists := bt.fromOthers[mr.fromID]
@@ -371,17 +407,20 @@ func (bt *bwmfTask) run() {
 				}
 			}
 		case <-bt.exitChan:
+			bt.logger.Println("SELECT- Exit at epoch", bt.epoch)
 			return
 		}
 	}
 }
 
 func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
+	bt.logger.Println("EnterEpoch at task ", bt.taskID, " into ", epoch)
 	bt.epochChange <- &event{ctx: ctx, epoch: epoch}
 }
 
 func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
+
 	bt.epoch = epoch
 	bt.curIter++
 
@@ -415,6 +454,7 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 
 // XXX(baigang): Master task will check this for invoking IncEpoch
 func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	bt.logger.Println("MetaReady at task ", bt.taskID, " with meta ", meta, " from task ", fromID)
 	switch meta {
 	case "metaReady":
 		bt.metaReady <- &event{ctx: ctx, fromID: fromID}
@@ -424,6 +464,7 @@ func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta
 }
 
 func (bt *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	bt.logger.Println("DataReady at task ", bt.taskID, " with method ", method, " from task ", fromID)
 	switch method {
 	case "/proto.BlockData/GetTShard":
 		bt.dataReady <- &event{ctx: ctx, fromID: fromID, response: output}
@@ -456,6 +497,7 @@ func (bt *bwmfTask) CreateOutputMessage(methodName string) proto.Message {
 
 func (bt *bwmfTask) Exit() {
 	close(bt.exitChan)
+	bt.logWriter.Flush()
 	// XXX Shall we dump the temporary results here or the last epoch?
 }
 

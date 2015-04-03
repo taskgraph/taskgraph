@@ -16,6 +16,7 @@ type BWMFTaskBuilder struct {
 	K              int
 	RowShardBuf    []byte
 	ColumnShardBuf []byte
+	WorkPath       string
 }
 
 func (btb *BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
@@ -30,5 +31,6 @@ func (btb *BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		k:          btb.K,
 		rowBuf:     btb.RowShardBuf,
 		columnBuf:  btb.ColumnShardBuf,
+		workPath:   btb.WorkPath,
 	}
 }
