@@ -1,3 +1,11 @@
+// TO-DO : updated the semantics of the Azure filesystem
+// Explanation : 
+// current semantics is Container/Blob like "A/B", restricted by only one slash
+// Need to update the senmatics supported mulriple slash (As same as the local system semantic)
+// "/A/B/C/D", ignore the first slash, "A" represents the contianer name
+// and "B/C/D" represents the Blob name.
+// Correspendingly, the Blob function need to change.
+
 package filesystem
 
 import (
