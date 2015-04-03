@@ -31,7 +31,7 @@ func getBufs() (row1, column1, row2, column2 []byte, err error) {
 
 	// shard1: row 0,1 of A
 	rowShard1 := &pb.SparseMatrixShard{
-		Row: make([]*pb.SparseMatrixShard_SparseRow, 2),
+		Row: []*pb.SparseMatrixShard_SparseRow{&pb.SparseMatrixShard_SparseRow{}, &pb.SparseMatrixShard_SparseRow{}},
 	}
 	rowShard1.Row[0].At = make(map[int32]float32)
 	rowShard1.Row[1].At = make(map[int32]float32)
@@ -49,7 +49,7 @@ func getBufs() (row1, column1, row2, column2 []byte, err error) {
 
 	// shard1: column 0,1 of A
 	columnShard1 := &pb.SparseMatrixShard{
-		Row: make([]*pb.SparseMatrixShard_SparseRow, 2),
+		Row: []*pb.SparseMatrixShard_SparseRow{&pb.SparseMatrixShard_SparseRow{}, &pb.SparseMatrixShard_SparseRow{}},
 	}
 	columnShard1.Row[0].At = make(map[int32]float32)
 	columnShard1.Row[1].At = make(map[int32]float32)
@@ -65,7 +65,7 @@ func getBufs() (row1, column1, row2, column2 []byte, err error) {
 
 	// shard2: row 2 of A
 	rowShard2 := &pb.SparseMatrixShard{
-		Row: make([]*pb.SparseMatrixShard_SparseRow, 1),
+		Row: []*pb.SparseMatrixShard_SparseRow{&pb.SparseMatrixShard_SparseRow{}},
 	}
 	rowShard2.Row[0].At = make(map[int32]float32)
 
@@ -77,7 +77,7 @@ func getBufs() (row1, column1, row2, column2 []byte, err error) {
 
 	// shard2: column 2,3 of A
 	columnShard2 := &pb.SparseMatrixShard{
-		Row: make([]*pb.SparseMatrixShard_SparseRow, 1),
+		Row: []*pb.SparseMatrixShard_SparseRow{&pb.SparseMatrixShard_SparseRow{}, &pb.SparseMatrixShard_SparseRow{}},
 	}
 	columnShard2.Row[0].At = make(map[int32]float32)
 	columnShard2.Row[1].At = make(map[int32]float32)

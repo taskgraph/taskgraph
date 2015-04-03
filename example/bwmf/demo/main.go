@@ -4,7 +4,7 @@ import (
 	"flag"
 	"log"
 	"net"
-	"strings"
+	// "strings"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
@@ -20,14 +20,19 @@ func main() {
 	columnShardPath := flag.String("column_file", "", "HDFS path to the column shard matrix.")
 	// XXX(baigang): We will be dealing with local fs first.
 	latentDim := flag.Int("latent_dim", 1, "Latent dimension.")
+	ntask := flag.Int("num_tasks", 1, "Num of task nodes.")
 	blockId := flag.Int("block_id", 0, "ID of the sharded data block. 0 ~ num_tasks-1")
 	numIters := flag.Int("num_iters", 10, "Num of iterations")
 	alpha := flag.Float64("alpha", 0.5, "Parameter alpha in rojected gradient method.")
 	beta := flag.Float64("beta", 0.5, "Parameter beta in rojected gradient method.")
 	sigma := flag.Float64("sigma", 0.5, "Parameter sigma in rojected gradient method.")
 	tolerance := flag.Float64("tolerance", 0.5, "Parameter tolerance in rojected gradient method.")
-	etcdURLs := strings.Split(*flag.String("etcd_urls", "", "List of etcd instances, sep by ','."), ",")
-	ntask := flag.Int("num_tasks", 1, "Num of task nodes.")
+	//etcdURLs := strings.Split(*flag.String("etcd_urls", "", "List of etcd instances, sep by ','."), ",")
+	{
+		tmp := *flag.String("etcd_urls", "", "List of etcd instances, sep by ','.")
+		tmp = tmp
+	}
+	etcdURLs := []string{"http://localhost:4001"}
 
 	flag.Parse()
 	numTasks := uint64(*ntask)
@@ -37,7 +42,8 @@ func main() {
 	switch *programType {
 	case "c":
 		log.Printf("controller")
-		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Parents", "Children"})
+		// controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Parents", "Children"})
+		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Neighbors", "toMaster"})
 		controller.Start()
 		controller.WaitForJobDone()
 	case "t":
@@ -87,6 +93,7 @@ func main() {
 			K:              *latentDim,
 			RowShardBuf:    rowShardBuf,
 			ColumnShardBuf: columnShardBuf,
+			WorkPath:       "./",
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
 		bootstrap.SetTopology(topo.NewFullTopology(numTasks))

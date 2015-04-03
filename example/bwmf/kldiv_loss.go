@@ -53,7 +53,7 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 				}
 
 				// evaluate element-wise KL-divergence
-				v, ok := l.V.GetRow()[i].At[int32(j)]
+				v, ok := l.V.GetRow()[j].At[int32(i)]
 				wh := l.WH[i][j]
 				if ok {
 					lossAccum <- -v*float32(math.Log(float64(l.smooth+wh))) + wh
@@ -79,7 +79,7 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 			go func(grad_index, j, k int) {
 				defer wg.Done()
 				for i := 0; i < l.m; i++ {
-					grad_val := l.W.Get(i*l.k+k) * (l.WH[i][j] - l.V.GetRow()[i].At[int32(j)]) / l.WH[i][j]
+					grad_val := l.W.Get(i*l.k+k) * (l.WH[i][j] - l.V.GetRow()[j].At[int32(i)]) / l.WH[i][j]
 					gradient.Add(grad_index, grad_val)
 				}
 			}(grad_index, j, k)
