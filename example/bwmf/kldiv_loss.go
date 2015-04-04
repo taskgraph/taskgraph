@@ -1,6 +1,7 @@
 package bwmf
 
 import (
+	"log"
 	"math"
 	"sync"
 
@@ -21,6 +22,7 @@ type KLDivLoss struct {
 	WH      [][]float32  // temporary storage for the intermediate result W*H
 	m, n, k int          // dimensions
 	smooth  float32
+	logger  *log.Logger
 }
 
 // This function evaluates the Kullback-Leibler Divergence given $\mathbf{V} the matrix to fact and $\mathbf{W}$ the fixed factor.
@@ -86,6 +88,10 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 		}
 	}
 	wg.Wait()
+
+	if l.logger != nil {
+		l.logger.Println("Evaluate at param ", param, " returns value ", value, " and gradient ", gradient)
+	}
 
 	return value
 }

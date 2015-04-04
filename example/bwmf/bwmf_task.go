@@ -146,23 +146,23 @@ func (bt *bwmfTask) checkpoint(epoch uint64) {
 
 	// In even epoch, we fetch D and update T; in odd epoch, we fetch T and update D.
 	if epoch%2 == 0 {
-		filename = "./shard.t.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		filename = "./shard.t." + strconv.FormatInt(int64(bt.taskID), 10) + "-" + strconv.FormatInt(int64(epoch), 10)
 		buf, err = proto.Marshal(bt.shardedT)
 	} else {
-		filename = "./shard.d.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		filename = "./shard.d." + strconv.FormatInt(int64(bt.taskID), 10) + "-" + strconv.FormatInt(int64(epoch), 10)
 		buf, err = proto.Marshal(bt.shardedD)
 	}
 	if err != nil {
-		bt.logger.Panicf("Failed marshalling result at epoch %d in task %d", epoch, bt.taskID)
+		bt.logger.Panicf("Failed marshalling result at epoch %d in task %d with err %s", epoch, bt.taskID, err)
 	}
 	// write the buffer
 	writer, openErr := filesystem.NewLocalFSClient().OpenWriteCloser(filename)
 	if openErr != nil {
-		bt.logger.Panicf("Failed open")
+		bt.logger.Panicf("Failed open %s with error %s.", filename, openErr)
 	}
 	_, wErr := writer.Write(buf)
 	if wErr != nil {
-		bt.logger.Panicf("Failed writing to %s", filename)
+		bt.logger.Panicf("Failed writing to %s with err %s", filename, wErr)
 	}
 
 	// remove the older instance
@@ -182,10 +182,10 @@ func (bt *bwmfTask) recoverFromCheckpoint(epoch uint64) {
 
 	// In even epoch, we fetch D and update T; in odd epoch, we fetch T and update D.
 	if epoch%2 == 0 {
-		filename = "./shard.t.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		filename = "./shard.t.checkpoint." + strconv.FormatInt(int64(bt.taskID), 10) + "-" + strconv.FormatInt(int64(epoch), 10)
 		shard = bt.shardedT
 	} else {
-		filename = "./shard.d.checkpoint." + strconv.FormatInt(int64(epoch), 10)
+		filename = "./shard.d.checkpoint." + strconv.FormatInt(int64(bt.taskID), 10) + "-" + strconv.FormatInt(int64(epoch), 10)
 		shard = bt.shardedD
 	}
 
@@ -219,7 +219,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		// constantly flushing the log messages.
 		for {
 			bt.logWriter.Flush()
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}()
 
@@ -269,6 +269,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		n:      bt.n,
 		k:      bt.k,
 		smooth: 1e-4,
+		logger: bt.logger,
 	}
 	bt.dLoss = &KLDivLoss{
 		V:      bt.rowShard,
@@ -278,6 +279,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 		n:      -1, // should be bt.N
 		k:      bt.k,
 		smooth: 1e-4,
+		logger: bt.logger,
 	}
 
 	bt.stopCriteria = taskgraph_op.MakeFixCountStopCriteria(int(bt.numOfIters))
@@ -307,7 +309,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.exitChan = make(chan struct{})
 
 	bt.logger.Println("RowShard:", *bt.rowShard)
-	bt.logger.Println("ColumnShard:", *bt.rowShard)
+	bt.logger.Println("ColumnShard:", *bt.columnShard)
 	bt.logger.Println("m: ", bt.m)
 	bt.logger.Println("n: ", bt.n)
 	bt.logger.Println("k: ", bt.k)
@@ -346,21 +348,32 @@ func (bt *bwmfTask) run() {
 				bt.logger.Panicf("GetTShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
 				close(reqT.retT)
 			}
+			bt.logger.Printf("To respond with retT at task %d epoch %d.", bt.taskID, bt.epoch)
 			reqT.retT <- bt.shardedT
+			bt.logger.Printf("Responded with retT at task %d epoch %d.", bt.taskID, bt.epoch)
 		case reqD := <-bt.getD:
 			bt.logger.Println("SELECT- GetD at epoch", bt.epoch)
 			// XXX: tShard is guaranteed to have been updated here.
+
+			bt.logger.Println("Before checking GRPC status...")
+			bt.logWriter.Flush()
 			err := bt.framework.CheckGRPCContext(reqD.ctx)
+			bt.logger.Println("After checking GRPC status: ", err)
+			bt.logWriter.Flush()
 			if err != nil {
 				bt.logger.Panicf("GetDShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
 				close(reqD.retD)
-				break
+				continue
 			}
+			bt.logger.Printf("To respond with retD at task %d epoch %d.", bt.taskID, bt.epoch)
 			reqD.retD <- bt.shardedD
+			bt.logger.Printf("Responded with retD at task %d epoch %d.", bt.taskID, bt.epoch)
 		case done := <-bt.updateDone:
 			bt.logger.Println("SELECT- update t/d is done at epoch", bt.epoch)
 			go bt.checkpoint(bt.epoch)
-			bt.framework.FlagMeta(done.ctx, "toMaster", "metaReady")
+			// bt.framework.FlagMeta(done.ctx, "toMaster", "metaReady")
+			bt.logger.Println("Flagging metaReady.")
+			bt.framework.FlagMeta(done.ctx, "Neighbors", "metaReady")
 		case dr := <-bt.dataReady:
 			bt.logger.Println("SELECT- DataReady at epoch", bt.epoch)
 			// each event comes as the shard is ready
@@ -378,6 +391,7 @@ func (bt *bwmfTask) run() {
 				// if all tShards have arrived
 				if len(bt.fullD) == int(bt.numOfTasks) {
 					// optimize to evaluate dShard. It will signals via bt.updateDone at completion.
+					bt.logger.Println("FullD is ready. data: ", bt.fullD)
 					go bt.updateTShard(dr.ctx)
 				}
 			} else {
@@ -389,6 +403,7 @@ func (bt *bwmfTask) run() {
 				// if all tShards have arrived
 				if len(bt.fullT) == int(bt.numOfTasks) {
 					// optimize to evaluate dShard. It will signals via bt.updateDone at completion.
+					bt.logger.Println("FullT is ready. data: ", bt.fullT)
 					go bt.updateDShard(dr.ctx)
 				}
 			}
@@ -401,8 +416,10 @@ func (bt *bwmfTask) run() {
 				if exists {
 					bt.logger.Panicf("Duplicated meta from task %d.", mr.fromID)
 				}
+				bt.logger.Printf("Master got metaReady from %d at epoch %d.", mr.fromID, bt.epoch)
 				bt.fromOthers[mr.fromID] = true
 				if len(bt.fromOthers) == int(bt.numOfTasks) {
+					bt.logger.Printf("All neighbors have metaReady. Current epoch %d finished.", bt.epoch)
 					bt.framework.IncEpoch(mr.ctx)
 				}
 			}
@@ -419,7 +436,6 @@ func (bt *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
-	bt.logger.Printf("master EnterEpoch, task %d, epoch %d\n", bt.taskID, epoch)
 
 	bt.epoch = epoch
 	bt.curIter++
@@ -434,27 +450,28 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	bt.fullT = make(map[uint32]*pb.DenseMatrixShard)
 	bt.fromOthers = make(map[uint64]bool)
 
-	bt.fromOthers[bt.taskID] = true
+	//	bt.fromOthers[bt.taskID] = true
 
 	var method string
 	// In even epoch even, we fetch D and update T; in odd epoch, we fetch T and update D.
 	if epoch%2 == 0 {
 		method = "/proto.BlockData/GetDShard"
 		// XXX: Add own block to it because neighbors doesn't include self.
-		bt.fullD[bt.blockId] = bt.shardedD
+		// bt.fullD[bt.blockId] = bt.shardedD
 	} else {
 		method = "/proto.BlockData/GetTShard"
-		bt.fullT[bt.blockId] = bt.shardedT
+		// bt.fullT[bt.blockId] = bt.shardedT
 	}
 
 	for _, c := range bt.framework.GetTopology().GetNeighbors("Neighbors", epoch) {
+		bt.logger.Println("Sending request ", method, " to neighbor [", c, "] at epoch ", epoch)
 		bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
 	}
 }
 
 // XXX(baigang): Master task will check this for invoking IncEpoch
 func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	bt.logger.Println("MetaReady at task ", bt.taskID, " with meta ", meta, " from task ", fromID)
+	bt.logger.Println("MetaReady  from task ", fromID)
 	switch meta {
 	case "metaReady":
 		bt.metaReady <- &event{ctx: ctx, fromID: fromID}
@@ -512,16 +529,20 @@ func (bt *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Res
 	if !ok {
 		return nil, fmt.Errorf("Failed getting T.")
 	}
+	close(retT)
 	return &pb.Response{BlockId: bt.blockId, Shard: resT}, nil
 }
 
 func (bt *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
 	// same as GetTShard
 	retD := make(chan *pb.DenseMatrixShard, 1)
+	bt.logger.Println("Requesting D at epoch ", request.Epoch)
 	bt.getD <- &event{ctx: ctx, epoch: request.Epoch, request: request, retD: retD}
 	resD, ok := <-retD
 	if !ok {
 		return nil, fmt.Errorf("Failed getting D.")
 	}
+	bt.logger.Println("Got responseD at epoch ", request.Epoch)
+	close(retD)
 	return &pb.Response{BlockId: bt.blockId, Shard: resD}, nil
 }
