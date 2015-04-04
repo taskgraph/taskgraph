@@ -16,16 +16,19 @@ func TestFullTopogoly(t *testing.T) {
 		t.Error()
 	}
 	n := topo.GetNeighbors("Neighbors", 0)
-	if len(n) != 2 {
+	if len(n) != 3 {
 		t.Error()
 	}
 	if n[0] != 0 {
 		t.Error()
 	}
-	if n[1] != 2 {
+	if n[1] != 1 {
 		t.Error()
 	}
-	m := topo.GetNeighbors("toMaster", 0)
+	if n[2] != 2 {
+		t.Error()
+	}
+	m := topo.GetNeighbors("Master", 0)
 	if len(m) != 1 {
 		t.Error()
 	}
