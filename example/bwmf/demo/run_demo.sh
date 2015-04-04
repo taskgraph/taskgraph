@@ -25,13 +25,14 @@ cleanup() {
 trap "cleanup" SIGINT SIGTERM EXIT
 
 is_etcd_up_on_4001() {
-  if curl -fs "http://localhost:4001/v2/machines" 2>/dev/null; then
-      return 0
+  if [ `curl -fs "http://localhost:4001/v2/machines" 2>/dev/null` ]; then
+      return 1
   fi
-  return 1
+  return 0
 }
 
-if [ is_etcd_up_on_4001 ] ; then
+test_etcd=is_etcd_up_on_4001
+if [ xx$text_etcd == xx1] ; then
     echo "ETCD is already running. Kill it and restart the demo."
     exit 1
 fi
@@ -65,10 +66,7 @@ popd
 
 go build
 
-set +e
-./demo -job="bwmf_test" -type=c -etcd_urls="http://localhost:4001/," \
-    -num_tasks=2 
-set -e
+./demo -job="bwmf_test" -type=c -etcd_urls="http://localhost:4001/," -num_tasks=2 > log.controller 2>&1  &
 
 # need to wait for controller to setup
 sleep 1
@@ -76,16 +74,21 @@ sleep 1
 ./demo -job="bwmf_test" -type=t -row_file=dummy -column_file=dummy \
     -latent_dim=2 -block_id=0 -num_iters=10 -alpha=0.5 -beta=0.1 -sigma=0.01 \
     -tolerance=0.0001 -etcd_urls="http://localhost:4001/," \
-    -num_tasks=2  > log1 2>&1 & 
+    -num_tasks=2  > log0 2>&1 &
 
 ./demo -job="bwmf_test" -type=t  -row_file=dummy -column_file=dummy \
     -latent_dim=2 -block_id=1 -num_iters=10 -alpha=0.5 -beta=0.1 -sigma=0.01 \
     -tolerance=0.0001 -etcd_urls="http://localhost:4001/," \
-    -num_tasks=2 > log2 2>&1 &
+    -num_tasks=2 > log1 2>&1 &
 
 echo "Finished."
 
 # go back to original dir and leave
 popd 
+
+while [ 1 ]
+do
+    sleep 1000
+done
 
 trap "kill 0" SIGINT SIGTERM EXIT

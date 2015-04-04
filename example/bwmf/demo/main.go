@@ -43,7 +43,7 @@ func main() {
 	case "c":
 		log.Printf("controller")
 		// controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Parents", "Children"})
-		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Neighbors", "toMaster"})
+		controller := controller.New(*job, etcd.NewClient(etcdURLs), numTasks, []string{"Neighbors", "Master"})
 		controller.Start()
 		controller.WaitForJobDone()
 	case "t":
