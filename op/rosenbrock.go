@@ -1,4 +1,4 @@
-package taskgraph_op
+package op
 
 // Rosenbrock is used as standard test function for optimization.
 //  f(x, y) = (1-x)^2 + 100(y-x^2)^2, it has a global minimum of 0

@@ -1,4 +1,4 @@
-package taskgraph_op
+package op
 
 // For more information read: http://ewencp.org/blog/golang-iterators/
 // We need an reasonably efficient way to enumerate all indexes.
