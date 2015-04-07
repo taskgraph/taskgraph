@@ -14,16 +14,14 @@ type FullTopology struct {
 // we should not need to set this again.
 func (t *FullTopology) SetTaskID(taskID uint64) {
 	t.taskID = taskID
-	t.neighbors = make([]uint64, 0, t.numOfTasks-1)
+	t.neighbors = make([]uint64, 0, t.numOfTasks)
 	for index := uint64(0); index < t.numOfTasks; index++ {
-		if index != t.taskID {
-			t.neighbors = append(t.neighbors, index)
-		}
+		t.neighbors = append(t.neighbors, index)
 	}
 }
 
 func (t *FullTopology) GetLinkTypes() []string {
-	return []string{"Neighbors", "toMaster"}
+	return []string{"Neighbors", "Master"}
 }
 
 func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
@@ -31,14 +29,11 @@ func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	switch {
 	case linkType == "Neighbors":
 		res = t.neighbors
-	case linkType == "toMaster":
+	case linkType == "Master":
 		res = []uint64{0}
 	}
 	return res
 }
-
-// TODO, do we really need to expose this?
-func (t *FullTopology) SetNumberOfTasks(nt uint64) { t.numOfTasks = nt }
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.

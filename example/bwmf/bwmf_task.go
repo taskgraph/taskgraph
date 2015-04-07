@@ -9,16 +9,9 @@ import (
 	"github.com/taskgraph/taskgraph/pkg/common"
 )
 
-/* TODO:
-- SetEpoch 0...
-- Topology should be pushed to user. FlagMeta, Meta/Data Ready..
-- Test Data. (Simple, real)
-- FileSystem (hdfs, s3).. run real data.
-*/
-
 /*
 The block wise matrix factorization task is designed for carry out block wise matrix
-factorization for a variety of criteria (loss function) and constraints (nonnegativity
+factorization for a variety of criteria (loss function) and constraints (non-negativity
 for example).
 
 The main idea behind the bwmf is following:
