@@ -114,6 +114,9 @@ func (f *framework) run() {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
+			// tmp logging
+			f.log.Printf("data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
+
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
 			if resp.epoch != f.epoch {

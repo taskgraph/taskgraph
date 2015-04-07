@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"log"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
@@ -16,12 +18,19 @@ var (
 	ErrEpochMismatch = fmt.Errorf("server epoch mismatch")
 )
 
-func (f *framework) CheckGRPCContext(ctx context.Context) error {
+// temporarily with logging, will remove it later
+func (f *framework) CheckGRPCContext(ctx context.Context, logger *log.Logger) error {
 	md, ok := metadata.FromContext(ctx)
 	if !ok {
 		return fmt.Errorf("Can't get grpc.Metadata from context: %v", ctx)
 	}
+
+	logger.Println("context meta: ", md, ". Context: ", ctx)
+
 	epoch, err := strconv.ParseUint(md["epoch"], 10, 64)
+
+	logger.Println("Parse meta epoch: ", epoch)
+
 	if err != nil {
 		return err
 	}
@@ -37,7 +46,13 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 	case <-f.globalStop:
 		return fmt.Errorf("framework stopped")
 	}
+
+	logger.Println("Waiting for resChan.")
+
 	ok = <-resChan
+
+	logger.Println("Got from resChan: ", ok)
+
 	if ok {
 		return nil
 	} else {
@@ -45,7 +60,7 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 	}
 }
 
-func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
+func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message, logger *log.Logger) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
@@ -54,6 +69,9 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 	// Event driven task will call this in a synchronous way so that
 	// the epoch won't change at the time task sending this request.
 	// Epoch may change, however, before the request is actually being sent.
+
+	// tmp log
+	logger.Println("Before select..")
 	select {
 	case f.dataReqtoSendChan <- &dataRequest{
 		ctx:    f.makeGRPCContext(ctx),
@@ -62,9 +80,11 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 		input:  input,
 		method: method,
 	}:
+		logger.Println("Pushed into dataReqtoSendChan")
 	case <-ctx.Done():
 		f.log.Printf("abort data request, to %d, epoch %d, method %s", toID, epoch, method)
 	}
+	logger.Println("After select..")
 }
 
 // encode metadata to context in grpc specific way

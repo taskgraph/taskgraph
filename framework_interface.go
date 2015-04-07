@@ -50,8 +50,8 @@ type Framework interface {
 	IncEpoch(ctx context.Context)
 
 	// Request data from task toID with specified linkType and meta.
-	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
-	CheckGRPCContext(ctx context.Context) error
+	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message, logger *log.Logger)
+	CheckGRPCContext(ctx context.Context, logger *log.Logger) error
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
