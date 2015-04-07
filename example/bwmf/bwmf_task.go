@@ -226,13 +226,13 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	// just for mem allocation
 	bt.rowShard = &pb.SparseMatrixShard{}
 	bt.columnShard = &pb.SparseMatrixShard{}
-	rowUnmashalErr := proto.Unmarshal(bt.rowBuf, bt.rowShard)
-	columnUnmashalErr := proto.Unmarshal(bt.columnBuf, bt.columnShard)
+	rowUnmarshalErr := proto.Unmarshal(bt.rowBuf, bt.rowShard)
+	columnUnmarshalErr := proto.Unmarshal(bt.columnBuf, bt.columnShard)
 
-	if rowUnmashalErr != nil {
+	if rowUnmarshalErr != nil {
 		bt.logger.Fatalf("Failed unmarshalling row shard data on task: %d", bt.taskID)
 	}
-	if columnUnmashalErr != nil {
+	if columnUnmarshalErr != nil {
 		bt.logger.Fatalf("Failed unmarshalling column shard data on task: %d", bt.taskID)
 	}
 
@@ -305,6 +305,7 @@ func (bt *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	bt.getD = make(chan *event, 1)
 	bt.getT = make(chan *event, 1)
 	bt.dataReady = make(chan *event, 1)
+	bt.metaReady = make(chan *event, 1)
 	bt.updateDone = make(chan *event, 1)
 	bt.exitChan = make(chan struct{})
 
@@ -343,7 +344,7 @@ func (bt *bwmfTask) run() {
 		case reqT := <-bt.getT:
 			bt.logger.Println("SELECT- GetT at epoch", bt.epoch)
 			// XXX: tShard is guaranteed to have been updated here.
-			err := bt.framework.CheckGRPCContext(reqT.ctx)
+			err := bt.framework.CheckGRPCContext(reqT.ctx, bt.logger)
 			if err != nil {
 				bt.logger.Panicf("GetTShard grpc broken in context at task %d for epoch %d.", bt.taskID, bt.epoch)
 				close(reqT.retT)
@@ -357,7 +358,7 @@ func (bt *bwmfTask) run() {
 
 			bt.logger.Println("Before checking GRPC status...")
 			bt.logWriter.Flush()
-			err := bt.framework.CheckGRPCContext(reqD.ctx)
+			err := bt.framework.CheckGRPCContext(reqD.ctx, bt.logger)
 			bt.logger.Println("After checking GRPC status: ", err)
 			bt.logWriter.Flush()
 			if err != nil {
@@ -465,8 +466,10 @@ func (bt *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 
 	for _, c := range bt.framework.GetTopology().GetNeighbors("Neighbors", epoch) {
 		bt.logger.Println("Sending request ", method, " to neighbor [", c, "] at epoch ", epoch)
-		bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
+		bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch}, bt.logger)
+		bt.logger.Println("Done request ", method, " to neighbor [", c, "] at epoch ", epoch)
 	}
+	bt.logger.Println("Finished doEnterEpoch().")
 }
 
 // XXX(baigang): Master task will check this for invoking IncEpoch
@@ -474,6 +477,7 @@ func (bt *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta
 	bt.logger.Println("MetaReady  from task ", fromID)
 	switch meta {
 	case "metaReady":
+		bt.logger.Println("Putting metaReady to bt.metaReady.")
 		bt.metaReady <- &event{ctx: ctx, fromID: fromID}
 	default:
 		bt.logger.Panicf("Unknow meta: %s", meta)
