@@ -1,4 +1,4 @@
-package taskgraph_op
+package op
 
 import (
 	"fmt"

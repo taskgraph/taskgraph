@@ -1,4 +1,4 @@
-package taskgraph_op
+package op
 
 // This defines how we do projected gradient.
 type ProjectedGradient struct {

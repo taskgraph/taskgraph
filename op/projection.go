@@ -1,4 +1,4 @@
-package taskgraph_op
+package op
 
 // This implementaton is useful for
 type oneParameter struct {
