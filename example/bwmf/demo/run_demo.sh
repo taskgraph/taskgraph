@@ -32,7 +32,7 @@ is_etcd_up_on_4001() {
 }
 
 test_etcd=is_etcd_up_on_4001
-if [ xx$text_etcd == xx1] ; then
+if [ xx$test_etcd == xx1 ] ; then
     echo "ETCD is already running. Kill it and restart the demo."
     exit 1
 fi
