@@ -1,12 +1,17 @@
 package bwmf
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/pkg/common"
+	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 /*
@@ -24,30 +29,6 @@ Topology: the topology is different from task to task. Each task will consider i
 and all others children.
 */
 
-// bwmfData is used to carry indexes and values associated with each index. Index here
-// can be row or column id, and value can be K wide, one for each topic;
-type bwmfData struct {
-	Index  int
-	Values []float64
-}
-
-type Shard []*bwmfData
-
-func newDShard(index uint64) []*bwmfData {
-	panic("")
-}
-func newTShard(index uint64) []*bwmfData {
-	panic("")
-}
-
-func (shard *Shard) randomFillValue() {
-}
-
-type sparseVec struct {
-	Indexes []int
-	Values  []float64
-}
-
 // bwmfTasks holds two shards of original matrices (row and column), one shard of D,
 // and one shard of T. It works differently for odd and even epoch:
 // During odd epoch, 1. it fetch all T from other slaves, and finding better value for
@@ -60,132 +41,197 @@ type bwmfTask struct {
 	logger     *log.Logger
 	numOfTasks uint64
 
-	// The original data.
-	rowShard, columnShard []sparseVec
-
-	dtReady       *common.CountdownLatch
-	childrenReady map[uint64]bool
-
-	dShard, tShard Shard
-	d, t           []*bwmfData
+	peerShardReady map[uint64]bool
+	peerUpdated    map[uint64]bool
+	// event hanlding
+	epochChange chan *event
+	getT        chan *event
+	getD        chan *event
+	dataReady   chan *event
+	updateDone  chan *event
+	metaReady   chan *event
+	exitChan    chan *event
 }
 
-// These two function carry out actual optimization.
-func (t *bwmfTask) updateDShard() {}
-func (t *bwmfTask) updateTShard() {}
-
-// Initialization: We need to read row and column shards of A.
-func (t *bwmfTask) readShardsFromDisk() {}
-
-// Read dShard and tShard from last checkpoint if any.
-func (t *bwmfTask) readLastCheckpoint() bool {
-	panic("")
+type event struct {
+	ctx     context.Context
+	epoch   uint64
+	request *pb.Request
+	retT    chan *pb.Response
+	retD    chan *pb.Response
+	fromID  uint64
+	method  string
+	output  proto.Message
 }
 
-// Task have all the data, compute local optimization of D/T.
-func (t *bwmfTask) localCompute() {}
+func (t *bwmfTask) initDShard()             {}
+func (t *bwmfTask) initTShard()             {}
+func (t *bwmfTask) getDShard() *pb.Response { return &pb.Response{} }
+func (t *bwmfTask) getTShard() *pb.Response { return &pb.Response{} }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.taskID = taskID
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	// Use some unique identifier to set Index "in the future".
-	// We can use taskID now.
-	t.dShard = newDShard(t.taskID)
-	t.tShard = newTShard(t.taskID)
-	t.readShardsFromDisk()
-	ok := t.readLastCheckpoint()
-	if !ok {
-		t.dShard.randomFillValue()
-		t.tShard.randomFillValue()
-	}
 
-	// At initialization:
-	// Task 0 will start the iterations.
+	t.initDShard()
+	t.initTShard()
+
+	t.epochChange = make(chan *event, 1)
+	t.getT = make(chan *event, 1)
+	t.getD = make(chan *event, 1)
+	t.dataReady = make(chan *event, 1)
+	t.updateDone = make(chan *event, 1)
+	t.metaReady = make(chan *event, 1)
+	t.exitChan = make(chan *event)
+	go t.run()
 }
 
-func (t *bwmfTask) Exit() {}
+func (t *bwmfTask) run() {
+	for {
+		select {
+		case epochChange := <-t.epochChange:
+			t.EnterEpoch(epochChange.ctx, epochChange.epoch)
+		case req := <-t.getT:
+			err := t.framework.CheckGRPCContext(req.ctx)
+			if err != nil {
+				close(req.retT)
+				break
+			}
+			// We only return the data shard of previous epoch. So it always exists.
+			req.retT <- t.getTShard()
+		case req := <-t.getD:
+			err := t.framework.CheckGRPCContext(req.ctx)
+			if err != nil {
+				close(req.retD)
+				break
+			}
+			req.retD <- t.getDShard()
+		case dataReady := <-t.dataReady:
+			t.doDataReady(dataReady.ctx, dataReady.fromID, dataReady.method, dataReady.output)
+		case done := <-t.updateDone:
+			t.notifyMaster(done.ctx)
+		case notify := <-t.metaReady:
+			t.notifyUpdate(notify.ctx, notify.fromID)
+		case <-t.exitChan:
+			return
+		}
+	}
+}
 
-func (t *bwmfTask) SetEpoch(ctx taskgraph.Context, epoch uint64) {
-	t.logger.Printf("slave SetEpoch, task: %d, epoch: %d\n", t.taskID, epoch)
+func (t *bwmfTask) Exit() {
+	close(t.exitChan)
+}
+
+func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
+	t.epochChange <- &event{ctx: ctx, epoch: epoch}
+}
+
+func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+	t.peerShardReady = make(map[uint64]bool)
+	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
-	t.childrenReady = make(map[uint64]bool)
-	t.dtReady = common.NewCountdownLatch(int(t.numOfTasks))
-
-	// Afterwards:
-	// We need to get all D/T from last epoch so that we can carry out local
-	// update on T/D.
-	// Even epochs: Fix D, calculate T;
-	// Odd epochs: Fix T, calculate D;
-
-	if t.epoch%2 == 0 {
-		for index := uint64(0); index < t.numOfTasks; index++ {
-			ctx.DataRequest(index, "getD")
-		}
+	if epoch%2 == 0 {
+		t.fetchShards(ctx, "/proto.BlockData/GetDShard")
 	} else {
-		for index := uint64(0); index < t.numOfTasks; index++ {
-			ctx.DataRequest(index, "getT")
-		}
+		t.fetchShards(ctx, "/proto.BlockData/GetTShard")
 	}
-
-	go func() {
-		// Wait for all shards (either D or T, depending on the epoch) to be ready.
-		t.dtReady.Await()
-		// We can compute local shard result from A and D/T.
-		t.localCompute()
-		// Notify task 0 about the result.
-		ctx.FlagMetaToParent("computed")
-	}()
 }
 
-func (t *bwmfTask) ParentMetaReady(ctx taskgraph.Context, parentID uint64, meta string) {}
-
-func (t *bwmfTask) ParentDataReady(ctx taskgraph.Context, parentID uint64, req string, resp []byte) {}
-
-func (t *bwmfTask) ChildMetaReady(ctx taskgraph.Context, childID uint64, meta string) {
-	// Task zero should maintain the barrier for iterations.
-	if meta == "computed" {
-		t.childrenReady[childID] = true
+func (t *bwmfTask) fetchShards(ctx context.Context, method string) {
+	peers := t.framework.GetTopology().GetNeighbors("Neighbors", t.epoch)
+	for _, peer := range peers {
+		t.framework.DataRequest(ctx, peer, method, &pb.Request{})
 	}
-	if uint64(len(t.childrenReady)) < t.numOfTasks {
+}
+
+func (t *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	t.dataReady <- &event{ctx: ctx, fromID: fromID, method: method, output: output}
+}
+func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	t.peerShardReady[fromID] = true
+	if len(t.peerShardReady) == int(t.numOfTasks) {
+		if t.epoch%2 == 0 {
+			t.logger.Printf("Full D ready, task %d, epoch %d", t.taskID, t.epoch)
+			go t.updateTShard(ctx)
+		} else {
+			t.logger.Printf("Full T ready, task %d, epoch %d", t.taskID, t.epoch)
+			go t.updateDShard(ctx)
+		}
+	}
+}
+
+// These two function carry out actual optimization.
+func (t *bwmfTask) updateDShard(ctx context.Context) {
+	select {
+	case <-time.After(time.Duration(rand.Intn(3)) * time.Second):
+	case <-ctx.Done():
 		return
 	}
-	// if we have all data, start next iteration.
-	ctx.IncEpoch()
+	t.updateDone <- &event{ctx: ctx}
+}
+func (t *bwmfTask) updateTShard(ctx context.Context) {
+	select {
+	case <-time.After(time.Duration(rand.Intn(3)) * time.Second):
+	case <-ctx.Done():
+		return
+	}
+	t.updateDone <- &event{ctx: ctx}
 }
 
-// Other nodes has served with their local shards.
-func (t *bwmfTask) ChildDataReady(ctx taskgraph.Context, childID uint64, req string, resp []byte) {
-	t.dtReady.CountDown()
+func (t *bwmfTask) notifyMaster(ctx context.Context) {
+	t.framework.FlagMeta(ctx, "Master", "done")
 }
 
-// get request of D/T shards from others. Serve with local shard.
-func (t *bwmfTask) ServeAsParent(fromID uint64, req string, dataReceiver chan<- []byte) {
-	var b []byte
-	var err error
+func (t *bwmfTask) CreateOutputMessage(method string) proto.Message {
+	switch method {
+	case "/proto.BlockData/GetDShard":
+		return new(pb.Response)
+	case "/proto.BlockData/GetTShard":
+		return new(pb.Response)
+	}
+	panic("")
+}
 
-	go func() {
-		if t.epoch%2 == 0 {
-			b, err = json.Marshal(t.dShard)
-			if err != nil {
-				t.logger.Fatalf("Slave can't encode dShard error: %v\n", err)
-			}
+func (t *bwmfTask) CreateServer() *grpc.Server {
+	server := grpc.NewServer()
+	pb.RegisterBlockDataServer(server, t)
+	return server
+}
+
+func (t *bwmfTask) GetTShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
+	retT := make(chan *pb.Response, 1)
+	t.getT <- &event{ctx: ctx, request: request, retT: retT}
+	resp, ok := <-retT
+	if !ok {
+		return nil, fmt.Errorf("epoch changed!")
+	}
+	return resp, nil
+}
+
+func (t *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Response, error) {
+	retD := make(chan *pb.Response, 1)
+	t.getD <- &event{ctx: ctx, request: request, retD: retD}
+	resp, ok := <-retD
+	if !ok {
+		return nil, fmt.Errorf("epoch changed!")
+	}
+	return resp, nil
+}
+
+func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	t.metaReady <- &event{ctx: ctx, fromID: fromID}
+}
+
+func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
+	t.peerUpdated[fromID] = true
+	if len(t.peerUpdated) == int(t.numOfTasks) {
+		t.logger.Printf("All tasks update done, epoch %d", t.epoch)
+		if t.epoch < 2 {
+			t.framework.IncEpoch(ctx)
 		} else {
-			b, err = json.Marshal(t.tShard)
-			if err != nil {
-				t.logger.Fatalf("Slave can't encode tShard error: %v\n", err)
-			}
+			t.framework.ShutdownJob()
 		}
-		dataReceiver <- b
-	}()
-}
-
-func (t *bwmfTask) ServeAsChild(fromID uint64, req string, dataReceiver chan<- []byte) {}
-
-type BWMFTaskBuilder struct {
-}
-
-func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
-	return &bwmfTask{}
+	}
 }

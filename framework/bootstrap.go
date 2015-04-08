@@ -234,7 +234,6 @@ func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkTyp
 	f.metaNotified[tm] = true
 
 	f.task.MetaReady(ctx, taskID, linkType, meta)
-
 }
 
 func taskMeta(taskID uint64, meta string) string {
