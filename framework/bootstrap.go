@@ -88,8 +88,10 @@ func (f *framework) run() {
 	go f.startHTTP()
 	// this for-select is primarily used to synchronize epoch specific events.
 	for {
+		f.log.Println("Waiting for events...")
 		select {
 		case nextEpoch, ok := <-f.epochWatcher:
+			f.log.Println("EpochChange event. nextEpoch:", nextEpoch)
 			f.releaseEpochResource()
 			if !ok { // single task exit
 				return
@@ -99,8 +101,11 @@ func (f *framework) run() {
 				return
 			}
 			// start the next epoch's work
+			f.log.Println("Before setEpochStarted...")
 			f.setEpochStarted()
+			f.log.Println("After setEpochStarted.")
 		case meta := <-f.metaChan:
+			f.log.Println("metaChan: ", *meta)
 			if meta.epoch != f.epoch {
 				break
 			}
@@ -110,18 +115,24 @@ func (f *framework) run() {
 			// with previous information.
 			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
+			f.log.Println("dataReq: ", *req)
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
+			// tmp logging
+			f.log.Printf("data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
+
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
+			f.log.Println("dataResp: ", *resp)
 			if resp.epoch != f.epoch {
 				f.log.Printf("abort data response, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
 			f.handleDataResp(f.userCtx, resp)
 		case ec := <-f.epochCheckChan:
+			f.log.Println("epochCheck: ", *ec)
 			if ec.epoch != f.epoch {
 				ec.fail()
 				break
@@ -135,17 +146,24 @@ func (f *framework) setEpochStarted() {
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
+	f.log.Println("With Value ...")
 	f.userCtx = context.WithValue(context.Background(), epochKey, f.epoch)
+	f.log.Println("With Cancel ...")
 	f.userCtx, f.userCtxCancel = context.WithCancel(f.userCtx)
 
+	f.log.Println("Before EnterEpoch...")
 	f.task.EnterEpoch(f.userCtx, f.epoch)
+	f.log.Println("After EnterEpoch.")
 	// setup etcd watches
 	// - create self's parent and child meta flag
 	// - watch parents' child meta flag
 	// - watch children's parent meta flag
 	for _, linkType := range f.topology.GetLinkTypes() {
+		f.log.Println("Watch meta with linkType ", linkType, "at epoch ", f.epoch)
 		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
 	}
+
+	f.log.Println("Finished setEpochStarted.")
 }
 
 func (f *framework) releaseEpochResource() {
@@ -216,13 +234,18 @@ func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 			}
 		}
 
+		f.log.Println("Watch ", taskID, " with path ", watchPath)
+
 		// Need to pass in taskID to make it work. Didn't know why.
 		err := etcdutil.WatchMeta(f.etcdClient, taskID, watchPath, stop, responseHandler)
+		f.log.Println("After watching.")
 		if err != nil {
 			f.log.Panicf("WatchMeta failed. path: %s, err: %v", watchPath, err)
 		}
 	}
+	f.log.Println("After WatchMeta all taskIDs.")
 	f.metaStops = append(f.metaStops, stops...)
+	f.log.Println("WatchMeta done.")
 }
 
 func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
