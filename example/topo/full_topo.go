@@ -7,16 +7,16 @@ package topo
 type FullTopology struct {
 	numOfTasks uint64
 	taskID     uint64
-	neighbors  []uint64
+	all        []uint64
 }
 
 // TODO, do we really need to expose this? Ideally after proper construction of StarTopology
 // we should not need to set this again.
 func (t *FullTopology) SetTaskID(taskID uint64) {
+	t.all = make([]uint64, 0, t.numOfTasks)
 	t.taskID = taskID
-	t.neighbors = make([]uint64, 0, t.numOfTasks)
 	for index := uint64(0); index < t.numOfTasks; index++ {
-		t.neighbors = append(t.neighbors, index)
+		t.all = append(t.all, index)
 	}
 }
 
@@ -28,9 +28,11 @@ func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
 	case linkType == "Neighbors":
-		res = t.neighbors
+		res = t.all
 	case linkType == "Master":
-		res = []uint64{0}
+		if t.taskID == 0 {
+			res = t.all
+		}
 	}
 	return res
 }
@@ -38,8 +40,7 @@ func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
 func NewFullTopology(nTasks uint64) *FullTopology {
-	m := &FullTopology{
+	return &FullTopology{
 		numOfTasks: nTasks,
 	}
-	return m
 }

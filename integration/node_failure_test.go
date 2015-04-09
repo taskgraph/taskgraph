@@ -34,13 +34,13 @@ func TestMasterSetEpochFailure(t *testing.T) {
 		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
+		go driveWithTreeTopo(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 	if <-taskBuilder.NodeProducer {
 		taskBuilder.MasterConfig = nil
 		log.Println("Starting a new node")
 		// this time we start a new bootstrap whose task master doesn't fail.
-		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
+		go driveWithTreeTopo(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}
@@ -97,7 +97,7 @@ func testSlaveFailure(t *testing.T, job string, slaveConfig map[string]string) {
 	go func() {
 		for _ = range taskBuilder.NodeProducer {
 			log.Println("Starting a new node")
-			go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
+			go driveWithTreeTopo(t, job, etcdURLs, numOfTasks, taskBuilder)
 		}
 	}()
 	for i := uint64(0); i < numOfTasks; i++ {

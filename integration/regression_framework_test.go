@@ -25,7 +25,7 @@ func TestRegressionFramework(t *testing.T) {
 		NumberOfIterations: numOfIterations,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcdURLs, numOfTasks, taskBuilder)
+		go driveWithTreeTopo(t, job, etcdURLs, numOfTasks, taskBuilder)
 	}
 
 	wantData := []int32{0, 105, 210, 315, 420, 525, 630, 735, 840, 945, 1050}

@@ -92,8 +92,9 @@ func (t *bwmfTask) run() {
 	for {
 		select {
 		case epochChange := <-t.epochChange:
-			t.EnterEpoch(epochChange.ctx, epochChange.epoch)
+			t.doEnterEpoch(epochChange.ctx, epochChange.epoch)
 		case req := <-t.getT:
+			t.logger.Printf("trying to serve T shard, task %d, epoch %d", t.taskID, t.epoch)
 			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
 				close(req.retT)
@@ -102,6 +103,7 @@ func (t *bwmfTask) run() {
 			// We only return the data shard of previous epoch. So it always exists.
 			req.retT <- t.getTShard()
 		case req := <-t.getD:
+			t.logger.Printf("trying to serve D shard, task %d, epoch %d", t.taskID, t.epoch)
 			err := t.framework.CheckGRPCContext(req.ctx)
 			if err != nil {
 				close(req.retD)
@@ -129,6 +131,7 @@ func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+	t.logger.Printf("doEnterEpoch, task %d, epoch %d", t.taskID, epoch)
 	t.peerShardReady = make(map[uint64]bool)
 	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
@@ -150,6 +153,7 @@ func (t *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, 
 	t.dataReady <- &event{ctx: ctx, fromID: fromID, method: method, output: output}
 }
 func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	t.logger.Printf("doDataReady, task %d, from %d, epoch %d, method %s", t.taskID, fromID, t.epoch, method)
 	t.peerShardReady[fromID] = true
 	if len(t.peerShardReady) == int(t.numOfTasks) {
 		if t.epoch%2 == 0 {
@@ -225,6 +229,7 @@ func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta 
 }
 
 func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
+	t.logger.Printf("notifyUpdate, task %d, from %d, epoch %d", t.taskID, fromID, t.epoch)
 	t.peerUpdated[fromID] = true
 	if len(t.peerUpdated) == int(t.numOfTasks) {
 		t.logger.Printf("All tasks update done, epoch %d", t.epoch)
