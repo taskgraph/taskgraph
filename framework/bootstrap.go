@@ -90,7 +90,6 @@ func (f *framework) run() {
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochWatcher:
-			// f.log.Printf("SELECT: nextepoch")
 			f.releaseEpochResource()
 			if !ok { // task is killed
 				return
@@ -102,7 +101,6 @@ func (f *framework) run() {
 			// start the next epoch's work
 			f.setEpochStarted()
 		case meta := <-f.metaChan:
-			// f.log.Printf("SELECT: meta")
 			if meta.epoch != f.epoch {
 				break
 			}
@@ -112,21 +110,18 @@ func (f *framework) run() {
 			// with previous information.
 			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
-			// f.log.Printf("SELECT: datareq")
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
-			// f.log.Printf("SELECT: dataresp")
 			if resp.epoch != f.epoch {
 				f.log.Printf("abort data response, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
 			f.handleDataResp(f.userCtx, resp)
 		case ec := <-f.epochCheckChan:
-			// f.log.Printf("SELECT: epochcheck")
 			if ec.epoch != f.epoch {
 				ec.fail()
 				break
