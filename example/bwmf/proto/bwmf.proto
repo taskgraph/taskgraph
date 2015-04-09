@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package proto;
+
+// block-wise matrix data service
+service BlockData {
+  rpc GetTShard(Request) returns (Response) {}
+  rpc GetDShard(Request) returns (Response) {}
+}
+
+message Request {
+}
+
+message Response {
+}

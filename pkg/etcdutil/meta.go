@@ -9,7 +9,7 @@ func WatchMeta(c *etcd.Client, taskID uint64, path string, stop chan bool, respo
 	}
 	// Get previous meta. We need to handle it.
 	if resp.Node.Value != "" {
-		responseHandler(resp, taskID)
+		go responseHandler(resp, taskID)
 	}
 	receiver := make(chan *etcd.Response, 1)
 	go c.Watch(path, resp.EtcdIndex+1, false, receiver, stop)

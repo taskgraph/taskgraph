@@ -90,8 +90,9 @@ func (f *framework) run() {
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochWatcher:
+			// f.log.Printf("SELECT: nextepoch")
 			f.releaseEpochResource()
-			if !ok { // single task exit
+			if !ok { // task is killed
 				return
 			}
 			f.epoch = nextEpoch
@@ -101,6 +102,7 @@ func (f *framework) run() {
 			// start the next epoch's work
 			f.setEpochStarted()
 		case meta := <-f.metaChan:
+			// f.log.Printf("SELECT: meta")
 			if meta.epoch != f.epoch {
 				break
 			}
@@ -110,18 +112,21 @@ func (f *framework) run() {
 			// with previous information.
 			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
 		case req := <-f.dataReqtoSendChan:
+			// f.log.Printf("SELECT: datareq")
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
 				break
 			}
 			go f.sendRequest(req)
 		case resp := <-f.dataRespChan:
+			// f.log.Printf("SELECT: dataresp")
 			if resp.epoch != f.epoch {
 				f.log.Printf("abort data response, to %d, epoch: %d, method %d", resp.taskID, resp.epoch, resp.method)
 				break
 			}
 			f.handleDataResp(f.userCtx, resp)
 		case ec := <-f.epochCheckChan:
+			// f.log.Printf("SELECT: epochcheck")
 			if ec.epoch != f.epoch {
 				ec.fail()
 				break
@@ -140,9 +145,6 @@ func (f *framework) setEpochStarted() {
 
 	f.task.EnterEpoch(f.userCtx, f.epoch)
 	// setup etcd watches
-	// - create self's parent and child meta flag
-	// - watch parents' child meta flag
-	// - watch children's parent meta flag
 	for _, linkType := range f.topology.GetLinkTypes() {
 		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
 	}
@@ -234,7 +236,6 @@ func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkTyp
 	f.metaNotified[tm] = true
 
 	f.task.MetaReady(ctx, taskID, linkType, meta)
-
 }
 
 func taskMeta(taskID uint64, meta string) string {
