@@ -82,16 +82,8 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 
 		// Now we arrive at a point satisfies sufficient decrease condition.
 		// Swap the wts and gradient for the next round.
-		{
-			tmp := stt
-			stt = nxt
-			nxt = tmp
-		}
-		{
-			tmp := ovalgrad
-			ovalgrad = nvalgrad
-			nvalgrad = tmp
-		}
+		stt, nxt = nxt, stt
+		ovalgrad, nvalgrad = nvalgrad, ovalgrad
 	}
 
 	// This is so that we can reuse the step size in next round.
