@@ -94,5 +94,5 @@ type StopCriteria interface {
 // with one point in the parameter space, and end with an optimal
 // point. Return true if we find optimal point.
 type Minimizer interface {
-	Minimize(function Function, stopCriteria StopCriteria, param Parameter) bool
+	Minimize(function Function, stopCriteria StopCriteria, param Parameter) (float32, error)
 }
