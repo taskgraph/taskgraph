@@ -23,7 +23,7 @@ func NewProjectedGradient(projector *Projection, beta, sigma, alpha float32) *Pr
 // This implementation is based on "Projected Gradient Methods for Non-negative Matrix
 // Factorization" by Chih-Jen Lin. Particularly it is based on the discription of an
 // improved projected gradient method in page 10 of that paper.
-func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Parameter) bool {
+func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Parameter) (float32, error) {
 
 	stt := vec
 
@@ -98,8 +98,8 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 	// XXX(baigang): pg.alpha will be preserved to solve a different PG minimization, i.e the counterpart in the alternating setup. Shall we keep this?
 	pg.alpha = alpha
 
-	// Simply return true to indicate the minimization is done.
-	return true
+	// Return the final loss func value and error.
+	return ovalgrad.value, nil
 }
 
 // This implements the sufficient decrease condition described in Eq (13)
