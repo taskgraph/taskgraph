@@ -52,16 +52,8 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 			newPoint(stt, cdd, ovalgrad.gradient, alpha/pg.beta, pg.projector)
 			evaluate(loss, cdd, tvalgrad)
 			for pg.isGoodStep(stt, cdd, ovalgrad, tvalgrad) {
-				{
-					tmp := nxt
-					nxt = cdd
-					cdd = tmp
-				}
-				{
-					tmp := nvalgrad
-					nvalgrad = tvalgrad
-					tvalgrad = tmp
-				}
+				nxt, cdd = cdd, nxt
+				nvalgrad, tvalgrad = tvalgrad, nvalgrad
 				// Now increase alpha as much as we can.
 				alpha /= pg.beta
 				newPoint(stt, cdd, ovalgrad.gradient, alpha/pg.beta, pg.projector)
