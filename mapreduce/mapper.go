@@ -19,28 +19,30 @@ type mapperTask struct {
 	epoch uint64
 	log *log.logger
 	taskId uint64
-	numOfTasks uint64
 	inputFile string
-
+	config map[[]string]string
+	
+	fileId int
 	//channels
 	epochChange chan *event
 	dataReady chan *event
 	metaReady chan *event
+	fileUpdate chan int
 	exitChan chan struct{}
 }
-
 
 func (mp *mapperTask) Init(taskId uint64, framework taskgraph.Framework) {
 	mp.taskID = taskID
 	mp.framework = framework
-	mp.inputFile = 
-
+	mp.fileId = 0
 	//channel init
 	mp.epochChange = make(chan *event, 1)
 	mp.dataReady = make(chan *event, 1)
 	mp.metaReady = make(chan *event, 1)
 	mp.exitChan = make(chan struct{})
+	mp.fileUpdate = make(chan *event, 1)
 
+	go mp.fileRead()
 	go mp.run()
 }
 
@@ -53,10 +55,31 @@ type event struct {
 
 func (mp *mapperTask) run() {
 	for {
-		switch {
-
+		select {
+			case ec := <-mp.epochChange
+			mp.doEnterEpoch(mp.ctx, mp.epoch)
+			case mapperDone := <-mp.fileUpdate
+			mp.framework.FlagMeta(mapperDone, "Suffix", "metaReady")
 		}
 	}
+}
+
+func (mp *mapperTask) fileRead() {
+	var 
+	for (fileID := 0; fileID < )
+}
+
+func (mp *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+
+	mp.epoch = epoch
+
+	
+	// var method string
+
+	// for _, c := range bt.framework.GetTopology().GetNeighbors("Neighbors", epoch) {
+	// 	bt.logger.Println("Sending request ", method, " to neighbor [", c, "] at epoch ", epoch)
+	// 	bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
+	// }
 }
 
 func (mp *mapperTask) Exit() {
@@ -65,4 +88,6 @@ func (mp *mapperTask) Exit() {
 
 func (mp *mapperTask) DataReady() {}
 
-func (mp *mapperTask) 
+func (mp *mapperTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	switch
+}
