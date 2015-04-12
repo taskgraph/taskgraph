@@ -9,7 +9,25 @@ service BlockData {
 }
 
 message Request {
+  // uint64 epoch = 1;
+  // repeated int32 indices = 2;
 }
 
 message Response {
+  uint64 blockId = 1;
+  DenseMatrixShard shard = 2;
+}
+
+message DenseMatrixShard {
+  message DenseRow {
+    repeated float at = 1;
+  }
+  repeated DenseRow row = 1;
+}
+
+message SparseMatrixShard {
+  message SparseRow {
+    map<int32, float> at = 1;
+  }
+  repeated SparseRow row = 1;
 }
