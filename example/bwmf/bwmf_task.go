@@ -5,11 +5,13 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	"github.com/taskgraph/taskgraph/op"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -40,9 +42,27 @@ type bwmfTask struct {
 	taskID     uint64
 	logger     *log.Logger
 	numOfTasks uint64
+	numIters   uint64
+	curIter    uint64
 
-	peerShardReady map[uint64]bool
-	peerUpdated    map[uint64]bool
+	rowShard    *pb.SparseMatrixShard
+	columnShard *pb.SparseMatrixShard
+	dShard      *pb.DenseMatrixShard
+	tShard      *pb.DenseMatrixShard
+
+	peerShards  map[uint64]*pb.DenseMatrixShard
+	peerUpdated map[uint64]bool
+
+	dims      *dimensions
+	config    *Config
+	latentDim int
+
+	// optimization toolkits
+	dLoss        *KLDivLoss
+	tLoss        *KLDivLoss
+	optimizer    *op.ProjectedGradient
+	stopCriteria op.StopCriteria
+
 	// event hanlding
 	epochChange chan *event
 	getT        chan *event
@@ -64,10 +84,76 @@ type event struct {
 	output  proto.Message
 }
 
-func (t *bwmfTask) initDShard()             {}
-func (t *bwmfTask) initTShard()             {}
-func (t *bwmfTask) getDShard() *pb.Response { return &pb.Response{} }
-func (t *bwmfTask) getTShard() *pb.Response { return &pb.Response{} }
+type dimensions struct {
+	m, n, k int
+	M, N    int
+}
+
+func (t *bwmfTask) initData() {
+
+	var rsErr, csErr error
+
+	t.rowShard, rsErr = LoadSparseShard(t.config.IOConf, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
+	if rsErr != nil {
+		t.logger.Panicf("Failed load rowShard. %s", rsErr)
+	}
+	t.columnShard, csErr = LoadSparseShard(t.config.IOConf, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
+	if csErr != nil {
+		t.logger.Panicf("Failed load columnShard. %s", csErr)
+	}
+
+	// set blockId as taskID
+	t.config.IOConf.BlockId = t.taskID
+	t.dims = &dimensions{
+		m: len(t.rowShard.Row),
+		n: len(t.columnShard.Row),
+		k: t.latentDim,
+		M: -1,
+		N: -1,
+	}
+
+	t.dShard, _ = initDenseShard(t.dims.m, t.dims.k)
+	t.tShard, _ = initDenseShard(t.dims.n, t.dims.k)
+}
+
+func (t *bwmfTask) initOptUtil() {
+	// init optimization utils
+	projLen := 0
+	if t.dims.m > t.dims.n {
+		projLen = t.dims.m * t.dims.k
+	} else {
+		projLen = t.dims.n * t.dims.k
+	}
+
+	t.optimizer = op.NewProjectedGradient(
+		op.NewProjection(
+			op.NewAllTheSameParameter(1e20, projLen),
+			op.NewAllTheSameParameter(1e-8, projLen),
+		),
+		t.config.OptConf.Beta,
+		t.config.OptConf.Sigma,
+		t.config.OptConf.Alpha,
+	)
+
+	t.stopCriteria = op.MakeComposedCriterion(
+		op.MakeFixCountStopCriteria(15),
+		op.MakeGradientNormStopCriteria(t.config.OptConf.GradTol),
+		op.MakeTimeoutCriterion(300*time.Second),
+	)
+}
+
+func initDenseShard(l, k int) (*pb.DenseMatrixShard, error) {
+	shard := &pb.DenseMatrixShard{
+		Row: make([]*pb.DenseMatrixShard_DenseRow, l),
+	}
+	for i, _ := range shard.Row {
+		shard.Row[i] = &pb.DenseMatrixShard_DenseRow{At: make([]float32, k)}
+		for j, _ := range shard.Row[i].At {
+			shard.Row[i].At[j] = rand.Float32()
+		}
+	}
+	return shard, nil
+}
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
 func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
@@ -75,8 +161,8 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.framework = framework
 	t.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
-	t.initDShard()
-	t.initTShard()
+	t.initData()
+	t.initOptUtil()
 
 	t.epochChange = make(chan *event, 1)
 	t.getT = make(chan *event, 1)
@@ -86,6 +172,20 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.metaReady = make(chan *event, 1)
 	t.exitChan = make(chan *event)
 	go t.run()
+}
+
+func (t *bwmfTask) getDShard() *pb.Response {
+	return &pb.Response{
+		BlockId: t.config.IOConf.BlockId,
+		Shard:   t.dShard,
+	}
+}
+
+func (t *bwmfTask) getTShard() *pb.Response {
+	return &pb.Response{
+		BlockId: t.config.IOConf.BlockId,
+		Shard:   t.tShard,
+	}
 }
 
 func (t *bwmfTask) run() {
@@ -124,6 +224,15 @@ func (t *bwmfTask) run() {
 
 func (t *bwmfTask) Exit() {
 	close(t.exitChan)
+	t.finish()
+}
+
+func (t *bwmfTask) finish() {
+	// TODO save result to filesystem
+	// but we can dump it to logger here for now
+	t.logger.Println("tShard: ", *t.tShard)
+	t.logger.Println("dShard: ", *t.dShard)
+	t.logger.Println("Finished. Waiting for the framework to stop the task...")
 }
 
 func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
@@ -132,7 +241,7 @@ func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 
 func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("doEnterEpoch, task %d, epoch %d", t.taskID, epoch)
-	t.peerShardReady = make(map[uint64]bool)
+	t.peerShards = make(map[uint64]*pb.DenseMatrixShard)
 	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
 	if epoch%2 == 0 {
@@ -154,13 +263,19 @@ func (t *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, 
 }
 func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	t.logger.Printf("doDataReady, task %d, from %d, epoch %d, method %s", t.taskID, fromID, t.epoch, method)
-	t.peerShardReady[fromID] = true
-	if len(t.peerShardReady) == int(t.numOfTasks) {
+	resp, bOk := output.(*pb.Response)
+	if !bOk {
+		t.logger.Panicf("doDataRead, corruption in proto.Message.")
+	}
+	t.peerShards[resp.BlockId] = resp.Shard
+	if len(t.peerShards) == int(t.numOfTasks) {
 		if t.epoch%2 == 0 {
 			t.logger.Printf("Full D ready, task %d, epoch %d", t.taskID, t.epoch)
+			// XXX Starting an intensive computation.
 			go t.updateTShard(ctx)
 		} else {
 			t.logger.Printf("Full T ready, task %d, epoch %d", t.taskID, t.epoch)
+			// XXX Starting an intensive computation.
 			go t.updateDShard(ctx)
 		}
 	}
@@ -168,19 +283,67 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 
 // These two function carry out actual optimization.
 func (t *bwmfTask) updateDShard(ctx context.Context) {
-	select {
-	case <-time.After(time.Duration(rand.Intn(3)) * time.Second):
-	case <-ctx.Done():
-		return
+	if t.dims.N == -1 {
+		t.dims.N = 0
+		for _, m := range t.peerShards {
+			t.dims.N += len(m.Row)
+		}
+		wh := make([][]float32, t.dims.N)
+		for i, _ := range wh {
+			wh[i] = make([]float32, t.dims.m)
+		}
+		t.dLoss = &KLDivLoss{
+			V:  t.rowShard,
+			WH: wh,
+			m:  t.dims.N,
+			n:  t.dims.m,
+			k:  t.dims.k,
+		}
 	}
+
+	t.dLoss.W = NewBlocksParameter(&t.peerShards)
+	param := NewSingleBlockParameter(t.dShard)
+
+	loss, optErr := t.optimizer.Minimize(t.dLoss, t.stopCriteria, param)
+	if optErr != nil {
+		t.logger.Panicf("Failed minimizing over dShard: %s", optErr)
+		// handle re-run
+		// XXX(baigang) just kill the framework and wait for restarting?
+	}
+	t.logger.Printf("Updated dShard, loss is %f", loss)
+
 	t.updateDone <- &event{ctx: ctx}
 }
+
 func (t *bwmfTask) updateTShard(ctx context.Context) {
-	select {
-	case <-time.After(time.Duration(rand.Intn(3)) * time.Second):
-	case <-ctx.Done():
-		return
+	if t.dims.M == -1 {
+		t.dims.M = 0
+		for _, m := range t.peerShards {
+			t.dims.M += len(m.Row)
+		}
+		wh := make([][]float32, t.dims.M)
+		for i, _ := range wh {
+			wh[i] = make([]float32, t.dims.n)
+		}
+		t.tLoss = &KLDivLoss{
+			V:  t.columnShard,
+			WH: wh,
+			m:  t.dims.M,
+			n:  t.dims.n,
+			k:  t.dims.k,
+		}
 	}
+
+	t.tLoss.W = NewBlocksParameter(&t.peerShards)
+	param := NewSingleBlockParameter(t.tShard)
+
+	loss, optErr := t.optimizer.Minimize(t.tLoss, t.stopCriteria, param)
+	if optErr != nil {
+		t.logger.Panicf("Failed minimizing over tShard:", optErr)
+		// TODO handle re-run
+	}
+	t.logger.Printf("Updated tShard, loss is %f", loss)
+
 	t.updateDone <- &event{ctx: ctx}
 }
 
@@ -233,7 +396,7 @@ func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
 	t.peerUpdated[fromID] = true
 	if len(t.peerUpdated) == int(t.numOfTasks) {
 		t.logger.Printf("All tasks update done, epoch %d", t.epoch)
-		if t.epoch < 2 {
+		if t.epoch < 2*t.numIters {
 			t.framework.IncEpoch(ctx)
 		} else {
 			t.framework.ShutdownJob()
