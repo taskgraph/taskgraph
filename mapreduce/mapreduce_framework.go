@@ -1,20 +1,25 @@
-package framework
+package mapreduce
 
 import (
 	"fmt"
 	"log"
 	"math"
+	"io"
 	"net"
+	"hash/fnv"
+	"json"
 
+	"github.com/taskgraph/filesystem"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
+
 )
 
 const exitEpoch = math.MaxUint64
 
-type framework struct {
+type mpFramework struct {
 	// These should be passed by outside world
 	name     string
 	etcdURLs []string
@@ -49,6 +54,14 @@ type framework struct {
 	dataReqtoSendChan chan *dataRequest
 	dataRespChan      chan *dataResponse
 	epochCheckChan    chan *epochCheck
+
+	// mapreduce config
+	mapperNum uint64
+	shuffleNum uint64
+	reducerNum uint64
+	azureClient filesystem.AzureClient
+	containerName string
+	shuffleWriteCloser []io.WriteCloser
 }
 
 // The key type is unexported to prevent collisions with context keys defined in
@@ -60,7 +73,35 @@ type contextKey int
 // different integer values.
 const epochKey contextKey = 1
 
-func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+func (f *mpFramework) InitWithMapreduceConfig(mpNum uint64, sfNum uint64, rdNum uint64, azureAccountName string, azureAccountKey string, containerName string) {
+	f.mapperNum = mpNum
+	f.shuffleNum = sfNum
+	f.reducerNum = rdNum
+	f.azureClient, err = filesystem.NewAzureClient(
+		azureAccountKey, 
+		azureAccountName,  
+		"core.chinacloudapi.cn", 
+        "2014-02-14", 
+        true
+    )
+    f.shuffleWriteCloser = make(io.WriteCloser(), f.shuffleNum) 
+    f.containerName = containerName
+    for i := 0; i < f.shuffleNum; i++ {
+		shuffleblobName := f.containerName + "/shuffle" + i;
+		shuffleWriteCloser[i], err := f.azureClient.openWriteCloser(shuffleblobName)
+		if err != nil {
+			f.log.Fatalf(err)
+		}
+    }
+    
+	if err != nil {
+		f.log.Fatalf("Create azure stroage client failed, error : %v", err)
+	}
+
+
+}
+
+func (f *mpFramework) FlagMeta(ctx context.Context, linkType, meta string) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
@@ -73,14 +114,22 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 	}
 }
 
-func (f *framework) Emit(string key, string val) {
+// TODO :
+// may have corruent
+func (f *mpFramework) Emit(string key, string val) {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	toShuffle := h.Sum32() % f.shuffleNum
+	
+	data := []byte(key + " " + val + "\n")
+	shuffleWriteCloser[toShuffle].write(data)
 
 }
 
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctx context.Context) {
+func (f *mpFramework) IncEpoch(ctx context.Context) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
@@ -92,9 +141,9 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *mpFramework) GetTopology() taskgraph.Topology { return f.topology }
 
-func (f *framework) Kill() {
+func (f *mpFramework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that
 	// it won't set exit epoch across cluster.
 	close(f.epochWatcher)
@@ -102,7 +151,7 @@ func (f *framework) Kill() {
 
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
-func (f *framework) ShutdownJob() {
+func (f *mpFramework) ShutdownJob() {
 	if err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch); err != nil {
 		panic("TODO: we should do a set instead of CAS here.")
 	}
@@ -111,8 +160,8 @@ func (f *framework) ShutdownJob() {
 	}
 }
 
-func (f *framework) GetLogger() *log.Logger { return f.log }
+func (f *mpFramework) GetLogger() *log.Logger { return f.log }
 
-func (f *framework) GetTaskID() uint64 { return f.taskID }
+func (f *mpFramework) GetTaskID() uint64 { return f.taskID }
 
-func (f *framework) GetEpoch() uint64 { return f.epoch }
+func (f *mpFramework) GetEpoch() uint64 { return f.epoch }

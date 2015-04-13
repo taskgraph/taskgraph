@@ -1,3 +1,4 @@
+package mapreduce
 import (
 	"fmt"
 	"io/ioutil"
@@ -22,7 +23,6 @@ type mapperTask struct {
 	inputFile string
 	config map[[]string]string
 	
-	fileId int
 	//channels
 	epochChange chan *event
 	dataReady chan *event
@@ -31,7 +31,7 @@ type mapperTask struct {
 	exitChan chan struct{}
 }
 
-func (mp *mapperTask) Init(taskId uint64, framework taskgraph.Framework) {
+func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.taskID = taskID
 	mp.framework = framework
 	mp.fileId = 0
@@ -58,15 +58,18 @@ func (mp *mapperTask) run() {
 		select {
 			case ec := <-mp.epochChange
 			mp.doEnterEpoch(mp.ctx, mp.epoch)
+
 			case mapperDone := <-mp.fileUpdate
 			mp.framework.FlagMeta(mapperDone, "Suffix", "metaReady")
+
+			case 
 		}
 	}
 }
 
 func (mp *mapperTask) fileRead() {
 	var 
-	for (fileID := 0; fileID < )
+	for (fileID := 0; fileID <map)
 }
 
 func (mp *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
