@@ -15,7 +15,6 @@ func TestParseDump(t *testing.T) {
 			GradTol: 1e-6,
 		},
 		IOConf: ioconfig{
-			BlockId: 0,
 			IFs:     "local",
 			IDPath:  "./row_shard.dat",
 			ITPath:  "./column_shard.dat",

@@ -102,8 +102,6 @@ func (t *bwmfTask) initData() {
 		t.logger.Panicf("Failed load columnShard. %s", csErr)
 	}
 
-	// set blockId as taskID
-	t.config.IOConf.BlockId = t.taskID
 	t.dims = &dimensions{
 		m: len(t.rowShard.Row),
 		n: len(t.columnShard.Row),
@@ -176,14 +174,14 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 
 func (t *bwmfTask) getDShard() *pb.Response {
 	return &pb.Response{
-		BlockId: t.config.IOConf.BlockId,
+		BlockId: t.taskID,
 		Shard:   t.dShard,
 	}
 }
 
 func (t *bwmfTask) getTShard() *pb.Response {
 	return &pb.Response{
-		BlockId: t.config.IOConf.BlockId,
+		BlockId: t.taskID,
 		Shard:   t.tShard,
 	}
 }
