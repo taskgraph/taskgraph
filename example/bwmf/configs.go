@@ -13,7 +13,6 @@ type optconfig struct {
 
 // xFs can be "local", ""
 type ioconfig struct {
-	BlockId uint64
 	IFs     string
 	IDPath  string
 	ITPath  string
