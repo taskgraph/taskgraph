@@ -5,7 +5,7 @@ TaskGraph
 
 [![Build Status](https://travis-ci.org/taskgraph/taskgraph.svg?branch=master)](https://travis-ci.org/taskgraph/taskgraph)
 
-TaskGraph is a framework for writing fault tolerent distributed applications. It
+TaskGraph is a framework for writing fault tolerent distributed machine learning applications. It
 assumes that application consists of a network of tasks, which are inter-connected
 based on certain topology (hence graph). TaskGraph assume for each task (logical
 unit of work), there are one primary node, and zero or more backup nodes. TaskGraph
