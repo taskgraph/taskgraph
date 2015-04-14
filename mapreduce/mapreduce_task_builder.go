@@ -5,28 +5,23 @@ import (
 )
 
 type mapreduceTaskBuilder struct {
-
-	MapperNum uint64
-	ShuffleNum uint64
-	ReducerNum uint64
-	MapperConfig map[string]string
+	MapperConfig map[string]string[]
 	ShuffleConfig map[string]string
 	ReducerConfig map[string]string
-	mapperFunc func(string)
 }
 
 func (t mapreduceTaskBuilder) GetTask(taskID unint64) taskgraph.Task {
 	if taskID < MapperNum {
 		return &mapperTask{
-
+			config : t.MapperConfig
 		}
 	} else if taskID < MapperNum + ShuffleNum {
 		return &shuffleTask{
-
+			config : t.ShuffleConfig
 		}
 	} else {
 		return &reduceTask{
-
+			config : t.ReducerConfig
 		}
 	}
 }
