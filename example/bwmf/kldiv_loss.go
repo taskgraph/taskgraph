@@ -3,7 +3,6 @@ package bwmf
 import (
 	"log"
 	"math"
-	"sync"
 
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/op"
@@ -45,49 +44,35 @@ type KLDivLoss struct {
 //
 func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 {
 	H := param
-	lossAccum := make(chan float32, 8)
+	var value float32
 	for i := 0; i < l.m; i++ {
 		for j := 0; j < l.n; j++ {
 			l.WH[i][j] = 0.0
-			go func(i, j int) {
-				for k := 0; k < l.k; k++ {
-					l.WH[i][j] += l.W.Get(i*l.k+k) * H.Get(j*l.k+k)
-				}
+			for k := 0; k < l.k; k++ {
+				l.WH[i][j] += l.W.Get(i*l.k+k) * H.Get(j*l.k+k)
+			}
 
-				// evaluate element-wise KL-divergence
-				v, ok := l.V.GetRow()[j].At[int32(i)]
-				wh := l.WH[i][j]
-				if ok {
-					lossAccum <- -v*float32(math.Log(float64(l.smooth+wh))) + wh
-				} else {
-					lossAccum <- wh
-				}
-			}(i, j)
+			// evaluate element-wise KL-divergence
+			v, ok := l.V.GetRow()[j].At[int32(i)]
+			wh := l.WH[i][j]
+			if ok {
+				value += -v*float32(math.Log(float64(l.smooth+wh))) + wh
+			} else {
+				value += wh
+			}
 		}
 	}
-
-	var value float32
-	for c := 0; c < l.m*l.n; c++ {
-		value += <-lossAccum
-	}
-
 	// now, another pass for grad calculation
-	var wg sync.WaitGroup
 	for j := 0; j < l.n; j++ {
 		for k := 0; k < l.k; k++ {
-			wg.Add(1)
 			grad_index := j*l.k + k
 			gradient.Set(grad_index, 0.0)
-			go func(grad_index, j, k int) {
-				defer wg.Done()
-				for i := 0; i < l.m; i++ {
-					grad_val := l.W.Get(i*l.k+k) * (l.WH[i][j] - l.V.GetRow()[j].At[int32(i)]) / l.WH[i][j]
-					gradient.Add(grad_index, grad_val)
-				}
-			}(grad_index, j, k)
+			for i := 0; i < l.m; i++ {
+				grad_val := l.W.Get(i*l.k+k) * (l.WH[i][j] - l.V.GetRow()[j].At[int32(i)]) / l.WH[i][j]
+				gradient.Add(grad_index, grad_val)
+			}
 		}
 	}
-	wg.Wait()
 
 	if l.logger != nil {
 		l.logger.Println("Evaluate at param ", param, " returns value ", value, " and gradient ", gradient)
