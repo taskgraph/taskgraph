@@ -18,17 +18,21 @@ import (
 type mapperTask struct {
 	framework taskgraph.framework
 	epoch uint64
-	log *log.logger
+	logger *log.logger
 	taskId uint64
-	inputFile string
-	config map[[]string]string
+	config map[string][]string
 	
 	//channels
 	epochChange chan *event
-	dataReady chan *event
-	metaReady chan *event
+	// dataReady chan *event
+	// metaReady chan *event
 	fileUpdate chan int
 	exitChan chan struct{}
+}
+
+struct event {
+	ctx context.Context
+	epoch uint64
 }
 
 func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
@@ -37,8 +41,8 @@ func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.fileId = 0
 	//channel init
 	mp.epochChange = make(chan *event, 1)
-	mp.dataReady = make(chan *event, 1)
-	mp.metaReady = make(chan *event, 1)
+	// mp.dataReady = make(chan *event, 1)
+	// mp.metaReady = make(chan *event, 1)
 	mp.exitChan = make(chan struct{})
 	mp.fileUpdate = make(chan *event, 1)
 
@@ -50,47 +54,64 @@ type event struct {
 	ctx context.Context
 	epoch uint64
 	fromID uint64
-	response proto.Message
+	// response proto.Message
 } 
 
 func (mp *mapperTask) run() {
 	for {
 		select {
-			case ec := <-mp.epochChange
-			mp.doEnterEpoch(mp.ctx, mp.epoch)
+			case ec := <-mp.epochChange:
+				mp.doEnterEpoch(mp.ctx, mp.epoch)
 
-			case mapperDone := <-mp.fileUpdate
-			mp.framework.FlagMeta(mapperDone, "Suffix", "metaReady")
+			case mapperDone := <-mp.fileUpdate:
+				mp.framework.FlagMeta(mapperDone, "Suffix", "metaReady")
+				mp.framework.ShutdownJob()
 
-			case 
+			case <-t.exitChan:
+				return
 		}
 	}
 }
 
 func (mp *mapperTask) fileRead() {
-	var 
-	for (fileID := 0; fileID <map)
+	fileNum := len(mp.config["files"])
+	files := mp.config["files"]
+	for (i := 0; i < fileNum; fileID++) {
+		mapperReaderCloser, err := mp.framework.GetAzureClient.OpenReadCloser(files[i])
+		if err != nil {
+			mp.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
+			return
+		}
+		err = nil
+		var str byte[]
+		bufioReader := bufio.NewReader(mapperReaderCloser)
+		for err != io.EOF {
+			str, err = bufioReader.ReadBytes('\n')
+			str = str[:len(str) - 1]
+			if err != io.EOF && err != nil {
+				mp.logger.Fatalf("MapReduce : Mapper read Error, ", err)
+				return
+			}
+			mp.framework.GetMapperFunc()(str)
+		}
+	}
 }
 
-func (mp *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+// At present, epoch is not a required parameter for mapper
+// but it may be useful in the future
+func (mp *mapperTask) EnterEpoch(ctx context.Context, epoch uint64) {
+	t.epochChange <- &event{ctx: ctx, epoch: epoch}
+}
 
+func (mp *mapperTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+	mp.logger.Printf("doEnterEpoch, Mapper task %d, epoch %d", t.taskID, epoch)
 	mp.epoch = epoch
-
-	
-	// var method string
-
-	// for _, c := range bt.framework.GetTopology().GetNeighbors("Neighbors", epoch) {
-	// 	bt.logger.Println("Sending request ", method, " to neighbor [", c, "] at epoch ", epoch)
-	// 	bt.framework.DataRequest(ctx, c, method, &pb.Request{Epoch: epoch})
-	// }
 }
 
 func (mp *mapperTask) Exit() {
 	close(mp.exitChan)
 }
 
-func (mp *mapperTask) DataReady() {}
+func (mp *mapperTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
 
-func (mp *mapperTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	switch
-}
+func (mp *mapperTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}

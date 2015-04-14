@@ -52,6 +52,26 @@ type Framework interface {
 	// Request data from task toID with specified linkType and meta.
 	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
 	CheckGRPCContext(ctx context.Context) error
+
+	// Mapreduce addtional interface
+	// This is used for mapper to emit (key, value) pairs
+	Emit(key string, value string)
+
+	// This is used for reducer to output their (key, value) result 
+	Collect(key string, value string)
+
+	// Initialize mapreduce configuration
+	InitWithMapreduceConfig(
+		mapperNum uint64, 
+		shuffleNum uint64, 
+		reducerNum uint64, 
+		azureAccountName string, 
+		azureAccountKey string, 
+		outputContainerName string, 
+		outputBlobName string,
+		mapperFunc func (string),
+		reducerFunc func (string, []string)
+	)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
