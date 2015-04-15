@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
+	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -57,6 +58,8 @@ type bwmfTask struct {
 	config    *Config
 	latentDim int
 
+	fsClient filesystem.Client
+
 	// optimization toolkits
 	dLoss        *KLDivLoss
 	tLoss        *KLDivLoss
@@ -93,11 +96,11 @@ func (t *bwmfTask) initData() {
 
 	var rsErr, csErr error
 
-	t.rowShard, rsErr = LoadSparseShard(t.config.IOConf, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
+	t.rowShard, rsErr = LoadSparseShard(t.fsClient, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
 	if rsErr != nil {
 		t.logger.Panicf("Failed load rowShard. %s", rsErr)
 	}
-	t.columnShard, csErr = LoadSparseShard(t.config.IOConf, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
+	t.columnShard, csErr = LoadSparseShard(t.fsClient, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
 	if csErr != nil {
 		t.logger.Panicf("Failed load columnShard. %s", csErr)
 	}
