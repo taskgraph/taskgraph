@@ -168,7 +168,7 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.epochChange = make(chan *event, 1)
 	t.getT = make(chan *event, 1)
 	t.getD = make(chan *event, 1)
-	t.dataReady = make(chan *event, 1)
+	t.dataReady = make(chan *event, t.numOfTasks)
 	t.updateDone = make(chan *event, 1)
 	t.metaReady = make(chan *event, 1)
 	t.exitChan = make(chan *event)
@@ -262,6 +262,7 @@ func (t *bwmfTask) fetchShards(ctx context.Context, method string) {
 func (t *bwmfTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	t.dataReady <- &event{ctx: ctx, fromID: fromID, method: method, output: output}
 }
+
 func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
 	t.logger.Printf("doDataReady, task %d, from %d, epoch %d, method %s", t.taskID, fromID, t.epoch, method)
 	resp, bOk := output.(*pb.Response)
