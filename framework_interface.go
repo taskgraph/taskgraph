@@ -20,6 +20,19 @@ type Bootstrap interface {
 	// After all the configure is done, driver need to call start so that all
 	// nodes will get into the event loop to run the application.
 	Start()
+
+	// Initialize mapreduce configuration
+	InitWithMapreduceConfig(
+		mapperNum uint64, 
+		shuffleNum uint64, 
+		reducerNum uint64, 
+		azureAccountName string, 
+		azureAccountKey string, 
+		outputContainerName string, 
+		outputBlobName string,
+		mapperFunc func (Framework, string),
+		reducerFunc func (Framework, string, []string),
+	)
 }
 
 // Framework hides distributed system complexity and provides users convenience of
@@ -54,33 +67,20 @@ type Framework interface {
 	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
 	CheckGRPCContext(ctx context.Context) error
 
-	// Mapreduce addtional interface
+	// // Mapreduce addtional interface
 	// This is used for mapper to emit (key, value) pairs
 	Emit(key string, value string)
 
 	// This is used for reducer to output their (key, value) result 
 	Collect(key string, value string)
 
-	// Initialize mapreduce configuration
-	InitWithMapreduceConfig(
-		mapperNum uint64, 
-		shuffleNum uint64, 
-		reducerNum uint64, 
-		azureAccountName string, 
-		azureAccountKey string, 
-		outputContainerName string, 
-		outputBlobName string,
-		mapperFunc func(string),
-		reducerFunc func(string, []string),
-	)
-
 	GetEpoch() uint64
 
-	GetAzureClient() filesystem.AzureClient
+	GetAzureClient() *filesystem.AzureClient
 
-	GetMapperFunc() func(string)
+	GetMapperFunc() func(Framework, string)
 
-	GetReducerFunc() func(string, []string)
+	GetReducerFunc() func(Framework, string, []string)
 
 	GetOutputContainerName() string
 }

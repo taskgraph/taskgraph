@@ -1,7 +1,8 @@
 package mapreduce
+
 import (
-	"io"
 	"bufio"
+	"io"
 	"log"
 
 	"github.com/golang/protobuf/proto"
@@ -11,25 +12,24 @@ import (
 	"google.golang.org/grpc"
 )
 
-
 type mapperTask struct {
 	framework taskgraph.Framework
-	epoch uint64
-	logger *log.Logger
-	taskID uint64
-	config map[string][]string
-	
+	epoch     uint64
+	logger    *log.Logger
+	taskID    uint64
+	config    map[string][]string
+
 	//channels
 	epochChange chan *mapperEvent
-	dataReady chan *mapperEvent
-	metaReady chan *mapperEvent
-	fileUpdate chan *mapperEvent
-	exitChan chan struct{}
+	dataReady   chan *mapperEvent
+	metaReady   chan *mapperEvent
+	fileUpdate  chan *mapperEvent
+	exitChan    chan struct{}
 }
 
 type mapperEvent struct {
-	ctx context.Context
-	epoch uint64
+	ctx    context.Context
+	epoch  uint64
 	fromID uint64
 	// response proto.Message
 }
@@ -37,7 +37,7 @@ type mapperEvent struct {
 func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.taskID = taskID
 	mp.framework = framework
-	
+
 	//channel init
 	mp.epochChange = make(chan *mapperEvent, 1)
 	mp.dataReady = make(chan *mapperEvent, 1)
@@ -52,15 +52,15 @@ func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 func (mp *mapperTask) run() {
 	for {
 		select {
-			case ec := <-mp.epochChange:
-				mp.doEnterEpoch(ec.ctx, ec.epoch)
+		case ec := <-mp.epochChange:
+			mp.doEnterEpoch(ec.ctx, ec.epoch)
 
-			case mapperDone := <-mp.fileUpdate:
-				mp.framework.FlagMeta(mapperDone.ctx, "Suffix", "metaReady")
-				mp.framework.ShutdownJob()
+		case mapperDone := <-mp.fileUpdate:
+			mp.framework.FlagMeta(mapperDone.ctx, "Suffix", "metaReady")
+			mp.framework.ShutdownJob()
 
-			case <-mp.exitChan:
-				return
+		case <-mp.exitChan:
+			return
 		}
 	}
 }
@@ -80,13 +80,13 @@ func (mp *mapperTask) fileRead() {
 		bufioReader := bufio.NewReader(mapperReaderCloser)
 		for err != io.EOF {
 			str, err = bufioReader.ReadString('\n')
-			str = str[:len(str) - 1]
+			str = str[:len(str)-1]
 			if err != io.EOF && err != nil {
 				mp.logger.Fatalf("MapReduce : Mapper read Error, ", err)
 				return
 			}
 			mapperFunc := mp.framework.GetMapperFunc()
-			mapperFunc(str)
+			mapperFunc(mp.framework, str)
 		}
 	}
 }
@@ -110,6 +110,7 @@ func (mp *mapperTask) CreateServer() *grpc.Server { return nil }
 
 func (mp *mapperTask) CreateOutputMessage(method string) proto.Message { return nil }
 
-func (mp *mapperTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
+func (mp *mapperTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+}
 
 func (mp *mapperTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}
