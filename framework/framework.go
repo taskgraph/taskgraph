@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"json"
+	"encoding/json"
 	"math"
 	"net"
+	"hash/fnv"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
+	"../../taskgraph"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
@@ -61,13 +62,13 @@ type mapreduceConfig struct {
 	mapperNum uint64
 	shuffleNum uint64
 	reducerNum uint64
-	azureClient filesystem.AzureClient
+	azureClient *filesystem.AzureClient
 	outputContainerName string
 	outputBlobName string
-	shuffleWriteCloser []io.WriterCloser
-	outputWriter io.ReaderCloser
-	mapperFunc func (string)
-	reducerFunc func (string, []string)
+	shuffleWriteCloser []io.WriteCloser
+	outputWriter io.WriteCloser
+	mapperFunc func (taskgraph.Framework, string)
+	reducerFunc func (taskgraph.Framework, string, []string)
 }
 
 type emitKV struct {
@@ -131,70 +132,28 @@ func (f *framework) ShutdownJob() {
 	}
 }
 
-// Initialize Mapreduce configuration
-func (f *framework) InitWithMapreduceConfig(
-	mapperNum uint64, 
-	shuffleNum uint64, 
-	reducerNum uint64, 
-	azureAccountName string, 
-	azureAccountKey string, 
-	outputContainerName string, 
-	outputBlobName string,
-	mapperFunc func (string)
-	reducerFunc func (string, []string)
-
-) {
-	f.mapperNum = mapperNum
-	f.shuffleNum = shuffleNum
-	f.reducerNum = reducerNum
-	f.azureClient, err = filesystem.NewAzureClient(
-		azureAccountKey, 
-		azureAccountName,  
-		"core.chinacloudapi.cn", 
-        "2014-02-14", 
-        true
-    )
-    if err != nil {
-		f.log.Fatalf("Create azure stroage client failed, error : %v", err)
-	}
-
-    f.shuffleWriteCloser = make(io.WriteCloser(), f.shuffleNum) 
-    f.outputContainerName = outputContainerName
-    f.outputBlobName = outputBlobName
-    f.outputWriter = f.azureClient.OpenReaderCloser(outputContainer + "/" + outputBlobName)
-    for i := 0; i < f.shuffleNum; i++ {
-		shufflePath := f.outputContainerName + "/shuffle" + strconv.Itoa(i);
-		shuffleWriteCloser[i], err := f.azureClient.openWriteCloser(shufflePath)
-		if err != nil {
-			f.log.Fatalf(err)
-		}
-    }
-    f.mapperFunc = mapperFunc
-    f.reducerFunc = reducerFunc
-
-}
 
 // TODO :
 // may have synchronization issues 
 // promote to buffer stream 
-func (f *framework) Emit(string key, string val) {
+func (f *framework) Emit(key string, val string) {
 	h := fnv.New32a()
 	h.Write([]byte(key))
 	var KV emitKV
-	KV.key = key
-	KV.value = val
-	toShuffle := h.Sum32() % f.shuffleNum
+	KV.Key = key
+	KV.Value = val
+	toShuffle := h.Sum32() % uint32(f.shuffleNum)
 	
 	data, err := json.Marshal(KV)
 	data = append(data, '\n')
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
-	shuffleWriteCloser[toShuffle].write(data)
+	f.shuffleWriteCloser[toShuffle].Write(data)
 }
 
-func (f *framework) Collect(string key, string val) {
-	f.outputWriter.write(key + " " + val + "\n");
+func (f *framework) Collect(key string, val string) {
+	f.outputWriter.Write([]byte(key + " " + val + "\n"));
 }
 
 func (f *framework) GetMapperNum() uint64 { return f.mapperNum }
@@ -203,11 +162,11 @@ func (f *framework) GetShuffleNum() uint64 { return f.shuffleNum }
 
 func (f *framework) GetReducerNum() uint64 { return f.reducerNum }
 
-func (f *framework) GetAzureClient() filesystem.AzureClient { return f.azureClient}
+func (f *framework) GetAzureClient() *filesystem.AzureClient { return f.azureClient}
 
-func (f *framework) GetMapperFunc() func(string) { return f.mapperFunc }
+func (f *framework) GetMapperFunc() func(taskgraph.Framework, string) { return f.mapperFunc }
 
-func (f *framework) GetReducerFunc() func(string) { return f.reducerFunc }
+func (f *framework) GetReducerFunc() func(taskgraph.Framework, string, []string) { return f.reducerFunc }
 
 func (f *framework) GetOutputContainerName() string { return f.outputContainerName }
 

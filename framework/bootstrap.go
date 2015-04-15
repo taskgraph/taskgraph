@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
+	"../../taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph/filesystem"
 	"golang.org/x/net/context"
 )
 
@@ -29,6 +30,60 @@ func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 }
 
 func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
+
+// Initialize Mapreduce configuration
+func (f *framework) InitWithMapreduceConfig(
+	mapperNum uint64, 
+	shuffleNum uint64, 
+	reducerNum uint64, 
+	azureAccountName string, 
+	azureAccountKey string, 
+	outputContainerName string, 
+	outputBlobName string,
+	mapperFunc func (taskgraph.Framework, string),
+	reducerFunc func (taskgraph.Framework, string, []string),
+
+) {
+	var err error
+	f.mapperNum = mapperNum
+	f.shuffleNum = shuffleNum
+	f.reducerNum = reducerNum
+	f.azureClient, err = filesystem.NewAzureClient(
+		azureAccountKey, 
+		azureAccountName,  
+		"core.chinacloudapi.cn", 
+        "2014-02-14", 
+        true,
+    )
+    if err != nil {
+		f.log.Fatalf("Create azure stroage client failed, error : %v", err)
+		return
+	}
+
+    // f.shuffleWriteCloser = make(io.WriteCloser, f.shuffleNum) 
+    f.outputContainerName = outputContainerName
+    f.outputBlobName = outputBlobName
+    f.outputWriter, err = f.azureClient.OpenWriteCloser(outputContainerName + "/" + outputBlobName)
+    if err != nil {
+		f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
+		return
+	}
+    for i := 0; i < int(f.shuffleNum); i++ {
+		shufflePath := f.outputContainerName + "/shuffle" + strconv.Itoa(i);
+		shuffleWriteCloserNow, err := f.azureClient.OpenWriteCloser(shufflePath)
+		if err != nil {
+
+		}
+		f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)
+		if err != nil {
+			f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
+		}
+    }
+    f.mapperFunc = mapperFunc
+    f.reducerFunc = reducerFunc
+
+}
+
 
 func (f *framework) Start() {
 	var err error
