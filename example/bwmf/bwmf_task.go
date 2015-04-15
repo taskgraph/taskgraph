@@ -93,7 +93,6 @@ type dimensions struct {
 }
 
 func (t *bwmfTask) initData() {
-
 	var rsErr, csErr error
 
 	t.rowShard, rsErr = LoadSparseShard(t.fsClient, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
@@ -134,12 +133,6 @@ func (t *bwmfTask) initOptUtil() {
 		t.config.OptConf.Beta,
 		t.config.OptConf.Sigma,
 		t.config.OptConf.Alpha,
-	)
-
-	t.stopCriteria = op.MakeComposedCriterion(
-		op.MakeFixCountStopCriteria(15),
-		op.MakeGradientNormStopCriteria(t.config.OptConf.GradTol),
-		op.MakeTimeoutCriterion(300*time.Second),
 	)
 }
 
@@ -245,6 +238,12 @@ func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	t.peerShards = make(map[uint64]*pb.DenseMatrixShard)
 	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
+	t.stopCriteria = op.MakeComposedCriterion(
+		op.MakeFixCountStopCriteria(15),
+		op.MakeGradientNormStopCriteria(t.config.OptConf.GradTol),
+		op.MakeTimeoutCriterion(300*time.Second),
+	)
+
 	if epoch%2 == 0 {
 		t.fetchShards(ctx, "/proto.BlockData/GetDShard")
 	} else {
