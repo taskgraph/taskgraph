@@ -31,7 +31,7 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		client, cltErr = filesystem.NewHdfsClient(
 			config.IOConf.HdfsConf.NamenodeAddr,
 			config.IOConf.HdfsConf.WebHdfsAddr,
-			config.IOConf.HdfsConf.User
+			config.IOConf.HdfsConf.User,
 		)
 		if cltErr != nil {
 			panic(cltErr)
@@ -42,7 +42,7 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 			config.IOConf.AzureConf.AccountKey,
 			config.IOConf.AzureConf.BlogServiceBaseUrl,
 			config.IOConf.AzureConf.ApiVersion,
-			config.IOConf.AzureConf.UseHttps
+			config.IOConf.AzureConf.UseHttps,
 		)
 		if cltErr != nil {
 			panic(cltErr)
