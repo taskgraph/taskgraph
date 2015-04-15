@@ -21,8 +21,14 @@ func TestBWMF(t *testing.T) {
 	tb := &bwmf.BWMFTaskBuilder{
 		NumOfTasks: numOfTasks,
 		NumIters:   4,
-		ConfBytes:  []byte(`{"OptConf":{"Sigma":0.01,"Alpha":1,"Beta":0.1,"GradTol":1e-06},"IOConf":{"IFs":"local","IDPath":"../example/bwmf/data/row_shard.dat","ITPath":"../example/bwmf/data/column_shard.dat","OFs":"local","ODPath":"../example/bwmf/data/dShard.dat","OTPath":"../example/bwmf/data/tShard.dat","HdfsConf":{}}}`),
-		LatentDim:  2,
+		ConfBytes: []byte(`{"OptConf": {"Sigma":0.01,"Alpha":1,"Beta":0.1,"GradTol":1e-06},
+				    "IOConf":  {"IFs":"local",
+						"IDPath":"../example/bwmf/data/row_shard.dat",
+						"ITPath":"../example/bwmf/data/column_shard.dat",
+						"OFs":"local",
+						"ODPath":"../example/bwmf/data/dShard.dat",
+						"OTPath":"../example/bwmf/data/tShard.dat"}}`),
+		LatentDim: 2,
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcdURLs, tb, topo.NewFullTopology(numOfTasks))
