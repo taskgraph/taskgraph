@@ -1,16 +1,14 @@
+package mapreduce
+
 import (
-	"fmt"
-	"io/ioutil"
-	"log"
-	"json"
-	"os"
+	"encoding/json"
 	"strconv"
-	"strings"
+	"log"
+	"bufio"
+	"io"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph/filesystem"
-	"github.com/taskgraph/taskgraph"
-	pb "github.com/taskgraph/taskgraph/example/regression/proto"
+	"../../taskgraph"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -18,23 +16,25 @@ import (
 type shuffleTask struct {
 	epoch uint64
 	taskID uint64
-	topo taskgraph.topo
-	framework taskgraph.framework
-	numOfMapper uint64
+	topo taskgraph.Topology
+	logger *log.Logger
+	framework taskgraph.Framework
+	config map[string]string
+	mapNum uint64
 	desReducerTaskId uint64
-	preparedMapper map[int]bool
+	preparedMapper map[uint64]bool
 	shuffleContainer map[string][]string
 	mapperNum uint64
 
-	epochChange chan *event
-	dataReady chan *event
-	metaReady chan *event
-	finished chan *event
+	epochChange chan *shuffleEvent
+	dataReady chan *shuffleEvent
+	metaReady chan *shuffleEvent
+	finished chan *shuffleEvent
 	exitChan chan struct{}
 
 }
 
-type event struct {
+type shuffleEvent struct {
 	ctx context.Context
 	epoch uint64
 	fromID uint64
@@ -53,51 +53,54 @@ type mapperEmitKV struct {
 func (sf *shuffleTask) Init(taskID uint64, framework taskgraph.Framework) {
 	
 	sf.epoch = framework.GetEpoch()
-	sf.mapNum = len(f.GetTopology().GetNeighbors("Prefix", sf.epoch))
+	sf.mapNum = uint64(len(sf.framework.GetTopology().GetNeighbors("Prefix", sf.epoch)))
 	// sf.mapNum = framework.GetMapperNum()
 	sf.taskID = taskID
-	sf.preparedMapper = make(map[int]bool)
+	sf.preparedMapper = make(map[uint64]bool)
 	sf.shuffleContainer = make(map[string][]string)
 
-	sf.epochChange = make(chan *event, 1)
-	sf.metaReady = make(chan *event, 1)
-	sf.dataReady = make(chan *event, 1)
-	sf.finished = make(chan *event, 1)
+	sf.epochChange = make(chan *shuffleEvent, 1)
+	sf.metaReady = make(chan *shuffleEvent, 1)
+	sf.dataReady = make(chan *shuffleEvent, 1)
+	sf.finished = make(chan *shuffleEvent, 1)
 	sf.exitChan = make(chan struct{}, 1)
 	go sf.run()
 }
 
-func (sf *shuffleTask) run {
+func (sf *shuffleTask) run() {
 	for {
 		select {
 			case ec := <-sf.epochChange:
-				sf.doEnterEpoch(sf.ctx, sf.epoch)
+				sf.doEnterEpoch(ec.ctx, ec.epoch)
 
 			case shuffleDone := <-sf.finished:
-				sf.framework.FlagMeta(mapperDone, "Suffix", "MetaReady")
-				reducerID := f.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
-				reducerPath := sf.framework.GetOutputContainerName() + "/reducer" + strconv.Itoa(reducerID)
+				sf.framework.FlagMeta(shuffleDone.ctx, "Suffix", "MetaReady")
+				reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
+				reducerPath := sf.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(reducerID, 10)
 				azureClient := sf.framework.GetAzureClient()
-				shuffleWriterCloser, err := azureClient.openWriterCloser(reducerPath)
-				for k := range sf.shuffleContianer {
-					block := &shuffleEmit {
+				shuffleWriteCloser, err := azureClient.OpenWriteCloser(reducerPath)
+				if err != nil {
+					sf.logger.Fatalf("MapReduce : Mapper read Error, ", err)
+					return
+				}
+				for k := range sf.shuffleContainer {
+					block := &shuffleEmit{
 						Key : k,
-						Value : sf.shuffleContianer[k]
+						Value : sf.shuffleContainer[k],
 					}
-					data, err := json.Marshal(key)
-					if (err) {
+					data, err := json.Marshal(block)
+					if err != nil {
 						sf.logger.Printf("Shuffle Emit json error, %v\n", err)
 					}
 					data = append(data, '\n')
-					shuffleWriterCloser.write(data)
+					shuffleWriteCloser.Write(data)
 				}
 				sf.framework.ShutdownJob()
 
-			case metaMapperReady := <-metaReady:
-				prepareMapper[metaMapperReady.fromID] = true
-				if (len(prepareMapper) == sf.mapNum) {
-					sf.framework.IncEpoch(ctx)
-					
+			case metaMapperReady := <-sf.metaReady:
+				sf.preparedMapper[metaMapperReady.fromID] = true
+				if (len(sf.preparedMapper) == int(sf.mapNum)) {
+					sf.framework.IncEpoch(metaMapperReady.ctx)					
 				}
 
 			case <-sf.exitChan:
@@ -109,27 +112,27 @@ func (sf *shuffleTask) run {
 
 
 func (sf *shuffleTask) EnterEpoch(ctx context.Context, epoch uint64) {
-	t.epochChange <- &event{ctx : ctx, epoch: epoch}
+	sf.epochChange <- &shuffleEvent{ctx : ctx, epoch: epoch}
 }
 
-func (sf *shuffleTask) processKV(str []byte]) {
+func (sf *shuffleTask) processKV(str []byte) {
 	// tmpKV, err := strings.Split(str, " ") 
 	var tp mapperEmitKV
 	if err := json.Unmarshal([]byte(str), &tp); err == nil {
-    	sf.shuffleContainer[tp.Key].append(tp.Value)    
+    	sf.shuffleContainer[tp.Key] = append(sf.shuffleContainer[tp.Key], tp.Value)    
     }
 }
 
-func (sf *shuffleTask) shuffleProgress() {
+func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 	azureClient := sf.framework.GetAzureClient()
-	shufflePath := sf.framework.GetOutputContainerName() + "/shuffle" + strconv.Itoa(sf.taksID - sf.mapNum)
-	shuffleReaderCloser, err := azureClient.OpenReaderCloser(shufflePath)
+	shufflePath := sf.framework.GetOutputContainerName() + "/shuffle" + strconv.FormatUint(sf.taskID - sf.mapNum, 10)
+	shuffleReadCloser, err := azureClient.OpenReadCloser(shufflePath)
 	if err != nil {
 		sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
 	}
-	bufioReader := bufio.NewReader(shuffleReaderCloser)
-	var str byte[]
+	bufioReader := bufio.NewReader(shuffleReadCloser)
+	var str []byte
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
@@ -140,22 +143,27 @@ func (sf *shuffleTask) shuffleProgress() {
 		}
 		sf.processKV(str)
 	}
-	sf.finished <- &event{ctx : ctx}
+	sf.finished <- &shuffleEvent{ctx : ctx}
 	
 
 }
 
 func (sf *shuffleTask) doEnterEpoch(ctx context.Context, epoch uint64) {
-	sf.logger.Printf("doEnterEpoch, Shuffle task %d, epoch %d", t.taskID, epoch)
+	sf.logger.Printf("doEnterEpoch, Shuffle task %d, epoch %d", sf.taskID, epoch)
 	sf.epoch = epoch
-	if (epoch == 1) 
-		go sf.shuffleProgress()
+	if (epoch == 1) {
+		go sf.shuffleProgress(ctx)
+	}
 }
 
 
 func (sf *shuffleTask) MetaReady(ctx context.Context, fromID uint64, LinkType, meta string) {
-	sf.metaReady <- &event{ctx : ctx, fromID : fromID}
+	sf.metaReady <- &shuffleEvent{ctx : ctx, fromID : fromID}
 }
+
+func (sf *shuffleTask) CreateServer() *grpc.Server { return nil }
+
+func (sf *shuffleTask) CreateOutputMessage(method string) proto.Message { return nil }
 
 func (sf *shuffleTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
 

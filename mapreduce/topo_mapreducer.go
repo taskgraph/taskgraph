@@ -23,7 +23,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	var numOfPrefix uint64
 	var numOfSuffix uint64
 	var scopeL uint64
-	shardQuotient, shardReminder := t.NumOfShuffle / t.NumOfReducer, t.NumOfShuflle % t.NumOfReducer
+	shardQuotient, shardReminder := t.NumOfShuffle / t.NumOfReducer, t.NumOfShuffle % t.NumOfReducer
 	switch {
 		case taskID < t.NumOfMapper : 
 			numOfPrefix = 0
@@ -31,14 +31,13 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 		case taskID < t.NumOfMapper + t.NumOfShuffle :
 			numOfPrefix = t.NumOfMapper
 			scopeL = 0
-			scopeR = t.NumOfMapper 
 		case taskID < t.NumOfMapper + t.NumOfShuffle + shardReminder:
 			numOfPrefix = shardQuotient + 1
 			scopeL = t.NumOfMapper + (shardQuotient + 1) * (taskID - t.NumOfMapper - t.NumOfShuffle)
-		case tasdID < t.NumOfMapper + t.NumOfShuffle + t.NumberOfReduer :	
+		case taskID < t.NumOfMapper + t.NumOfShuffle + t.NumOfReducer :	
 			numOfPrefix = t.NumOfShuffle / t.NumOfReducer
 			scopeL = t.NumOfMapper + t.NumOfShuffle % t.NumOfReducer * (shardQuotient + 1)
-			scopeL += (taskID - t.NumOfMapper - t.NumOfShuffle - shardReminder) * shardQoutient
+			scopeL += (taskID - t.NumOfMapper - t.NumOfShuffle - shardReminder) * shardQuotient
 		// default :
 		// 	numOfPrefix = t.NumOfReducer 
 		// 	scopeL = t.NumberOfMapper + t.NumberOfShuffle
@@ -53,13 +52,13 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 			numOfSuffix = t.NumOfShuffle
 			scopeL = t.NumOfMapper 
 		case taskID < t.NumOfMapper + t.NumOfShuffle :
-			numOfsuffix = 1
-			tmpAcc := taskID - t.NumberOfMapper 
+			numOfSuffix = 1
+			tmpAcc := taskID - t.NumOfMapper 
 			if tmpAcc / (shardQuotient + 1) < shardReminder {
 				scopeL = tmpAcc / (shardQuotient + 1) + t.NumOfMapper
 			} else {
 				scopeL = tmpAcc - shardReminder * (shardQuotient + 1)
-				scopeL += scopeL / shardQuotient + t.NumberOfMapper + shardReminder	
+				scopeL += scopeL / shardQuotient + t.NumOfMapper + shardReminder	
 			} 
 		case taskID < t.NumOfMapper + t.NumOfShuffle + t.NumOfReducer :
 			numOfSuffix = 0
@@ -96,11 +95,11 @@ func (t *MapReduceTopology) SetNumberOfReduer(n uint64) { t.NumOfReducer = n }
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
-func NewMaperTopology(nm, ns, nr uint64) *FullTopology {
+func NewMapReduceTopology(nm, ns, nr uint64) *MapReduceTopology {
 	m := &MapReduceTopology{
-		NumOfMapper: nm
-		NumOfShuffle : ns
-		NumOfReducer : nr
+		NumOfMapper: nm,
+		NumOfShuffle : ns,
+		NumOfReducer : nr,
 	}
 	return m
 }

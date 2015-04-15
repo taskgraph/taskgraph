@@ -5,6 +5,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
+	"github.com/taskgraph/taskgraph/filesystem"
 )
 
 // This interface is used by application during taskgraph configuration phase.
@@ -69,9 +70,19 @@ type Framework interface {
 		azureAccountKey string, 
 		outputContainerName string, 
 		outputBlobName string,
-		mapperFunc func (string),
-		reducerFunc func (string, []string)
+		mapperFunc func(string),
+		reducerFunc func(string, []string),
 	)
+
+	GetEpoch() uint64
+
+	GetAzureClient() filesystem.AzureClient
+
+	GetMapperFunc() func(string)
+
+	GetReducerFunc() func(string, []string)
+
+	GetOutputContainerName() string
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.
