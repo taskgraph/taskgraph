@@ -1,43 +1,41 @@
 package bwmf
 
 import (
-	"fmt"
-	"io"
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
-	"github.com/taskgraph/taskgraph/filesystem"
+	fs "github.com/taskgraph/taskgraph/filesystem"
 )
 
-func LoadSparseShard(conf ioconfig, path string) (*pb.SparseMatrixShard, error) {
+func LoadSparseShard(client fs.Client, path string) (*pb.SparseMatrixShard, error) {
 	shard := &pb.SparseMatrixShard{}
-	lErr := loadMessage(conf, path, shard)
+	lErr := loadMessage(client, path, shard)
 	if lErr != nil {
 		return nil, lErr
 	}
 	return shard, nil
 }
 
-func LoadDenseShard(conf ioconfig, path string) (*pb.DenseMatrixShard, error) {
+func LoadDenseShard(client fs.Client, path string) (*pb.DenseMatrixShard, error) {
 	shard := &pb.DenseMatrixShard{}
-	lErr := loadMessage(conf, path, shard)
+	lErr := loadMessage(client, path, shard)
 	if lErr != nil {
 		return nil, lErr
 	}
 	return shard, nil
 }
 
-func SaveSparseShard(conf ioconfig, shard *pb.SparseMatrixShard, path string) error {
-	return saveMessage(conf, shard, path)
+func SaveSparseShard(client fs.Client, shard *pb.SparseMatrixShard, path string) error {
+	return saveMessage(client, shard, path)
 }
 
-func SaveDenseShard(conf ioconfig, shard *pb.DenseMatrixShard, path string) error {
-	return saveMessage(conf, shard, path)
+func SaveDenseShard(client fs.Client, shard *pb.DenseMatrixShard, path string) error {
+	return saveMessage(client, shard, path)
 }
 
-func loadMessage(conf ioconfig, path string, message proto.Message) error {
-	reader, cErr := createReader(conf, path)
+func loadMessage(client fs.Client, path string, message proto.Message) error {
+	reader, cErr := client.OpenReadCloser(path)
 	if cErr != nil {
 		return cErr
 	}
@@ -52,12 +50,12 @@ func loadMessage(conf ioconfig, path string, message proto.Message) error {
 	return nil
 }
 
-func saveMessage(conf ioconfig, msg proto.Message, path string) error {
+func saveMessage(client fs.Client, msg proto.Message, path string) error {
 	buf, seErr := toByte(msg)
 	if seErr != nil {
 		return seErr
 	}
-	writer, oErr := createWriter(conf, path)
+	writer, oErr := client.OpenWriteCloser(path)
 	if oErr != nil {
 		return oErr
 	}
@@ -75,48 +73,4 @@ func fromByte(buf []byte, message proto.Message) error {
 		return unmarshErr
 	}
 	return nil
-}
-
-func createReader(conf ioconfig, path string) (io.ReadCloser, error) {
-	switch conf.IFs {
-	case "local":
-		return filesystem.NewLocalFSClient().OpenReadCloser(path)
-	case "hdfs":
-		client, cltErr := filesystem.NewHdfsClient(conf.HdfsConf.NamenodeAddr, conf.HdfsConf.WebHdfsAddr, conf.HdfsConf.User)
-		if cltErr != nil {
-			return nil, cltErr
-		}
-		return client.OpenReadCloser(path)
-	case "azure":
-		client, cltErr := filesystem.NewAzureClient(conf.AzureConf.AccountName, conf.AzureConf.AccountKey, conf.AzureConf.BlogServiceBaseUrl,
-			conf.AzureConf.ApiVersion, conf.AzureConf.UseHttps)
-		if cltErr != nil {
-			return nil, cltErr
-		}
-		return client.OpenReadCloser(path)
-	default:
-		return nil, fmt.Errorf("Unknow fs: %s", conf.IFs)
-	}
-}
-
-func createWriter(conf ioconfig, path string) (io.WriteCloser, error) {
-	switch conf.OFs {
-	case "local":
-		return filesystem.NewLocalFSClient().OpenWriteCloser(path)
-	case "hdfs":
-		client, cltErr := filesystem.NewHdfsClient(conf.HdfsConf.NamenodeAddr, conf.HdfsConf.WebHdfsAddr, conf.HdfsConf.User)
-		if cltErr != nil {
-			return nil, cltErr
-		}
-		return client.OpenWriteCloser(path)
-	case "azure":
-		client, cltErr := filesystem.NewAzureClient(conf.AzureConf.AccountName, conf.AzureConf.AccountKey, conf.AzureConf.BlogServiceBaseUrl,
-			conf.AzureConf.ApiVersion, conf.AzureConf.UseHttps)
-		if cltErr != nil {
-			return nil, cltErr
-		}
-		return client.OpenWriteCloser(path)
-	default:
-		return nil, fmt.Errorf("Unknow fs: %s", conf.IFs)
-	}
 }
