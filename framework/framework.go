@@ -10,6 +10,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
+	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -66,7 +67,7 @@ type mapreduceConfig struct {
 	shuffleWriteCloser []io.WriterCloser
 	outputWriter io.ReaderCloser
 	mapperFunc func (string)
-	reducerFunc fun (string, []string) string
+	reducerFunc func (string, []string)
 }
 
 type emitKV struct {

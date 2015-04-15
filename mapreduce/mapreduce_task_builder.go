@@ -1,27 +1,28 @@
 package mapreduce
 
 import (
-	"github.com/taskgraph/taskgraph"
+	"../../taskgraph"
 )
 
-type mapreduceTaskBuilder struct {
-	MapperConfig map[string]string[]
+type MapreduceTaskBuilder struct {
+	MapperNum, ShuffleNum, ReducerNum uint64
+	MapperConfig map[string][]string
 	ShuffleConfig map[string]string
 	ReducerConfig map[string]string
 }
 
-func (t mapreduceTaskBuilder) GetTask(taskID unint64) taskgraph.Task {
-	if taskID < MapperNum {
+func (t MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
+	if taskID < t.MapperNum {
 		return &mapperTask{
-			config : t.MapperConfig
+			config : t.MapperConfig,
 		}
-	} else if taskID < MapperNum + ShuffleNum {
+	} else if taskID < t.MapperNum + t.ShuffleNum {
 		return &shuffleTask{
-			config : t.ShuffleConfig
+			config : t.ShuffleConfig,
 		}
 	} else {
-		return &reduceTask{
-			config : t.ReducerConfig
+		return &reducerTask{
+			config : t.ReducerConfig,
 		}
 	}
 }

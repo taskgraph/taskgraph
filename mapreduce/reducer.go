@@ -1,72 +1,68 @@
+package mapreduce
+
 import (
-	"fmt"
-	"io/ioutil"
 	"log"
-	"json"
-	"os"
+	"io"
+	"bufio"
+	"encoding/json"
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph/filesystem"
-	"github.com/taskgraph/taskgraph"
-	pb "github.com/taskgraph/taskgraph/example/regression/proto"
+	"../../taskgraph"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 type reducerTask struct {
-	framework taskgraph.framework
+	framework taskgraph.Framework
 	epoch uint64
-	log *log.logger
+	logger *log.Logger
 	taskID uint64
 	numOfTasks uint64
-	preparedShuffle map[int]bool
+	shuffleNum uint64
+	preparedShuffle map[uint64]bool
+	config map[string]string
 
-	epochChange chan *event
-	dataReady chan *event
-	metaReady chan *event
-	finished chan *event
+	epochChange chan *reducerEvent
+	dataReady chan *reducerEvent
+	metaReady chan *reducerEvent
+	finished chan *reducerEvent
 	exitChan chan struct{}
 }
 
-type event struct {
+type reducerEvent struct {
 	ctx context.Context
 	epoch uint64
 	fromID uint64
 }
 
-type shuffleEmit struct {
-	Key string `json:"key"`
-	Value []string `json:"value"`
-}
-
-func (rd *rducerTask) Init(taskId uint64, framework taskgraph.Framework) {
+func (rd *reducerTask) Init(taskID uint64, framework taskgraph.Framework) {
 	rd.taskID = taskID
 	rd.framework = framework
 	rd.epoch = framework.GetEpoch()
-	rd.shuffleNum = len(f.GetTopology().GetNeighbors("Prefix", rd.epoch))
-	rd.preparedShuffle = make(map[int]bool)
+	rd.shuffleNum = uint64(len(framework.GetTopology().GetNeighbors("Prefix", rd.epoch)))
+	rd.preparedShuffle = make(map[uint64]bool)
 	
-	rd.epochChange = make(chan *event, 1)
-	rd.metaReady = make(chan *event, 1)
-	rd.dataReady = make(chan *event, 1)
-	rd.finished = make(chan *event, 1)
+	rd.epochChange = make(chan *reducerEvent, 1)
+	rd.metaReady = make(chan *reducerEvent, 1)
+	rd.dataReady = make(chan *reducerEvent, 1)
+	rd.finished = make(chan *reducerEvent, 1)
 	rd.exitChan = make(chan struct{}, 1)
 }
 
-func (rd *reducerTask) run {
+func (rd *reducerTask) run() {
 	for {
 		select {
 			case ec := <-rd.epochChange:
-				rd.doEnterEpoch(rd.ctx, rd.epoch)
+				rd.doEnterEpoch(ec.ctx, ec.epoch)
 
-			case reducerDone := <-rd.finished:
-				rd.framework.ShutDownJob()
+			case <-rd.finished:
+				rd.framework.ShutdownJob()
 
 			case metaShuffleReady := <-rd.metaReady:
-				preparedShuffle[metaShuffleReady.fromID] = true
-				if (len(prepareShuffle) == rd.shuffleNum) {
-					sf.framework.IncEopch(ctx)
+				rd.preparedShuffle[metaShuffleReady.fromID] = true
+				if (len(rd.preparedShuffle) == int(rd.shuffleNum)) {
+					rd.framework.IncEpoch(metaShuffleReady.ctx)
 				}
 
 			case <-rd.exitChan:
@@ -77,40 +73,41 @@ func (rd *reducerTask) run {
 }
 
 func (rd *reducerTask)  EnterEpoch(ctx context.Context, epoch uint64) {
-	t.epochChange <- &event{ctx : ctx, epoch : epoch}
+	rd.epochChange <- &reducerEvent{ctx : ctx, epoch : epoch}
 }
 
 func (rd *reducerTask) doEnterEpoch(ctx context.Context, epoch uint64) {
-	rd.logger.Prinntf("doEnterEpoch, Reducer task %d, epoch %d", t.taskID, epoch)
+	rd.logger.Printf("doEnterEpoch, Reducer task %d, epoch %d", rd.taskID, epoch)
 	rd.epoch = epoch
-	if (epoch == 2)
-		go rd.reducerProgress()
+	if epoch == 2 {
+		go rd.reducerProgress(ctx)
+	}
 }
 
-func (rd *reducerTask) reducerProgress() {
-	reducerPath := rd.framework.GetOutputContainerName() + "/reducer" + strconv.Itoa(rd.taskID)
+func (rd *reducerTask) reducerProgress(ctx context.Context) {
+	reducerPath := rd.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(rd.taskID, 10)
 	azureClient := rd.framework.GetAzureClient()
-	reducerReaderCloser, err := azureClient.openReaderCloser(reducerPath)
+	reducerReadCloser, err := azureClient.OpenReadCloser(reducerPath)
 	if err != nil {
 		rd.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
 	}
-	bufioReader := bufio.NewReader(reducerReaderCloser)
-	var str byte[]
+	bufioReader := bufio.NewReader(reducerReadCloser)
+	var str []byte
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
 		str = str[:len(str) - 1]
 		if err != io.EOF && err != nil {
-			sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
+			rd.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
 			return
 		}
 		rd.processKV(str)
 	}
-	rd.finished <- &event{ctx : ctx}
+	rd.finished <- &reducerEvent{ctx : ctx}
 }
 
-func (rd *reducerTask) processKV(str []byte]) {
+func (rd *reducerTask) processKV(str []byte) {
 	// tmpKV, err := strings.Split(str, " ") 
 	var tp shuffleEmit
 	if err := json.Unmarshal([]byte(str), &tp); err == nil {
@@ -118,9 +115,13 @@ func (rd *reducerTask) processKV(str []byte]) {
     }
 }
 
-func (rd *reducerTask) MetaReady(ctx context.Context, fromID) {
-	rd.metaReady <- &event{ctx : ctx, fromID : fromID}
+func (rd *reducerTask) MetaReady(ctx context.Context, fromID uint64, LinkType, meta string) {
+	rd.metaReady <- &reducerEvent{ctx : ctx, fromID : fromID}
 }
+
+func (rd *reducerTask) CreateServer() *grpc.Server { return nil }
+
+func (rd *reducerTask) CreateOutputMessage(method string) proto.Message { return nil }
 
 func (rd *reducerTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
 
