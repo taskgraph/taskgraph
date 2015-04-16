@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"os"
 	"strconv"
-
+	pb "./proto"
 	"../../taskgraph"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -39,15 +40,19 @@ type reducerEvent struct {
 func (rd *reducerTask) Init(taskID uint64, framework taskgraph.Framework) {
 	rd.taskID = taskID
 	rd.framework = framework
+	rd.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	rd.epoch = framework.GetEpoch()
 	rd.shuffleNum = uint64(len(framework.GetTopology().GetNeighbors("Prefix", rd.epoch)))
 	rd.preparedShuffle = make(map[uint64]bool)
+
+	rd.logger.Println("Reduce Task")
 
 	rd.epochChange = make(chan *reducerEvent, 1)
 	rd.metaReady = make(chan *reducerEvent, 1)
 	rd.dataReady = make(chan *reducerEvent, 1)
 	rd.finished = make(chan *reducerEvent, 1)
 	rd.exitChan = make(chan struct{}, 1)
+	go rd.run()
 }
 
 func (rd *reducerTask) run() {
@@ -60,7 +65,9 @@ func (rd *reducerTask) run() {
 			rd.framework.ShutdownJob()
 
 		case metaShuffleReady := <-rd.metaReady:
+			rd.logger.Printf("meta ready")
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
+			rd.logger.Println(rd.preparedShuffle, " ", rd.shuffleNum)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
 				rd.framework.IncEpoch(metaShuffleReady.ctx)
 			}
@@ -88,6 +95,7 @@ func (rd *reducerTask) reducerProgress(ctx context.Context) {
 	reducerPath := rd.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(rd.taskID, 10)
 	azureClient := rd.framework.GetAzureClient()
 	reducerReadCloser, err := azureClient.OpenReadCloser(reducerPath)
+	rd.logger.Println("in reduce Progress")
 	if err != nil {
 		rd.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
@@ -97,10 +105,14 @@ func (rd *reducerTask) reducerProgress(ctx context.Context) {
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
-		str = str[:len(str)-1]
+
 		if err != io.EOF && err != nil {
 			rd.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
 			return
+		}
+
+		if err != io.EOF {
+			str = str[:len(str)]			
 		}
 		rd.processKV(str)
 	}
@@ -119,7 +131,11 @@ func (rd *reducerTask) MetaReady(ctx context.Context, fromID uint64, LinkType, m
 	rd.metaReady <- &reducerEvent{ctx: ctx, fromID: fromID}
 }
 
-func (rd *reducerTask) CreateServer() *grpc.Server { return nil }
+func (rd *reducerTask) CreateServer() *grpc.Server { 
+	server := grpc.NewServer()
+	pb.RegisterMapreduceServer(server, rd)
+	return server
+}
 
 func (rd *reducerTask) CreateOutputMessage(method string) proto.Message { return nil }
 

@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"os"
 	"strconv"
-
+	pb "./proto"
 	"../../taskgraph"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -52,7 +53,11 @@ type mapperEmitKV struct {
 func (sf *shuffleTask) Init(taskID uint64, framework taskgraph.Framework) {
 
 	sf.epoch = framework.GetEpoch()
+	sf.framework = framework
+	sf.logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Lshortfile)
+	// sf.logger.Println(sf.framework.GetTopology().GetNeighbors("Prefix", sf.epoch)))
 	sf.mapNum = uint64(len(sf.framework.GetTopology().GetNeighbors("Prefix", sf.epoch)))
+	
 	// sf.mapNum = framework.GetMapperNum()
 	sf.taskID = taskID
 	sf.preparedMapper = make(map[uint64]bool)
@@ -73,7 +78,7 @@ func (sf *shuffleTask) run() {
 			sf.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case shuffleDone := <-sf.finished:
-			sf.framework.FlagMeta(shuffleDone.ctx, "Suffix", "MetaReady")
+			
 			reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
 			reducerPath := sf.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(reducerID, 10)
 			azureClient := sf.framework.GetAzureClient()
@@ -94,11 +99,15 @@ func (sf *shuffleTask) run() {
 				data = append(data, '\n')
 				shuffleWriteCloser.Write(data)
 			}
-			sf.framework.ShutdownJob()
+			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
+			// sf.Exit()
 
 		case metaMapperReady := <-sf.metaReady:
+
 			sf.preparedMapper[metaMapperReady.fromID] = true
-			if len(sf.preparedMapper) == int(sf.mapNum) {
+			
+			if len(sf.preparedMapper) >= int(sf.mapNum) {
+				sf.logger.Println(len(sf.preparedMapper), sf.mapNum)
 				sf.framework.IncEpoch(metaMapperReady.ctx)
 			}
 
@@ -134,10 +143,13 @@ func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
-		str = str[:len(str)-1]
+		
 		if err != io.EOF && err != nil {
 			sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
 			return
+		}
+		if err != io.EOF {
+			str = str[:len(str) - 1]
 		}
 		sf.processKV(str)
 	}
@@ -157,7 +169,11 @@ func (sf *shuffleTask) MetaReady(ctx context.Context, fromID uint64, LinkType, m
 	sf.metaReady <- &shuffleEvent{ctx: ctx, fromID: fromID}
 }
 
-func (sf *shuffleTask) CreateServer() *grpc.Server { return nil }
+func (sf *shuffleTask) CreateServer() *grpc.Server { 
+	server := grpc.NewServer()
+	pb.RegisterMapreduceServer(server, sf)
+	return server
+}
 
 func (sf *shuffleTask) CreateOutputMessage(method string) proto.Message { return nil }
 

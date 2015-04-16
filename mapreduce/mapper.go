@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"io"
 	"log"
+	"os"
+	// "strconv"
 
 	"github.com/golang/protobuf/proto"
 	// "github.com/taskgraph/taskgraph/filesystem"
+	pb "./proto"
 	"../../taskgraph"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,8 +38,11 @@ type mapperEvent struct {
 }
 
 func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
+
+	mp.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	mp.taskID = taskID
 	mp.framework = framework
+	
 
 	//channel init
 	mp.epochChange = make(chan *mapperEvent, 1)
@@ -45,7 +51,7 @@ func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.exitChan = make(chan struct{})
 	mp.fileUpdate = make(chan *mapperEvent, 1)
 
-	go mp.fileRead()
+	
 	go mp.run()
 }
 
@@ -56,8 +62,8 @@ func (mp *mapperTask) run() {
 			mp.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case mapperDone := <-mp.fileUpdate:
-			mp.framework.FlagMeta(mapperDone.ctx, "Suffix", "metaReady")
-			mp.framework.ShutdownJob()
+			mp.framework.FlagMeta(mapperDone.ctx, "Prefix", "metaReady")
+			// mp.Exit()
 
 		case <-mp.exitChan:
 			return
@@ -65,30 +71,45 @@ func (mp *mapperTask) run() {
 	}
 }
 
-func (mp *mapperTask) fileRead() {
+func (mp *mapperTask) fileRead(ctx context.Context) {
 	fileNum := len(mp.config["files"])
+	mp.logger.Printf("fileReader, Mapper task %d %d", mp.taskID, fileNum)
 	files := mp.config["files"]
+	azureClient := mp.framework.GetAzureClient()
 	for i := 0; i < fileNum; i++ {
-		azureClient := mp.framework.GetAzureClient()
+		mp.logger.Printf("In loop %d", i)
+		mp.logger.Println("In Azure Strage Client", files[i])
+		mp.logger.Println(azureClient)
+
 		mapperReaderCloser, err := azureClient.OpenReadCloser(files[i])
+		mp.logger.Println(mapperReaderCloser)
+		mp.logger.Println(azureClient)
 		if err != nil {
-			mp.logger.Fatalf("MapReduce : get azure storage client reader failed, ", err)
+			mp.logger.Panicf("MapReduce : get azure storage client reader failed, ", err)
 			return
 		}
 		err = nil
+
 		var str string
 		bufioReader := bufio.NewReader(mapperReaderCloser)
 		for err != io.EOF {
 			str, err = bufioReader.ReadString('\n')
-			str = str[:len(str)-1]
+
 			if err != io.EOF && err != nil {
-				mp.logger.Fatalf("MapReduce : Mapper read Error, ", err)
+				mp.logger.Panicf("MapReduce : Mapper read Error, ", err)
 				return
 			}
+			if err != io.EOF {
+				str = str[:len(str)]
+			}
 			mapperFunc := mp.framework.GetMapperFunc()
+			mp.logger.Println(str)
 			mapperFunc(mp.framework, str)
 		}
+		mapperReaderCloser.Close()
 	}
+	mp.logger.Println("FileRead finished")
+	mp.fileUpdate <- &mapperEvent{ctx : ctx, epoch : mp.epoch}
 }
 
 // At present, epoch is not a required parameter for mapper
@@ -100,13 +121,24 @@ func (mp *mapperTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (mp *mapperTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	mp.logger.Printf("doEnterEpoch, Mapper task %d, epoch %d", mp.taskID, epoch)
 	mp.epoch = epoch
+	mp.logger.Printf("go fileReader, Mapper task %d", mp.taskID)
+	mp.logger.Println(mp.config["files"][0])
+	if epoch == 0 {
+		go mp.fileRead(ctx)
+	}
+
 }
 
 func (mp *mapperTask) Exit() {
 	close(mp.exitChan)
 }
 
-func (mp *mapperTask) CreateServer() *grpc.Server { return nil }
+func (mp *mapperTask) CreateServer() *grpc.Server { 
+	server := grpc.NewServer()
+	pb.RegisterMapreduceServer(server, mp)
+	return server
+	
+}
 
 func (mp *mapperTask) CreateOutputMessage(method string) proto.Message { return nil }
 
