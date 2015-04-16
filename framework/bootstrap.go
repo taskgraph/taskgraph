@@ -49,8 +49,8 @@ func (f *framework) InitWithMapreduceConfig(
 	f.shuffleNum = shuffleNum
 	f.reducerNum = reducerNum
 	f.azureClient, err = filesystem.NewAzureClient(
+		azureAccountName,
 		azureAccountKey, 
-		azureAccountName,  
 		"core.chinacloudapi.cn", 
         "2014-02-14", 
         true,
@@ -65,22 +65,23 @@ func (f *framework) InitWithMapreduceConfig(
     f.outputBlobName = outputBlobName
     f.outputWriter, err = f.azureClient.OpenWriteCloser(outputContainerName + "/" + outputBlobName)
     if err != nil {
-		f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
+		f.log.Fatalf("Create azure storage client writeCloser failed, error : %v", err)
 		return
 	}
+	f.mapperFunc = mapperFunc
+    f.reducerFunc = reducerFunc
     for i := 0; i < int(f.shuffleNum); i++ {
 		shufflePath := f.outputContainerName + "/shuffle" + strconv.Itoa(i);
+
 		shuffleWriteCloserNow, err := f.azureClient.OpenWriteCloser(shufflePath)
 		if err != nil {
-
+			f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
+			return
 		}
 		f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)
-		if err != nil {
-			f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
-		}
+		
     }
-    f.mapperFunc = mapperFunc
-    f.reducerFunc = reducerFunc
+    
 
 }
 
@@ -149,7 +150,9 @@ func (f *framework) run() {
 			if !ok { // task is killed
 				return
 			}
+
 			f.epoch = nextEpoch
+			f.log.Printf("join epoch %d", nextEpoch)
 			if f.epoch == exitEpoch {
 				return
 			}
@@ -238,7 +241,7 @@ func (f *framework) occupyTask() error {
 
 func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
-
+	f.log.Println(f.taskID, linkType, taskIDs)
 	for i, taskID := range taskIDs {
 		stop := make(chan bool, 1)
 		stops[i] = stop

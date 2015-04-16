@@ -91,6 +91,7 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
+	f.log.Printf("etcdClient.Set failed; key: %s, value: %s, error: %v", etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
@@ -106,7 +107,9 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
 	}
+	f.log.Println(f.name, epoch, epoch+1)
 	err := etcdutil.CASEpoch(f.etcdClient, f.name, epoch, epoch+1)
+	f.log.Println(f.name, epoch, epoch+1)
 	if err != nil {
 		f.log.Fatalf("task %d Epoch CompareAndSwap(%d, %d) failed: %v",
 			f.taskID, epoch+1, epoch, err)
@@ -137,6 +140,9 @@ func (f *framework) ShutdownJob() {
 // may have synchronization issues 
 // promote to buffer stream 
 func (f *framework) Emit(key string, val string) {
+	if f.shuffleNum == 0 {
+		return
+	}
 	h := fnv.New32a()
 	h.Write([]byte(key))
 	var KV emitKV
@@ -149,10 +155,12 @@ func (f *framework) Emit(key string, val string) {
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
+	f.log.Printf(key + " " + val)
 	f.shuffleWriteCloser[toShuffle].Write(data)
 }
 
 func (f *framework) Collect(key string, val string) {
+	f.log.Printf(key + " " + val)
 	f.outputWriter.Write([]byte(key + " " + val + "\n"));
 }
 

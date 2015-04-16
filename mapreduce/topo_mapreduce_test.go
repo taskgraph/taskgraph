@@ -1,7 +1,6 @@
 package mapreduce
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -70,5 +69,24 @@ func TestMapReduceTopology(t *testing.T) {
 	if m[2] != 5 {
 		t.Error()
 	}
+
+	topo = NewMapReduceTopology(1, 1, 1)
+	topo.SetTaskID(0)
+	m = topo.GetNeighbors("Suffix", 0)
+	if len(m) != 1 {
+		t.Error()
+	}
+	if m[0] != 1 {
+		t.Error()
+	}
+	topo.SetTaskID(2)
+	m = topo.GetNeighbors("Prefix", 0)
+	if len(m) != 1 {
+		t.Error()
+	}
+	if m[0] != 1 {
+		t.Error(m[0])
+	}
+	
 
 }

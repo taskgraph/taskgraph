@@ -9,6 +9,7 @@ import (
 	"os"
 	"bufio"
 	"net"
+	"fmt"
 
 	"github.com/coreos/go-etcd/etcd"
 	"../../controller"
@@ -23,7 +24,7 @@ func mapperFunc(framework taskgraph.Framework, text string) {
 	var str string
 	for err != io.EOF {
 		str, err = textReader.ReadString(' ')
-		if err != nil {
+		if err != io.EOF && err != nil {
 			return
 		}
 		framework.Emit(str, "1")
@@ -32,7 +33,7 @@ func mapperFunc(framework taskgraph.Framework, text string) {
 
 func reducerFunc(framework taskgraph.Framework, key string, val []string) {
 	lenVal := len(val)
-	sum := 0
+	var sum int
 	for v := 0; v < lenVal; v++ {
 		a, err := strconv.Atoi(val[v])
 		if err != nil {
@@ -40,7 +41,7 @@ func reducerFunc(framework taskgraph.Framework, key string, val []string) {
 		}
 		sum = sum + a
 	}
-	framework.Collect(key, string(sum))
+	framework.Collect(key, strconv.Itoa(sum))
 }
 
 var mpFiles []string
@@ -65,14 +66,20 @@ func main() {
 	var str string
 	for err != io.EOF {
 		str, err = fileRead.ReadString('\n')
+		
 		if err != io.EOF && err != nil {
 			log.Fatal("read error ", err)
 		}
+		if err != io.EOF {
+			str = str[:len(str) - 1]
+		}
 		mpFiles = append(mpFiles, str)
 	}
-	
+	var ll *log.Logger
+	ll = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	etcdURLs := []string{"http://localhost:4001"} 
-	
+	fmt.Println(mpFiles[0])
+	fmt.Println(mpFiles[1])
 	flag.Parse()
 	if *job == "" {
 		log.Fatalf("Please specify a job name")
@@ -89,7 +96,7 @@ func main() {
 		controller.WaitForJobDone()
 	case "t":
 		log.Printf("task")
-		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), nil)
+		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), ll)
 		taskBuilder := &mapreduce.MapreduceTaskBuilder{
 			MapperConfig:       map[string][]string{ "files" : mpFiles},
 			MapperNum : uint64(*mapperNum),

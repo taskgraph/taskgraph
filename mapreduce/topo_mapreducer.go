@@ -23,7 +23,13 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	var numOfPrefix uint64
 	var numOfSuffix uint64
 	var scopeL uint64
-	shardQuotient, shardReminder := t.NumOfShuffle/t.NumOfReducer, t.NumOfShuffle%t.NumOfReducer
+	var shardQuotient uint64 = 0
+	var shardReminder uint64 = 0
+	if t.NumOfReducer != 0 {
+		shardQuotient, shardReminder = t.NumOfShuffle/t.NumOfReducer, t.NumOfShuffle%t.NumOfReducer
+	} else {
+		shardReminder = t.NumOfShuffle
+	}
 	switch {
 	case taskID < t.NumOfMapper:
 		numOfPrefix = 0
@@ -52,13 +58,18 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 		numOfSuffix = t.NumOfShuffle
 		scopeL = t.NumOfMapper
 	case taskID < t.NumOfMapper+t.NumOfShuffle:
-		numOfSuffix = 1
-		tmpAcc := taskID - t.NumOfMapper
-		if tmpAcc/(shardQuotient+1) < shardReminder {
-			scopeL = tmpAcc/(shardQuotient+1) + t.NumOfShuffle + t.NumOfMapper
-		} else {
-			scopeL = tmpAcc - shardReminder*(shardQuotient+1)
-			scopeL += scopeL/shardQuotient + t.NumOfShuffle + t.NumOfMapper + shardReminder
+		if (t.NumOfReducer != 0) {
+			numOfSuffix = 1
+			tmpAcc := taskID - t.NumOfMapper
+			if tmpAcc/(shardQuotient+1) < shardReminder {
+				scopeL = tmpAcc/(shardQuotient+1) + t.NumOfShuffle + t.NumOfMapper
+			} else {
+				scopeL = tmpAcc - shardReminder*(shardQuotient+1)
+				if shardQuotient != 0 {
+					scopeL = scopeL/shardQuotient
+				}
+				scopeL += scopeL + t.NumOfShuffle + t.NumOfMapper + shardReminder
+			}
 		}
 	case taskID < t.NumOfMapper+t.NumOfShuffle+t.NumOfReducer:
 		numOfSuffix = 0
