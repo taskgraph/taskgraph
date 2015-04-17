@@ -3,10 +3,12 @@
 // current semantics is Container/Blob like "A/B", restricted by only one slash
 // Might need to update the senmatics supported multiple slash
 // (As same as the local system semantic)
+
+// Need to update the senmatics supported multiple slash (As same as the local system semantic)
 // "/A/B/C/D", ignore the first slash, "A" represents the contianer name
 // and "B/C/D" represents the Blob name.
-// Correspendingly, the Blob function, Remove function,
-// Exist function, Rename function need to change.
+
+// Correspendingly, the Blob function, Remove function need to change.
 
 package filesystem
 
