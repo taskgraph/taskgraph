@@ -222,10 +222,14 @@ func (t *bwmfTask) Exit() {
 }
 
 func (t *bwmfTask) finish() {
-	// TODO save result to filesystem
-	// but we can dump it to logger here for now
-	t.logger.Println("tShard: ", *t.tShard)
-	t.logger.Println("dShard: ", *t.dShard)
+	err := SaveDenseShard(t.fsClient, t.tShard, t.config.IOConf.OTPath+"."+strconv.Itoa(int(t.taskID)))
+	if err != nil {
+		t.logger.Printf("Save tShard for task %d failed!", t.taskID)
+	}
+	err = SaveDenseShard(t.fsClient, t.dShard, t.config.IOConf.ODPath+"."+strconv.Itoa(int(t.taskID)))
+	if err != nil {
+		t.logger.Printf("Save dShard for task %d failed!", t.taskID)
+	}
 	t.logger.Println("Finished. Waiting for the framework to stop the task...")
 }
 
