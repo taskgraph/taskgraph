@@ -74,15 +74,9 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 	fileNum := len(mp.config["files"])
 	mp.logger.Printf("fileReader, Mapper task %d %d", mp.taskID, fileNum)
 	files := mp.config["files"]
-	azureClient := mp.framework.GetAzureClient()
+	client := mp.framework.GetClient()
 	for i := 0; i < fileNum; i++ {
-		mp.logger.Printf("In loop %d", i)
-		mp.logger.Println("In Azure Strage Client", files[i])
-		mp.logger.Println(azureClient)
-
-		mapperReaderCloser, err := azureClient.OpenReadCloser(files[i])
-		mp.logger.Println(mapperReaderCloser)
-		mp.logger.Println(azureClient)
+		mapperReaderCloser, err := client.OpenReadCloser(files[i])
 		if err != nil {
 			mp.logger.Panicf("MapReduce : get azure storage client reader failed, ", err)
 			return

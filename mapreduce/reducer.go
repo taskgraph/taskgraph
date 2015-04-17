@@ -65,9 +65,7 @@ func (rd *reducerTask) run() {
 			rd.framework.ShutdownJob()
 
 		case metaShuffleReady := <-rd.metaReady:
-			rd.logger.Printf("meta ready")
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
-			rd.logger.Println(rd.preparedShuffle, " ", rd.shuffleNum)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
 				// rd.framework.IncEpoch(metaShuffleReady.ctx)
 				go rd.reducerProgress(metaShuffleReady.ctx)
@@ -93,9 +91,9 @@ func (rd *reducerTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (rd *reducerTask) reducerProgress(ctx context.Context) {
-	reducerPath := rd.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(rd.taskID, 10)
-	azureClient := rd.framework.GetAzureClient()
-	reducerReadCloser, err := azureClient.OpenReadCloser(reducerPath)
+	reducerPath := rd.framework.GetOutputDirName() + "/reducer" + strconv.FormatUint(rd.taskID, 10)
+	client := rd.framework.GetClient()
+	reducerReadCloser, err := client.OpenReadCloser(reducerPath)
 	rd.logger.Println("in reduce Progress")
 	if err != nil {
 		rd.logger.Fatalf("MapReduce : get azure storage client failed, ", err)

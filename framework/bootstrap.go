@@ -36,10 +36,9 @@ func (f *framework) InitWithMapreduceConfig(
 	mapperNum uint64, 
 	shuffleNum uint64, 
 	reducerNum uint64, 
-	azureAccountName string, 
-	azureAccountKey string, 
-	outputContainerName string, 
-	outputBlobName string,
+	client filesystem.Client,
+	outputDirName string,
+	outputFileName string,
 	mapperFunc func (taskgraph.Framework, string),
 	reducerFunc func (taskgraph.Framework, string, []string),
 
@@ -48,22 +47,10 @@ func (f *framework) InitWithMapreduceConfig(
 	f.mapperNum = mapperNum
 	f.shuffleNum = shuffleNum
 	f.reducerNum = reducerNum
-	f.azureClient, err = filesystem.NewAzureClient(
-		azureAccountName,
-		azureAccountKey, 
-		"core.chinacloudapi.cn", 
-        "2014-02-14", 
-        true,
-    )
-    if err != nil {
-		f.log.Fatalf("Create azure stroage client failed, error : %v", err)
-		return
-	}
-
-    // f.shuffleWriteCloser = make(io.WriteCloser, f.shuffleNum) 
-    f.outputContainerName = outputContainerName
-    f.outputBlobName = outputBlobName
-    f.outputWriter, err = f.azureClient.OpenWriteCloser(outputContainerName + "/" + outputBlobName)
+	f.outputDirName = outputDirName
+    f.outputFileName = outputFileName
+    f.client = client
+    f.outputWriter, err = f.client.OpenWriteCloser(outputDirName + "/" + outputFileName)
     if err != nil {
 		f.log.Fatalf("Create azure storage client writeCloser failed, error : %v", err)
 		return
@@ -71,18 +58,15 @@ func (f *framework) InitWithMapreduceConfig(
 	f.mapperFunc = mapperFunc
     f.reducerFunc = reducerFunc
     for i := 0; i < int(f.shuffleNum); i++ {
-		shufflePath := f.outputContainerName + "/shuffle" + strconv.Itoa(i);
+		shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
 
-		shuffleWriteCloserNow, err := f.azureClient.OpenWriteCloser(shufflePath)
+		shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
 		if err != nil {
 			f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
 			return
 		}
-		f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)
-		
+		f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)		
     }
-    
-
 }
 
 
