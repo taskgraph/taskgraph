@@ -23,7 +23,8 @@ go install github.com/MSOpenTech/azure-sdk-for-go
 Example:
 
 ```
-    cli, err := NewClient(
+    import "github.com/taskgraph/taskgraph/filesystem"
+    cli, err := filesystem.NewAzureClient(
         AzurestorageAccountName, 
         AzurestorageAccountKey, 
         "core.chinacloudapi.cn", 

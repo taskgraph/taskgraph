@@ -1,0 +1,2 @@
+testforcomplexmapreduceframework/textForExamination1
+testforcomplexmapreduceframework/textForExamination2
