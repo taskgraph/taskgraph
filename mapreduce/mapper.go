@@ -63,7 +63,7 @@ func (mp *mapperTask) run() {
 
 		case mapperDone := <-mp.fileUpdate:
 			mp.framework.FlagMeta(mapperDone.ctx, "Prefix", "metaReady")
-
+			return
 		case <-mp.exitChan:
 			return
 		}

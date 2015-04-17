@@ -61,13 +61,14 @@ func (rd *reducerTask) run() {
 		case ec := <-rd.epochChange:
 			rd.doEnterEpoch(ec.ctx, ec.epoch)
 
-		case <-rd.finished:
-			rd.framework.ShutdownJob()
+		case reducerDone := <-rd.finished:
+			rd.framework.FlagMeta(reducerDone.ctx, "Prefix", "metaReady")
+			return
 
 		case metaShuffleReady := <-rd.metaReady:
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
-				// rd.framework.IncEpoch(metaShuffleReady.ctx)
+				// rd.chframework.IncEpoch(metaShuffleReady.ctx)
 				go rd.reducerProgress(metaShuffleReady.ctx)
 			}
 
@@ -100,13 +101,13 @@ func (rd *reducerTask) reducerProgress(ctx context.Context) {
 		return
 	}
 	bufioReader := bufio.NewReader(reducerReadCloser)
-	var str []byte
+	var str []byte 
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
 
 		if err != io.EOF && err != nil {
-			rd.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
+			rd.logger.Fatalf("MapReduce : Reducer read Error, ", err)
 			return
 		}
 
@@ -114,6 +115,11 @@ func (rd *reducerTask) reducerProgress(ctx context.Context) {
 			str = str[:len(str)]			
 		}
 		rd.processKV(str)
+	}
+	rd.logger.Printf("%s removing..\n", reducerPath)
+	err = client.Remove(reducerPath)
+	if err != nil {
+		rd.logger.Fatal(err)
 	}
 	rd.finished <- &reducerEvent{ctx: ctx}
 }

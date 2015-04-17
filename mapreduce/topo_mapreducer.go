@@ -44,9 +44,9 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 		numOfPrefix = t.NumOfShuffle / t.NumOfReducer
 		scopeL = t.NumOfMapper + t.NumOfShuffle%t.NumOfReducer*(shardQuotient+1)
 		scopeL += (taskID - t.NumOfMapper - t.NumOfShuffle - shardReminder) * shardQuotient
-		// default :
-		// 	numOfPrefix = t.NumOfReducer
-		// 	scopeL = t.NumberOfMapper + t.NumberOfShuffle
+	default :
+		numOfPrefix = t.NumOfReducer
+		scopeL = t.NumOfMapper + t.NumOfShuffle
 	}
 	t.prefix = make([]uint64, 0, numOfPrefix)
 	for index := scopeL; index < scopeL+numOfPrefix; index++ {
@@ -72,6 +72,9 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 			}
 		}
 	case taskID < t.NumOfMapper+t.NumOfShuffle+t.NumOfReducer:
+		numOfSuffix = 1
+		scopeL = t.NumOfMapper + t.NumOfReducer + t.NumOfShuffle
+	default :
 		numOfSuffix = 0
 	}
 
