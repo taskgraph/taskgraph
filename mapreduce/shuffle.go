@@ -100,7 +100,7 @@ func (sf *shuffleTask) run() {
 				shuffleWriteCloser.Write(data)
 			}
 			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
-
+			return
 		case metaMapperReady := <-sf.metaReady:
 
 			sf.preparedMapper[metaMapperReady.fromID] = true
@@ -152,6 +152,11 @@ func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 			str = str[:len(str) - 1]
 		}
 		sf.processKV(str)
+	}
+	sf.logger.Printf("%s removing..\n", shufflePath)
+	err = client.Remove(shufflePath)
+	if err != nil {
+		sf.logger.Fatal(err)
 	}
 	sf.finished <- &shuffleEvent{ctx: ctx}
 

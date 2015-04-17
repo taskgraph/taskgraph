@@ -60,7 +60,7 @@ func main() {
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
 	azureAccountKey := flag.String("azureAccountKey", "aaa", "azureAccountKey")
 	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreducepr2", "outputContainerName")
-	outputBlobName := flag.String("outputBlobName", "result.txt", "outputBlobName")
+	outputBlobName := flag.String("outputBlobName", "result5.txt", "outputBlobName")
 	// inputFileSource := flag.String("inputFileName", "input1.txt", "mapperInputFileName")
 	var q []map[string][]string
 	// /q = make(map[string][]string)
@@ -114,7 +114,7 @@ func main() {
 	switch *programType {
 	case "c":
 		log.Printf("controller")
-		ntask := *mapperNum + *shuffleNum + *reducerNum
+		ntask := *mapperNum + *shuffleNum + *reducerNum + 1
 		controller := controller.New(*job, etcd.NewClient(etcdURLs), uint64(ntask), []string{"Prefix", "Suffix"})
 		controller.Start()
 		controller.WaitForJobDone()

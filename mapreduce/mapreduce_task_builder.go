@@ -20,13 +20,19 @@ func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		} else {
 			return &mapperTask{}
 		}
-	} else if taskID < t.MapperNum+t.ShuffleNum {
+	} else if taskID < t.MapperNum + t.ShuffleNum {
 		return &shuffleTask{
 			// config: t.ShuffleConfig[taskID - t.MapperNum],
 		}
-	} else {
+	} else if taskID < t.MapperNum + t.ShuffleNum + t.ReducerNum{
 		return &reducerTask{
 			// config: t.ReducerConfig[taskID - t.MapperNum - t.ShuffleNum],
+		}
+	} else {
+		return &masterTask{
+			mapperNum : t.MapperNum,
+			shuffleNum : t.ShuffleNum,
+			reducerNum : t.ReducerNum,
 		}
 	}
 }

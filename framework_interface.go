@@ -4,8 +4,8 @@ import (
 	"log"
 
 	"github.com/golang/protobuf/proto"
+	"./filesystem"
 	"golang.org/x/net/context"
-	"github.com/taskgraph/taskgraph/filesystem"
 )
 
 // This interface is used by application during taskgraph configuration phase.
@@ -23,14 +23,14 @@ type Bootstrap interface {
 
 	// Initialize mapreduce configuration
 	InitWithMapreduceConfig(
-		mapperNum uint64, 
-		shuffleNum uint64, 
-		reducerNum uint64, 
+		mapperNum uint64,
+		shuffleNum uint64,
+		reducerNum uint64,
 		client filesystem.Client,
 		outputDirName string,
 		outputFileName string,
-		mapperFunc func (Framework, string),
-		reducerFunc func (Framework, string, []string),
+		mapperFunc func(Framework, string),
+		reducerFunc func(Framework, string, []string),
 	)
 }
 
@@ -70,7 +70,7 @@ type Framework interface {
 	// This is used for mapper to emit (key, value) pairs
 	Emit(key string, value string)
 
-	// This is used for reducer to output their (key, value) result 
+	// This is used for reducer to output their (key, value) result
 	Collect(key string, value string)
 
 	GetEpoch() uint64

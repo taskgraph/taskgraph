@@ -22,6 +22,7 @@ sleep 2
 sleep 2
 ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www9.txt &
 ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www10.txt &
+./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www11.txt &
  
 
 

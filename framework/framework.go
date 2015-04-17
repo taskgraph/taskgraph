@@ -11,7 +11,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"../../taskgraph"
-	"github.com/taskgraph/taskgraph/filesystem"
+	"../filesystem"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
