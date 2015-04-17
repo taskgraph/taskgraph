@@ -91,7 +91,6 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
 	}
 	value := fmt.Sprintf("%d-%s", epoch, meta)
-	f.log.Printf("etcdClient.Set failed; key: %s, value: %s, error: %v", etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
 	if err != nil {
 		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
@@ -155,7 +154,6 @@ func (f *framework) Emit(key string, val string) {
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
-	f.log.Printf(key + " " + val)
 	f.shuffleWriteCloser[toShuffle].Write(data)
 }
 

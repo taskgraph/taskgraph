@@ -69,7 +69,8 @@ func (rd *reducerTask) run() {
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
 			rd.logger.Println(rd.preparedShuffle, " ", rd.shuffleNum)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
-				rd.framework.IncEpoch(metaShuffleReady.ctx)
+				// rd.framework.IncEpoch(metaShuffleReady.ctx)
+				go rd.reducerProgress(metaShuffleReady.ctx)
 			}
 
 		case <-rd.exitChan:
@@ -86,9 +87,9 @@ func (rd *reducerTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (rd *reducerTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	rd.logger.Printf("doEnterEpoch, Reducer task %d, epoch %d", rd.taskID, epoch)
 	rd.epoch = epoch
-	if epoch == 2 {
-		go rd.reducerProgress(ctx)
-	}
+	// if epoch == 2 {
+	// 	go rd.reducerProgress(ctx)
+	// }
 }
 
 func (rd *reducerTask) reducerProgress(ctx context.Context) {

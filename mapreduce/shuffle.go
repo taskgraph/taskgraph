@@ -100,7 +100,6 @@ func (sf *shuffleTask) run() {
 				shuffleWriteCloser.Write(data)
 			}
 			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
-			// sf.Exit()
 
 		case metaMapperReady := <-sf.metaReady:
 
@@ -108,7 +107,8 @@ func (sf *shuffleTask) run() {
 			
 			if len(sf.preparedMapper) >= int(sf.mapNum) {
 				sf.logger.Println(len(sf.preparedMapper), sf.mapNum)
-				sf.framework.IncEpoch(metaMapperReady.ctx)
+				// sf.framework.IncEpoch(metaMapperReady.ctx)
+				go sf.shuffleProgress(metaMapperReady.ctx)
 			}
 
 		case <-sf.exitChan:
@@ -160,9 +160,9 @@ func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 func (sf *shuffleTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	sf.logger.Printf("doEnterEpoch, Shuffle task %d, epoch %d", sf.taskID, epoch)
 	sf.epoch = epoch
-	if epoch == 1 {
-		go sf.shuffleProgress(ctx)
-	}
+	// if epoch == 1 {
+	// 	go sf.shuffleProgress(ctx)
+	// }
 }
 
 func (sf *shuffleTask) MetaReady(ctx context.Context, fromID uint64, LinkType, meta string) {

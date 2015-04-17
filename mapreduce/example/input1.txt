@@ -1,3 +1,2 @@
-j4qgwvr1tzgfc4gp7xufexe5aqm16pan/a.txt
-j4qgwvr1tzgfc4gp7xufexe5aqm16pan/b.txt
-j4qgwvr1tzgfc4gp7xufexe5aqm16pan/b.txt
+testforcomplexmapreduceframework/textForExamination3
+testforcomplexmapreduceframework/textForExamination4
