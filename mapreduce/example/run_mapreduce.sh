@@ -5,7 +5,7 @@ ETCDBIN=$GOPATH/etcd-v2.0.5-darwin-amd64
 # clear etcd
 $ETCDBIN/etcdctl rm --recursive mapreduce+test/
 
-
+echo $azureAccountKey
 ./ex -job="mapreduce test" -type=c -azureAccountKey=$azureAccountKey > www.txt&
 
 # need to wait for controller to setup

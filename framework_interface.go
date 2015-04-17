@@ -26,10 +26,9 @@ type Bootstrap interface {
 		mapperNum uint64, 
 		shuffleNum uint64, 
 		reducerNum uint64, 
-		azureAccountName string, 
-		azureAccountKey string, 
-		outputContainerName string, 
-		outputBlobName string,
+		client filesystem.Client,
+		outputDirName string,
+		outputFileName string,
 		mapperFunc func (Framework, string),
 		reducerFunc func (Framework, string, []string),
 	)
@@ -76,13 +75,13 @@ type Framework interface {
 
 	GetEpoch() uint64
 
-	GetAzureClient() *filesystem.AzureClient
+	GetClient() filesystem.Client
 
 	GetMapperFunc() func(Framework, string)
 
 	GetReducerFunc() func(Framework, string, []string)
 
-	GetOutputContainerName() string
+	GetOutputDirName() string
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

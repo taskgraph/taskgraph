@@ -80,9 +80,9 @@ func (sf *shuffleTask) run() {
 		case shuffleDone := <-sf.finished:
 			
 			reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
-			reducerPath := sf.framework.GetOutputContainerName() + "/reducer" + strconv.FormatUint(reducerID, 10)
-			azureClient := sf.framework.GetAzureClient()
-			shuffleWriteCloser, err := azureClient.OpenWriteCloser(reducerPath)
+			reducerPath := sf.framework.GetOutputDirName() + "/reducer" + strconv.FormatUint(reducerID, 10)
+			client := sf.framework.GetClient()
+			shuffleWriteCloser, err := client.OpenWriteCloser(reducerPath)
 			if err != nil {
 				sf.logger.Fatalf("MapReduce : Mapper read Error, ", err)
 				return
@@ -131,9 +131,9 @@ func (sf *shuffleTask) processKV(str []byte) {
 }
 
 func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
-	azureClient := sf.framework.GetAzureClient()
-	shufflePath := sf.framework.GetOutputContainerName() + "/shuffle" + strconv.FormatUint(sf.taskID-sf.mapNum, 10)
-	shuffleReadCloser, err := azureClient.OpenReadCloser(shufflePath)
+	client := sf.framework.GetClient()
+	shufflePath := sf.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(sf.taskID-sf.mapNum, 10)
+	shuffleReadCloser, err := client.OpenReadCloser(shufflePath)
 	if err != nil {
 		sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return

@@ -62,9 +62,9 @@ type mapreduceConfig struct {
 	mapperNum uint64
 	shuffleNum uint64
 	reducerNum uint64
-	azureClient *filesystem.AzureClient
-	outputContainerName string
-	outputBlobName string
+	client filesystem.Client
+	outputDirName string
+	outputFileName string
 	shuffleWriteCloser []io.WriteCloser
 	outputWriter io.WriteCloser
 	mapperFunc func (taskgraph.Framework, string)
@@ -168,13 +168,13 @@ func (f *framework) GetShuffleNum() uint64 { return f.shuffleNum }
 
 func (f *framework) GetReducerNum() uint64 { return f.reducerNum }
 
-func (f *framework) GetAzureClient() *filesystem.AzureClient { return f.azureClient}
+func (f *framework) GetClient() filesystem.Client { return f.client}
 
 func (f *framework) GetMapperFunc() func(taskgraph.Framework, string) { return f.mapperFunc }
 
 func (f *framework) GetReducerFunc() func(taskgraph.Framework, string, []string) { return f.reducerFunc }
 
-func (f *framework) GetOutputContainerName() string { return f.outputContainerName }
+func (f *framework) GetOutputDirName() string { return f.outputDirName }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }
 

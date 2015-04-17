@@ -9,14 +9,19 @@ import (
 	"os"
 	"bufio"
 	"net"
-	"fmt"
+	// "fmt"
 
 	"github.com/coreos/go-etcd/etcd"
 	"../../controller"
 	"../../mapreduce"
 	"../../framework"
 	"../../../taskgraph"
+	"../../filesystem"
 )
+// azureAccountName string, 
+// 		azureAccountKey string, 
+// 		outputContainerName string, 
+// 		outputBlobName string,
 
 func mapperFunc(framework taskgraph.Framework, text string) {
 	textReader := bufio.NewReader(strings.NewReader(text))
@@ -53,7 +58,7 @@ func main() {
 	shuffleNum := flag.Int("shuffleNum", 5, "shuffleNum")
 	reducerNum := flag.Int("reducerNum", 2, "reducerNum")
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
-	azureAccountKey := flag.String("azureAccountKey", "", "azureAccountKey")
+	azureAccountKey := flag.String("azureAccountKey", "aaa", "azureAccountKey")
 	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreducepr2", "outputContainerName")
 	outputBlobName := flag.String("outputBlobName", "result.txt", "outputBlobName")
 	// inputFileSource := flag.String("inputFileName", "input1.txt", "mapperInputFileName")
@@ -85,7 +90,7 @@ func main() {
 	var ll *log.Logger
 	ll = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	etcdURLs := []string{"http://localhost:4001"} 
-	fmt.Println(mpFiles[0])
+	// fmt.Println(*azureAccountKey)
 	// fmt.Println(mpFiles[1])
 	flag.Parse()
 	if *job == "" {
@@ -94,6 +99,18 @@ func main() {
 	if *azureAccountKey == "" {
 		log.Fatalf("Please specify azureAccountKey")
 	}
+	azureClient, err := filesystem.NewAzureClient(
+		*azureAccountName,
+		*azureAccountKey, 
+		"core.chinacloudapi.cn",
+		"2014-02-14",
+		true,
+	)
+	if (err != nil) {
+		log.Fatalf("%v", err)
+	}
+	
+	
 	switch *programType {
 	case "c":
 		log.Printf("controller")
@@ -116,8 +133,7 @@ func main() {
 			uint64(*mapperNum), 
 			uint64(*shuffleNum), 
 			uint64(*reducerNum), 
-			*azureAccountName,
-			*azureAccountKey,
+			azureClient,
 			*outputContainerName,
 			*outputBlobName,
 			mapperFunc,
