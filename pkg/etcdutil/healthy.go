@@ -86,7 +86,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 	var resp *etcd.Response
 	select {
 	case resp = <-respChan:
-	case <-time.After(10 * time.Second):
+	case <-time.After(100 * time.Second):
 		return 0, fmt.Errorf("WaitFailure timeout!")
 	}
 	idStr := path.Base(resp.Node.Key)

@@ -1,4 +1,4 @@
-package framework
+package mapreduceFramework
 
 import (
 	"time"
@@ -10,7 +10,7 @@ var (
 	heartbeatInterval = 1 * time.Second
 )
 
-func (f *framework) heartbeat() {
+func (f *mapreducerFramework) heartbeat() {
 	f.globalStop = make(chan struct{})
 	go func() {
 		err := etcdutil.Heartbeat(f.etcdClient, f.name, f.taskID, heartbeatInterval, f.globalStop)

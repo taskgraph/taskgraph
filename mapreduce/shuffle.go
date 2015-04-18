@@ -1,17 +1,17 @@
 package mapreduce
 
 import (
+	"../../taskgraph"
+	pb "./proto"
 	"bufio"
 	"encoding/json"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"io"
 	"log"
 	"os"
 	"strconv"
-	pb "./proto"
-	"../../taskgraph"
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 type shuffleTask struct {
@@ -19,7 +19,7 @@ type shuffleTask struct {
 	taskID           uint64
 	topo             taskgraph.Topology
 	logger           *log.Logger
-	framework        taskgraph.Framework
+	framework        taskgraph.MapreduceFramework
 	config           map[string]string
 	mapNum           uint64
 	desReducerTaskId uint64
@@ -49,14 +49,14 @@ type mapperEmitKV struct {
 	Value string `json:"value"`
 }
 
-func (sf *shuffleTask) Init(taskID uint64, framework taskgraph.Framework) {
+func (sf *shuffleTask) Init(taskID uint64, framework taskgraph.MapreduceFramework) {
 
 	sf.epoch = framework.GetEpoch()
 	sf.framework = framework
 	sf.logger = log.New(os.Stdout, "\r\n", log.Ldate|log.Ltime|log.Lshortfile)
 	// sf.logger.Println(sf.framework.GetTopology().GetNeighbors("Prefix", sf.epoch)))
 	sf.mapNum = uint64(len(sf.framework.GetTopology().GetNeighbors("Prefix", sf.epoch)))
-	
+
 	// sf.mapNum = framework.GetMapperNum()
 	sf.taskID = taskID
 	sf.preparedMapper = make(map[uint64]bool)
@@ -77,14 +77,13 @@ func (sf *shuffleTask) run() {
 			sf.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case shuffleDone := <-sf.finished:
-			
+
 			// reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
 			reducerPath := sf.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(sf.taskID, 10)
 			client := sf.framework.GetClient()
 			shuffleWriteCloser, err := client.OpenWriteCloser(reducerPath)
 			if err != nil {
 				sf.logger.Fatalf("MapReduce : Mapper read Error, ", err)
-				return
 			}
 			for k := range sf.shuffleContainer {
 				block := &shuffleEmit{
@@ -93,21 +92,19 @@ func (sf *shuffleTask) run() {
 				}
 				data, err := json.Marshal(block)
 				if err != nil {
-					sf.logger.Printf("Shuffle Emit json error, %v\n", err)
+					sf.logger.Fatalf("Shuffle Emit json error, %v\n", err)
 				}
 				data = append(data, '\n')
 				shuffleWriteCloser.Write(data)
 			}
 			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
 			sf.framework.Kill()
-			
+
 		case metaMapperReady := <-sf.metaReady:
 
 			sf.preparedMapper[metaMapperReady.fromID] = true
-			
+
 			if len(sf.preparedMapper) >= int(sf.mapNum) {
-				sf.logger.Println(len(sf.preparedMapper), sf.mapNum)
-				// sf.framework.IncEpoch(metaMapperReady.ctx)
 				go sf.shuffleProgress(metaMapperReady.ctx)
 			}
 
@@ -123,7 +120,6 @@ func (sf *shuffleTask) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (sf *shuffleTask) processKV(str []byte) {
-	// tmpKV, err := strings.Split(str, " ")
 	var tp mapperEmitKV
 	if err := json.Unmarshal([]byte(str), &tp); err == nil {
 		sf.shuffleContainer[tp.Key] = append(sf.shuffleContainer[tp.Key], tp.Value)
@@ -138,20 +134,18 @@ func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 		shuffleReadCloser, err := client.OpenReadCloser(shufflePath)
 		if err != nil {
 			sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
-			return
 		}
 		bufioReader := bufio.NewReader(shuffleReadCloser)
 		var str []byte
 		err = nil
 		for err != io.EOF {
 			str, err = bufioReader.ReadBytes('\n')
-			
+
 			if err != io.EOF && err != nil {
 				sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
-				return
 			}
 			if err != io.EOF {
-				str = str[:len(str) - 1]
+				str = str[:len(str)-1]
 			}
 			sf.processKV(str)
 		}
@@ -177,7 +171,7 @@ func (sf *shuffleTask) MetaReady(ctx context.Context, fromID uint64, LinkType, m
 	sf.metaReady <- &shuffleEvent{ctx: ctx, fromID: fromID}
 }
 
-func (sf *shuffleTask) CreateServer() *grpc.Server { 
+func (sf *shuffleTask) CreateServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterMapreduceServer(server, sf)
 	return server

@@ -5,8 +5,8 @@ at any give node. It should be called only once at node initialization.
 */
 package taskgraph
 
-type TaskBuilder interface {
+type MapreduceTaskBuilder interface {
 	// This method is called once by framework implementation to get the
 	// right task implementation for given node/task.
-	GetTask(taskID uint64) Task
+	GetTask(taskID uint64) MapreduceTask
 }

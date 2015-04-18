@@ -9,14 +9,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	// "github.com/taskgraph/taskgraph/filesystem"
-	pb "./proto"
 	"../../taskgraph"
+	pb "./proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 type mapperTask struct {
-	framework taskgraph.Framework
+	framework taskgraph.MapreduceFramework
 	epoch     uint64
 	logger    *log.Logger
 	taskID    uint64
@@ -37,12 +37,11 @@ type mapperEvent struct {
 	// response proto.Message
 }
 
-func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
+func (mp *mapperTask) Init(taskID uint64, framework taskgraph.MapreduceFramework) {
 
 	mp.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	mp.taskID = taskID
 	mp.framework = framework
-	
 
 	//channel init
 	mp.epochChange = make(chan *mapperEvent, 1)
@@ -51,7 +50,6 @@ func (mp *mapperTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.exitChan = make(chan struct{})
 	mp.fileUpdate = make(chan *mapperEvent, 1)
 
-	
 	go mp.run()
 }
 
@@ -78,8 +76,7 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 	for i := 0; i < fileNum; i++ {
 		mapperReaderCloser, err := client.OpenReadCloser(files[i])
 		if err != nil {
-			mp.logger.Panicf("MapReduce : get azure storage client reader failed, ", err)
-			return
+			mp.logger.Fatalf("MapReduce : get azure storage client reader failed, ", err)
 		}
 		err = nil
 
@@ -89,20 +86,18 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 			str, err = bufioReader.ReadString('\n')
 
 			if err != io.EOF && err != nil {
-				mp.logger.Panicf("MapReduce : Mapper read Error, ", err)
-				return
+				mp.logger.Fatalf("MapReduce : Mapper read Error, ", err)
 			}
 			if err != io.EOF {
 				str = str[:len(str)-1]
 			}
 			mapperFunc := mp.framework.GetMapperFunc()
-			mp.logger.Println(str)
 			mapperFunc(mp.framework, str)
 		}
 		mapperReaderCloser.Close()
 	}
 	mp.logger.Println("FileRead finished")
-	mp.fileUpdate <- &mapperEvent{ctx : ctx, epoch : mp.epoch}
+	mp.fileUpdate <- &mapperEvent{ctx: ctx, epoch: mp.epoch}
 }
 
 // At present, epoch is not a required parameter for mapper
@@ -114,8 +109,6 @@ func (mp *mapperTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (mp *mapperTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	mp.logger.Printf("doEnterEpoch, Mapper task %d, epoch %d", mp.taskID, epoch)
 	mp.epoch = epoch
-	mp.logger.Printf("go fileReader, Mapper task %d", mp.taskID)
-	mp.logger.Println(mp.config["files"][0])
 	if epoch == 0 {
 		go mp.fileRead(ctx)
 	}
@@ -126,11 +119,11 @@ func (mp *mapperTask) Exit() {
 	close(mp.exitChan)
 }
 
-func (mp *mapperTask) CreateServer() *grpc.Server { 
+func (mp *mapperTask) CreateServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterMapreduceServer(server, mp)
 	return server
-	
+
 }
 
 func (mp *mapperTask) CreateOutputMessage(method string) proto.Message { return nil }
