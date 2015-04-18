@@ -3,6 +3,10 @@ package mapreduce
 import (
 	"log"
 	"os"
+	"io"
+	"bufio"
+	"strconv"
+
 	pb "./proto"
 	"../../taskgraph"
 	"github.com/golang/protobuf/proto"
@@ -64,6 +68,8 @@ func (m *masterTask) run() {
 
 		case metaReady := <-m.metaReady:
 			m.finishedReducer[metaReady.fromID] = true
+			m.processReducerOut(metaReady.fromID)
+			
 			if len(m.finishedReducer) >= int(m.reducerNum) {
 				m.framework.ShutdownJob()
 			}
@@ -72,6 +78,34 @@ func (m *masterTask) run() {
 			return
 
 		}
+	}
+}
+
+func (m *masterTask) processReducerOut(taskID uint64) {
+	client := m.framework.GetClient()
+	reducerPath := m.framework.GetOutputDirName() + "/" + "reducerResult" + strconv.FormatUint(taskID, 10)
+	reducerReadCloser, err := client.OpenReadCloser(reducerPath)
+	outputCloser, err := client.OpenWriteCloser(m.framework.GetOutputDirName() + "/" + m.framework.GetOutputFileName())
+	if err != nil {
+		m.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
+		return
+	}
+	bufioReader := bufio.NewReader(reducerReadCloser)
+	var str []byte
+	err = nil
+	for err != io.EOF {
+		str, err = bufioReader.ReadBytes('\n')
+		
+		if err != io.EOF && err != nil {
+			m.logger.Fatalf("MapReduce : Master read Error, ", err)
+			return
+		}
+		outputCloser.Write(str)
+	}
+	m.logger.Printf("%s removing..\n", reducerPath)
+	err = client.Remove(reducerPath)
+	if err != nil {
+		m.logger.Fatal(err)
 	}
 }
 

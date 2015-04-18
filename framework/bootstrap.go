@@ -52,21 +52,21 @@ func (f *framework) InitWithMapreduceConfig(
     f.client = client
     f.outputWriter, err = f.client.OpenWriteCloser(outputDirName + "/" + outputFileName)
     if err != nil {
-		f.log.Fatalf("Create azure storage client writeCloser failed, error : %v", err)
+		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 		return
 	}
 	f.mapperFunc = mapperFunc
     f.reducerFunc = reducerFunc
-    for i := 0; i < int(f.shuffleNum); i++ {
-		shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
+  //   for i := 0; i < int(f.shuffleNum); i++ {
+		// shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
 
-		shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
-		if err != nil {
-			f.log.Fatalf("Create azure stroage client writeCloser failed, error : %v", err)
-			return
-		}
-		f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)		
-    }
+		// shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
+		// if err != nil {
+		// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+		// 	return
+		// }
+		// f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)		
+  //   }
 }
 
 

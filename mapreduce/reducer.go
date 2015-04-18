@@ -63,13 +63,15 @@ func (rd *reducerTask) run() {
 
 		case reducerDone := <-rd.finished:
 			rd.framework.FlagMeta(reducerDone.ctx, "Prefix", "metaReady")
-			return
+			rd.framework.Kill()
 
 		case metaShuffleReady := <-rd.metaReady:
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
+			rd.reducerProgress(metaShuffleReady.fromID)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
 				// rd.chframework.IncEpoch(metaShuffleReady.ctx)
-				go rd.reducerProgress(metaShuffleReady.ctx)
+				//go rd.reducerProgress(metaShuffleReady.ctx)
+				rd.finished <- &reducerEvent{ctx: metaShuffleReady.ctx}
 			}
 
 		case <-rd.exitChan:
@@ -91,8 +93,8 @@ func (rd *reducerTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	// }
 }
 
-func (rd *reducerTask) reducerProgress(ctx context.Context) {
-	reducerPath := rd.framework.GetOutputDirName() + "/reducer" + strconv.FormatUint(rd.taskID, 10)
+func (rd *reducerTask) reducerProgress(fromID uint64) {
+	reducerPath := rd.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(fromID, 10)
 	client := rd.framework.GetClient()
 	reducerReadCloser, err := client.OpenReadCloser(reducerPath)
 	rd.logger.Println("in reduce Progress")
@@ -121,7 +123,7 @@ func (rd *reducerTask) reducerProgress(ctx context.Context) {
 	if err != nil {
 		rd.logger.Fatal(err)
 	}
-	rd.finished <- &reducerEvent{ctx: ctx}
+	
 }
 
 func (rd *reducerTask) processKV(str []byte) {
