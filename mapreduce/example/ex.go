@@ -32,6 +32,9 @@ func mapperFunc(framework taskgraph.Framework, text string) {
 		if err != io.EOF && err != nil {
 			return
 		}
+		if err != io.EOF {
+			str = str[:len(str) - 1]
+		}
 		framework.Emit(str, "1")
 	}
 }
@@ -59,8 +62,8 @@ func main() {
 	reducerNum := flag.Int("reducerNum", 2, "reducerNum")
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
 	azureAccountKey := flag.String("azureAccountKey", "aaa", "azureAccountKey")
-	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreducepr2", "outputContainerName")
-	outputBlobName := flag.String("outputBlobName", "result5.txt", "outputBlobName")
+	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreducep12", "outputContainerName")
+	outputBlobName := flag.String("outputBlobName", "result1.txt", "outputBlobName")
 	// inputFileSource := flag.String("inputFileName", "input1.txt", "mapperInputFileName")
 	var q []map[string][]string
 	// /q = make(map[string][]string)

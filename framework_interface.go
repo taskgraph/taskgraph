@@ -82,6 +82,8 @@ type Framework interface {
 	GetReducerFunc() func(Framework, string, []string)
 
 	GetOutputDirName() string
+
+	GetOutputFileName() string
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

@@ -25,7 +25,6 @@ type shuffleTask struct {
 	desReducerTaskId uint64
 	preparedMapper   map[uint64]bool
 	shuffleContainer map[string][]string
-	mapperNum        uint64
 
 	epochChange chan *shuffleEvent
 	dataReady   chan *shuffleEvent
@@ -79,8 +78,8 @@ func (sf *shuffleTask) run() {
 
 		case shuffleDone := <-sf.finished:
 			
-			reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
-			reducerPath := sf.framework.GetOutputDirName() + "/reducer" + strconv.FormatUint(reducerID, 10)
+			// reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
+			reducerPath := sf.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(sf.taskID, 10)
 			client := sf.framework.GetClient()
 			shuffleWriteCloser, err := client.OpenWriteCloser(reducerPath)
 			if err != nil {
@@ -100,7 +99,8 @@ func (sf *shuffleTask) run() {
 				shuffleWriteCloser.Write(data)
 			}
 			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
-			return
+			sf.framework.Kill()
+			
 		case metaMapperReady := <-sf.metaReady:
 
 			sf.preparedMapper[metaMapperReady.fromID] = true
@@ -131,32 +131,35 @@ func (sf *shuffleTask) processKV(str []byte) {
 }
 
 func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
-	client := sf.framework.GetClient()
-	shufflePath := sf.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(sf.taskID-sf.mapNum, 10)
-	shuffleReadCloser, err := client.OpenReadCloser(shufflePath)
-	if err != nil {
-		sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
-		return
-	}
-	bufioReader := bufio.NewReader(shuffleReadCloser)
-	var str []byte
-	err = nil
-	for err != io.EOF {
-		str, err = bufioReader.ReadBytes('\n')
-		
-		if err != io.EOF && err != nil {
-			sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
+	var i uint64
+	for i = 0; i < sf.mapNum; i++ {
+		client := sf.framework.GetClient()
+		shufflePath := sf.framework.GetOutputDirName() + "/" + strconv.FormatUint(i, 10) + "mapper" + strconv.FormatUint(sf.taskID-sf.mapNum, 10)
+		shuffleReadCloser, err := client.OpenReadCloser(shufflePath)
+		if err != nil {
+			sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 			return
 		}
-		if err != io.EOF {
-			str = str[:len(str) - 1]
+		bufioReader := bufio.NewReader(shuffleReadCloser)
+		var str []byte
+		err = nil
+		for err != io.EOF {
+			str, err = bufioReader.ReadBytes('\n')
+			
+			if err != io.EOF && err != nil {
+				sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
+				return
+			}
+			if err != io.EOF {
+				str = str[:len(str) - 1]
+			}
+			sf.processKV(str)
 		}
-		sf.processKV(str)
-	}
-	sf.logger.Printf("%s removing..\n", shufflePath)
-	err = client.Remove(shufflePath)
-	if err != nil {
-		sf.logger.Fatal(err)
+		sf.logger.Printf("%s removing..\n", shufflePath)
+		err = client.Remove(shufflePath)
+		if err != nil {
+			sf.logger.Fatal(err)
+		}
 	}
 	sf.finished <- &shuffleEvent{ctx: ctx}
 

@@ -63,7 +63,7 @@ func (mp *mapperTask) run() {
 
 		case mapperDone := <-mp.fileUpdate:
 			mp.framework.FlagMeta(mapperDone.ctx, "Prefix", "metaReady")
-			return
+			mp.framework.Kill()
 		case <-mp.exitChan:
 			return
 		}
@@ -93,7 +93,7 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 				return
 			}
 			if err != io.EOF {
-				str = str[:len(str)]
+				str = str[:len(str)-1]
 			}
 			mapperFunc := mp.framework.GetMapperFunc()
 			mp.logger.Println(str)

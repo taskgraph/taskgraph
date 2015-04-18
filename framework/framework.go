@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"hash/fnv"
+	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
 	"../../taskgraph"
@@ -154,12 +155,23 @@ func (f *framework) Emit(key string, val string) {
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
-	f.shuffleWriteCloser[toShuffle].Write(data)
+	shufflePath := f.outputDirName + "/" + strconv.FormatUint(f.taskID, 10) + "mapper" + strconv.FormatUint(uint64(toShuffle), 10);
+
+	shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
+	if err != nil {
+		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+	}
+	f.log.Println(key, " ", val, " ", toShuffle)
+	shuffleWriteCloserNow.Write(data)
 }
 
 func (f *framework) Collect(key string, val string) {
-	f.log.Printf(key + " " + val)
-	f.outputWriter.Write([]byte(key + " " + val + "\n"));
+	outputWriter, err := f.client.OpenWriteCloser(f.outputDirName + "/" + "reducerResult" + strconv.FormatUint(f.taskID, 10))
+	if err != nil {
+		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+	}
+	f.log.Println(key, " ", val)
+	outputWriter.Write([]byte(key + " " + val + "\n"));
 }
 
 func (f *framework) GetMapperNum() uint64 { return f.mapperNum }
@@ -175,6 +187,8 @@ func (f *framework) GetMapperFunc() func(taskgraph.Framework, string) { return f
 func (f *framework) GetReducerFunc() func(taskgraph.Framework, string, []string) { return f.reducerFunc }
 
 func (f *framework) GetOutputDirName() string { return f.outputDirName }
+
+func (f *framework) GetOutputFileName() string { return f.outputFileName }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }
 
