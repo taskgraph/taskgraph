@@ -1,21 +1,21 @@
 package mapreduce
 
 import (
+	"../../taskgraph"
+	pb "./proto"
 	"bufio"
 	"encoding/json"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"io"
 	"log"
 	"os"
 	"strconv"
-	pb "./proto"
-	"../../taskgraph"
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 type reducerTask struct {
-	framework       taskgraph.Framework
+	framework       taskgraph.MapreduceFramework
 	epoch           uint64
 	logger          *log.Logger
 	taskID          uint64
@@ -37,7 +37,7 @@ type reducerEvent struct {
 	fromID uint64
 }
 
-func (rd *reducerTask) Init(taskID uint64, framework taskgraph.Framework) {
+func (rd *reducerTask) Init(taskID uint64, framework taskgraph.MapreduceFramework) {
 	rd.taskID = taskID
 	rd.framework = framework
 	rd.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -69,8 +69,6 @@ func (rd *reducerTask) run() {
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
 			rd.reducerProgress(metaShuffleReady.fromID)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
-				// rd.chframework.IncEpoch(metaShuffleReady.ctx)
-				//go rd.reducerProgress(metaShuffleReady.ctx)
 				rd.finished <- &reducerEvent{ctx: metaShuffleReady.ctx}
 			}
 
@@ -88,22 +86,18 @@ func (rd *reducerTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (rd *reducerTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	rd.logger.Printf("doEnterEpoch, Reducer task %d, epoch %d", rd.taskID, epoch)
 	rd.epoch = epoch
-	// if epoch == 2 {
-	// 	go rd.reducerProgress(ctx)
-	// }
 }
 
 func (rd *reducerTask) reducerProgress(fromID uint64) {
 	reducerPath := rd.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(fromID, 10)
 	client := rd.framework.GetClient()
 	reducerReadCloser, err := client.OpenReadCloser(reducerPath)
-	rd.logger.Println("in reduce Progress")
 	if err != nil {
 		rd.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
 	}
 	bufioReader := bufio.NewReader(reducerReadCloser)
-	var str []byte 
+	var str []byte
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
@@ -114,7 +108,7 @@ func (rd *reducerTask) reducerProgress(fromID uint64) {
 		}
 
 		if err != io.EOF {
-			str = str[:len(str)]			
+			str = str[:len(str)]
 		}
 		rd.processKV(str)
 	}
@@ -123,7 +117,7 @@ func (rd *reducerTask) reducerProgress(fromID uint64) {
 	if err != nil {
 		rd.logger.Fatal(err)
 	}
-	
+
 }
 
 func (rd *reducerTask) processKV(str []byte) {
@@ -138,7 +132,7 @@ func (rd *reducerTask) MetaReady(ctx context.Context, fromID uint64, LinkType, m
 	rd.metaReady <- &reducerEvent{ctx: ctx, fromID: fromID}
 }
 
-func (rd *reducerTask) CreateServer() *grpc.Server { 
+func (rd *reducerTask) CreateServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterMapreduceServer(server, rd)
 	return server

@@ -1,30 +1,30 @@
 package mapreduce
 
 import (
+	"bufio"
+	"io"
 	"log"
 	"os"
-	"io"
-	"bufio"
 	"strconv"
 
-	pb "./proto"
 	"../../taskgraph"
+	pb "./proto"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 type masterTask struct {
-	framework       taskgraph.Framework
-	epoch           uint64
-	logger          *log.Logger
-	taskID          uint64
-	numOfTasks      uint64
-	mapperNum uint64
-	shuffleNum uint64 
+	framework  taskgraph.MapreduceFramework
+	epoch      uint64
+	logger     *log.Logger
+	taskID     uint64
+	numOfTasks uint64
+	mapperNum  uint64
+	shuffleNum uint64
 	reducerNum uint64
-	
-	finishedMapper map[uint64]bool
+
+	finishedMapper  map[uint64]bool
 	finishedShuffle map[uint64]bool
 	finishedReducer map[uint64]bool
 	config          map[string]string
@@ -42,12 +42,12 @@ type masterEvent struct {
 	fromID uint64
 }
 
-func (m *masterTask) Init(taskID uint64, framework taskgraph.Framework) {
+func (m *masterTask) Init(taskID uint64, framework taskgraph.MapreduceFramework) {
 	m.taskID = taskID
 	m.framework = framework
 	m.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	m.epoch = framework.GetEpoch()
-	
+
 	m.finishedMapper = make(map[uint64]bool)
 	m.finishedShuffle = make(map[uint64]bool)
 	m.finishedReducer = make(map[uint64]bool)
@@ -69,7 +69,7 @@ func (m *masterTask) run() {
 		case metaReady := <-m.metaReady:
 			m.finishedReducer[metaReady.fromID] = true
 			m.processReducerOut(metaReady.fromID)
-			
+
 			if len(m.finishedReducer) >= int(m.reducerNum) {
 				m.framework.ShutdownJob()
 			}
@@ -95,7 +95,7 @@ func (m *masterTask) processReducerOut(taskID uint64) {
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
-		
+
 		if err != io.EOF && err != nil {
 			m.logger.Fatalf("MapReduce : Master read Error, ", err)
 			return
@@ -122,7 +122,7 @@ func (m *masterTask) MetaReady(ctx context.Context, fromID uint64, LinkType, met
 	m.metaReady <- &masterEvent{ctx: ctx, fromID: fromID}
 }
 
-func (m *masterTask) CreateServer() *grpc.Server { 
+func (m *masterTask) CreateServer() *grpc.Server {
 	server := grpc.NewServer()
 	pb.RegisterMapreduceServer(server, m)
 	return server
@@ -130,7 +130,8 @@ func (m *masterTask) CreateServer() *grpc.Server {
 
 func (m *masterTask) CreateOutputMessage(method string) proto.Message { return nil }
 
-func (m *masterTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
+func (m *masterTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+}
 
 func (m *masterTask) Exit() {
 	close(m.exitChan)

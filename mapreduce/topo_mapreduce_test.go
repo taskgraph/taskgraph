@@ -87,6 +87,5 @@ func TestMapReduceTopology(t *testing.T) {
 	if m[0] != 1 {
 		t.Error(m[0])
 	}
-	
 
 }

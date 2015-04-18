@@ -1,29 +1,30 @@
-package main 
+package main
 
 import (
+	"bufio"
 	"flag"
+	"io"
 	"log"
+	"net"
+	"os"
 	"strconv"
 	"strings"
-	"io"
-	"os"
-	"bufio"
-	"net"
 	// "fmt"
 
-	"github.com/coreos/go-etcd/etcd"
-	"../../controller"
-	"../../mapreduce"
-	"../../framework"
 	"../../../taskgraph"
+	"../../controller"
 	"../../filesystem"
+	"../../mapreduce"
+	"../../mapreduceFramework"
+	"github.com/coreos/go-etcd/etcd"
 )
-// azureAccountName string, 
-// 		azureAccountKey string, 
-// 		outputContainerName string, 
+
+// azureAccountName string,
+// 		azureAccountKey string,
+// 		outputContainerName string,
 // 		outputBlobName string,
 
-func mapperFunc(framework taskgraph.Framework, text string) {
+func mapperFunc(framework taskgraph.MapreduceFramework, text string) {
 	textReader := bufio.NewReader(strings.NewReader(text))
 	var err error
 	var str string
@@ -33,13 +34,13 @@ func mapperFunc(framework taskgraph.Framework, text string) {
 			return
 		}
 		if err != io.EOF {
-			str = str[:len(str) - 1]
+			str = str[:len(str)-1]
 		}
 		framework.Emit(str, "1")
 	}
 }
 
-func reducerFunc(framework taskgraph.Framework, key string, val []string) {
+func reducerFunc(framework taskgraph.MapreduceFramework, key string, val []string) {
 	lenVal := len(val)
 	var sum int
 	for v := 0; v < lenVal; v++ {
@@ -79,20 +80,20 @@ func main() {
 		var str string
 		for err != io.EOF {
 			str, err = fileRead.ReadString('\n')
-			
+
 			if err != io.EOF && err != nil {
 				log.Fatal("read error ", err)
 			}
 			if err != io.EOF {
-				str = str[:len(str) - 1]
+				str = str[:len(str)-1]
 			}
 			mpFiles = append(mpFiles, str)
 		}
-		q = append(q, map[string][]string{ "files" : mpFiles})
+		q = append(q, map[string][]string{"files": mpFiles})
 	}
 	var ll *log.Logger
 	ll = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-	etcdURLs := []string{"http://localhost:4001"} 
+	etcdURLs := []string{"http://localhost:4001"}
 	// fmt.Println(*azureAccountKey)
 	// fmt.Println(mpFiles[1])
 	flag.Parse()
@@ -104,16 +105,15 @@ func main() {
 	}
 	azureClient, err := filesystem.NewAzureClient(
 		*azureAccountName,
-		*azureAccountKey, 
+		*azureAccountKey,
 		"core.chinacloudapi.cn",
 		"2014-02-14",
 		true,
 	)
-	if (err != nil) {
+	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	
-	
+
 	switch *programType {
 	case "c":
 		log.Printf("controller")
@@ -123,19 +123,19 @@ func main() {
 		controller.WaitForJobDone()
 	case "t":
 		log.Printf("task")
-		bootstrap := framework.NewBootStrap(*job, etcdURLs, createListener(), ll)
+		bootstrap := mapreduceFramework.NewBootStrap(*job, etcdURLs, createListener(), ll)
 		taskBuilder := &mapreduce.MapreduceTaskBuilder{
-			MapperConfig: q, 
-			MapperNum : uint64(*mapperNum),
-			ShuffleNum : uint64(*shuffleNum),
-			ReducerNum : uint64(*reducerNum),
+			MapperConfig: q,
+			MapperNum:    uint64(*mapperNum),
+			ShuffleNum:   uint64(*shuffleNum),
+			ReducerNum:   uint64(*reducerNum),
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
 		bootstrap.SetTopology(mapreduce.NewMapReduceTopology(uint64(*mapperNum), uint64(*shuffleNum), uint64(*reducerNum)))
 		bootstrap.InitWithMapreduceConfig(
-			uint64(*mapperNum), 
-			uint64(*shuffleNum), 
-			uint64(*reducerNum), 
+			uint64(*mapperNum),
+			uint64(*shuffleNum),
+			uint64(*reducerNum),
 			azureClient,
 			*outputContainerName,
 			*outputBlobName,
@@ -145,7 +145,7 @@ func main() {
 		bootstrap.Start()
 	default:
 		log.Fatal("Please choose a type: (c) controller, (t) task")
-	} 
+	}
 }
 
 func createListener() net.Listener {
@@ -155,4 +155,3 @@ func createListener() net.Listener {
 	}
 	return l
 }
-

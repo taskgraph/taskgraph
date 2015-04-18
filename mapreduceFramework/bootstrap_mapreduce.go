@@ -1,4 +1,4 @@
-package framework
+package mapreduceFramework
 
 import (
 	"fmt"
@@ -8,16 +8,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/coreos/go-etcd/etcd"
 	"../../taskgraph"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"../filesystem"
+	"github.com/coreos/go-etcd/etcd"
+	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
 // One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
-	return &framework{
+func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.MapreduceBootstrap {
+	return &mapreducerFramework{
 		name:     jobName,
 		etcdURLs: etcdURLs,
 		ln:       ln,
@@ -25,22 +25,22 @@ func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *lo
 	}
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
+func (f *mapreducerFramework) SetTaskBuilder(taskBuilder taskgraph.MapreduceTaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
+func (f *mapreducerFramework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
 // Initialize Mapreduce configuration
-func (f *framework) InitWithMapreduceConfig(
-	mapperNum uint64, 
-	shuffleNum uint64, 
-	reducerNum uint64, 
+func (f *mapreducerFramework) InitWithMapreduceConfig(
+	mapperNum uint64,
+	shuffleNum uint64,
+	reducerNum uint64,
 	client filesystem.Client,
 	outputDirName string,
 	outputFileName string,
-	mapperFunc func (taskgraph.Framework, string),
-	reducerFunc func (taskgraph.Framework, string, []string),
+	mapperFunc func(taskgraph.MapreduceFramework, string),
+	reducerFunc func(taskgraph.MapreduceFramework, string, []string),
 
 ) {
 	var err error
@@ -48,29 +48,28 @@ func (f *framework) InitWithMapreduceConfig(
 	f.shuffleNum = shuffleNum
 	f.reducerNum = reducerNum
 	f.outputDirName = outputDirName
-    f.outputFileName = outputFileName
-    f.client = client
-    f.outputWriter, err = f.client.OpenWriteCloser(outputDirName + "/" + outputFileName)
-    if err != nil {
+	f.outputFileName = outputFileName
+	f.client = client
+	f.outputWriter, err = f.client.OpenWriteCloser(outputDirName + "/" + outputFileName)
+	if err != nil {
 		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 		return
 	}
 	f.mapperFunc = mapperFunc
-    f.reducerFunc = reducerFunc
-  //   for i := 0; i < int(f.shuffleNum); i++ {
-		// shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
+	f.reducerFunc = reducerFunc
+	//   for i := 0; i < int(f.shuffleNum); i++ {
+	// shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
 
-		// shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
-		// if err != nil {
-		// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
-		// 	return
-		// }
-		// f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)		
-  //   }
+	// shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
+	// if err != nil {
+	// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+	// 	return
+	// }
+	// f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)
+	//   }
 }
 
-
-func (f *framework) Start() {
+func (f *mapreducerFramework) Start() {
 	var err error
 
 	if f.log == nil {
@@ -113,7 +112,7 @@ func (f *framework) Start() {
 	f.task.Exit()
 }
 
-func (f *framework) setup() {
+func (f *mapreducerFramework) setup() {
 	f.globalStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 1)
 	f.dataReqtoSendChan = make(chan *dataRequest, 1)
@@ -121,7 +120,7 @@ func (f *framework) setup() {
 	f.epochCheckChan = make(chan *epochCheck, 1)
 }
 
-func (f *framework) run() {
+func (f *mapreducerFramework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
@@ -173,7 +172,7 @@ func (f *framework) run() {
 	}
 }
 
-func (f *framework) setEpochStarted() {
+func (f *mapreducerFramework) setEpochStarted() {
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
@@ -187,7 +186,7 @@ func (f *framework) setEpochStarted() {
 	}
 }
 
-func (f *framework) releaseEpochResource() {
+func (f *mapreducerFramework) releaseEpochResource() {
 	f.userCtxCancel()
 	for _, c := range f.metaStops {
 		c <- true
@@ -196,7 +195,7 @@ func (f *framework) releaseEpochResource() {
 }
 
 // release resources: heartbeat, epoch watch.
-func (f *framework) releaseResource() {
+func (f *mapreducerFramework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
 	f.epochWatchStop <- true
 	close(f.globalStop)
@@ -204,7 +203,7 @@ func (f *framework) releaseResource() {
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
-func (f *framework) occupyTask() error {
+func (f *mapreducerFramework) occupyTask() error {
 	for {
 		freeTask, err := etcdutil.WaitFreeTask(f.etcdClient, f.name, f.log)
 		if err != nil {
@@ -223,7 +222,7 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
+func (f *mapreducerFramework) watchMeta(linkType string, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
 	f.log.Println(f.taskID, linkType, taskIDs)
 	for i, taskID := range taskIDs {
@@ -264,7 +263,7 @@ func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
+func (f *mapreducerFramework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {

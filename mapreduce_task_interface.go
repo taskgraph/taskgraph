@@ -11,9 +11,9 @@ import (
 // Each task has exact one master Node and might have multiple salve Nodes.
 
 // All event handler functions and should be non-blocking.
-type Task interface {
+type MapreduceTask interface {
 	// This is useful to bring the task up to speed from scratch or if it recovers.
-	Init(taskID uint64, framework Framework)
+	Init(taskID uint64, framework MapreduceFramework)
 
 	// Task is finished up for exit. Last chance to save some task specific work.
 	Exit()

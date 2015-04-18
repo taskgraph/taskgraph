@@ -3,16 +3,16 @@ package taskgraph
 import (
 	"log"
 
-	"github.com/golang/protobuf/proto"
 	"./filesystem"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 )
 
 // This interface is used by application during taskgraph configuration phase.
-type Bootstrap interface {
+type MapreduceBootstrap interface {
 	// These allow application developer to set the task configuration so framework
 	// implementation knows which task to invoke at each node.
-	SetTaskBuilder(taskBuilder TaskBuilder)
+	SetTaskBuilder(taskBuilder MapreduceTaskBuilder)
 
 	// This allow the application to specify how tasks are connection at each epoch
 	SetTopology(topology Topology)
@@ -29,14 +29,14 @@ type Bootstrap interface {
 		client filesystem.Client,
 		outputDirName string,
 		outputFileName string,
-		mapperFunc func(Framework, string),
-		reducerFunc func(Framework, string, []string),
+		mapperFunc func(MapreduceFramework, string),
+		reducerFunc func(MapreduceFramework, string, []string),
 	)
 }
 
 // Framework hides distributed system complexity and provides users convenience of
 // high level features.
-type Framework interface {
+type MapreduceFramework interface {
 	// This allow the task implementation query its neighbors.
 	GetTopology() Topology
 
@@ -77,9 +77,9 @@ type Framework interface {
 
 	GetClient() filesystem.Client
 
-	GetMapperFunc() func(Framework, string)
+	GetMapperFunc() func(MapreduceFramework, string)
 
-	GetReducerFunc() func(Framework, string, []string)
+	GetReducerFunc() func(MapreduceFramework, string, []string)
 
 	GetOutputDirName() string
 

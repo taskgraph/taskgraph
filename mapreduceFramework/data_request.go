@@ -1,4 +1,4 @@
-package framework
+package mapreduceFramework
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var (
 	ErrEpochMismatch = fmt.Errorf("server epoch mismatch")
 )
 
-func (f *framework) CheckGRPCContext(ctx context.Context) error {
+func (f *mapreducerFramework) CheckGRPCContext(ctx context.Context) error {
 	md, ok := metadata.FromContext(ctx)
 	if !ok {
 		return fmt.Errorf("Can't get grpc.Metadata from context: %v", ctx)
@@ -45,7 +45,7 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 	}
 }
 
-func (f *framework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
+func (f *mapreducerFramework) DataRequest(ctx context.Context, toID uint64, method string, input proto.Message) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey or cast is in DataRequest")
@@ -68,7 +68,7 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 }
 
 // encode metadata to context in grpc specific way
-func (f *framework) makeGRPCContext(ctx context.Context) context.Context {
+func (f *mapreducerFramework) makeGRPCContext(ctx context.Context) context.Context {
 	md := metadata.MD{
 		"taskID": strconv.FormatUint(f.taskID, 10),
 		"epoch":  strconv.FormatUint(f.epoch, 10),
@@ -76,7 +76,7 @@ func (f *framework) makeGRPCContext(ctx context.Context) context.Context {
 	return metadata.NewContext(ctx, md)
 }
 
-func (f *framework) sendRequest(dr *dataRequest) {
+func (f *mapreducerFramework) sendRequest(dr *dataRequest) {
 	addr, err := etcdutil.GetAddress(f.etcdClient, f.name, dr.taskID)
 	if err != nil {
 		f.log.Printf("getAddress(%d) failed: %v", dr.taskID, err)
@@ -121,7 +121,7 @@ func (f *framework) sendRequest(dr *dataRequest) {
 	}
 }
 
-func (f *framework) retrySendRequest(dr *dataRequest) {
+func (f *mapreducerFramework) retrySendRequest(dr *dataRequest) {
 	// we try again after the previous task key expires and hopefully another task
 	// gets up and running.
 	time.Sleep(2 * heartbeatInterval)
@@ -137,7 +137,7 @@ func (f *framework) retrySendRequest(dr *dataRequest) {
 // Each request will be in the format: "/datareq?taskID=XXX&req=XXX".
 // "taskID" indicates the requesting task. "req" is the meta data for this request.
 // On success, it should respond with requested data in http body.
-func (f *framework) startHTTP() {
+func (f *mapreducerFramework) startHTTP() {
 	f.log.Printf("serving grpc on %s\n", f.ln.Addr())
 	server := f.task.CreateServer()
 	err := server.Serve(f.ln)
@@ -152,6 +152,6 @@ func (f *framework) startHTTP() {
 	}
 }
 
-func (f *framework) handleDataResp(ctx context.Context, resp *dataResponse) {
+func (f *mapreducerFramework) handleDataResp(ctx context.Context, resp *dataResponse) {
 	f.task.DataReady(ctx, resp.taskID, resp.method, resp.output)
 }

@@ -1,35 +1,35 @@
-package framework
+package mapreduceFramework
 
 import (
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
-	"encoding/json"
 	"math"
 	"net"
-	"hash/fnv"
 	"strconv"
 
-	"github.com/coreos/go-etcd/etcd"
 	"../../taskgraph"
 	"../filesystem"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
 const exitEpoch = math.MaxUint64
 
-type framework struct {
+type mapreducerFramework struct {
 	// These should be passed by outside world
 	name     string
 	etcdURLs []string
 	log      *log.Logger
 
 	// user defined interfaces
-	taskBuilder taskgraph.TaskBuilder
+	taskBuilder taskgraph.MapreduceTaskBuilder
 	topology    taskgraph.Topology
 
-	task          taskgraph.Task
+	task          taskgraph.MapreduceTask
 	taskID        uint64
 	epoch         uint64
 	etcdClient    *etcd.Client
@@ -60,20 +60,20 @@ type framework struct {
 }
 
 type mapreduceConfig struct {
-	mapperNum uint64
-	shuffleNum uint64
-	reducerNum uint64
-	client filesystem.Client
-	outputDirName string
-	outputFileName string
+	mapperNum          uint64
+	shuffleNum         uint64
+	reducerNum         uint64
+	client             filesystem.Client
+	outputDirName      string
+	outputFileName     string
 	shuffleWriteCloser []io.WriteCloser
-	outputWriter io.WriteCloser
-	mapperFunc func (taskgraph.Framework, string)
-	reducerFunc func (taskgraph.Framework, string, []string)
+	outputWriter       io.WriteCloser
+	mapperFunc         func(taskgraph.MapreduceFramework, string)
+	reducerFunc        func(taskgraph.MapreduceFramework, string, []string)
 }
 
 type emitKV struct {
-	Key string `json:"key"`
+	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
@@ -86,7 +86,7 @@ type contextKey int
 // different integer values.
 const epochKey contextKey = 1
 
-func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
+func (f *mapreducerFramework) FlagMeta(ctx context.Context, linkType, meta string) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
@@ -102,7 +102,7 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 // When app code invoke this method on framework, we simply
 // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
-func (f *framework) IncEpoch(ctx context.Context) {
+func (f *mapreducerFramework) IncEpoch(ctx context.Context) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
 		f.log.Fatalf("Can not find epochKey in IncEpoch")
@@ -116,9 +116,9 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *mapreducerFramework) GetTopology() taskgraph.Topology { return f.topology }
 
-func (f *framework) Kill() {
+func (f *mapreducerFramework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that
 	// it won't set exit epoch across cluster.
 	close(f.epochWatcher)
@@ -126,7 +126,7 @@ func (f *framework) Kill() {
 
 // When node call this on framework, it simply set epoch to exitEpoch,
 // All nodes will be notified of the epoch change and exit themselves.
-func (f *framework) ShutdownJob() {
+func (f *mapreducerFramework) ShutdownJob() {
 	if err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch); err != nil {
 		panic("TODO: we should do a set instead of CAS here.")
 	}
@@ -135,11 +135,10 @@ func (f *framework) ShutdownJob() {
 	}
 }
 
-
 // TODO :
-// may have synchronization issues 
-// promote to buffer stream 
-func (f *framework) Emit(key string, val string) {
+// may have synchronization issues
+// promote to buffer stream
+func (f *mapreducerFramework) Emit(key string, val string) {
 	if f.shuffleNum == 0 {
 		return
 	}
@@ -149,49 +148,52 @@ func (f *framework) Emit(key string, val string) {
 	KV.Key = key
 	KV.Value = val
 	toShuffle := h.Sum32() % uint32(f.shuffleNum)
-	
+
 	data, err := json.Marshal(KV)
 	data = append(data, '\n')
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
-	shufflePath := f.outputDirName + "/" + strconv.FormatUint(f.taskID, 10) + "mapper" + strconv.FormatUint(uint64(toShuffle), 10);
+	shufflePath := f.outputDirName + "/" + strconv.FormatUint(f.taskID, 10) + "mapper" + strconv.FormatUint(uint64(toShuffle), 10)
 
 	shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
 	if err != nil {
 		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 	}
-	f.log.Println(key, " ", val, " ", toShuffle)
+
 	shuffleWriteCloserNow.Write(data)
 }
 
-func (f *framework) Collect(key string, val string) {
+func (f *mapreducerFramework) Collect(key string, val string) {
 	outputWriter, err := f.client.OpenWriteCloser(f.outputDirName + "/" + "reducerResult" + strconv.FormatUint(f.taskID, 10))
 	if err != nil {
 		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 	}
-	f.log.Println(key, " ", val)
-	outputWriter.Write([]byte(key + " " + val + "\n"));
+	outputWriter.Write([]byte(key + " " + val + "\n"))
 }
 
-func (f *framework) GetMapperNum() uint64 { return f.mapperNum }
+func (f *mapreducerFramework) GetMapperNum() uint64 { return f.mapperNum }
 
-func (f *framework) GetShuffleNum() uint64 { return f.shuffleNum }
+func (f *mapreducerFramework) GetShuffleNum() uint64 { return f.shuffleNum }
 
-func (f *framework) GetReducerNum() uint64 { return f.reducerNum }
+func (f *mapreducerFramework) GetReducerNum() uint64 { return f.reducerNum }
 
-func (f *framework) GetClient() filesystem.Client { return f.client}
+func (f *mapreducerFramework) GetClient() filesystem.Client { return f.client }
 
-func (f *framework) GetMapperFunc() func(taskgraph.Framework, string) { return f.mapperFunc }
+func (f *mapreducerFramework) GetMapperFunc() func(taskgraph.MapreduceFramework, string) {
+	return f.mapperFunc
+}
 
-func (f *framework) GetReducerFunc() func(taskgraph.Framework, string, []string) { return f.reducerFunc }
+func (f *mapreducerFramework) GetReducerFunc() func(taskgraph.MapreduceFramework, string, []string) {
+	return f.reducerFunc
+}
 
-func (f *framework) GetOutputDirName() string { return f.outputDirName }
+func (f *mapreducerFramework) GetOutputDirName() string { return f.outputDirName }
 
-func (f *framework) GetOutputFileName() string { return f.outputFileName }
+func (f *mapreducerFramework) GetOutputFileName() string { return f.outputFileName }
 
-func (f *framework) GetLogger() *log.Logger { return f.log }
+func (f *mapreducerFramework) GetLogger() *log.Logger { return f.log }
 
-func (f *framework) GetTaskID() uint64 { return f.taskID }
+func (f *mapreducerFramework) GetTaskID() uint64 { return f.taskID }
 
-func (f *framework) GetEpoch() uint64 { return f.epoch }
+func (f *mapreducerFramework) GetEpoch() uint64 { return f.epoch }

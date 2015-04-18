@@ -1,4 +1,4 @@
-package framework
+package mapreduceFramework
 
 import (
 	"github.com/golang/protobuf/proto"

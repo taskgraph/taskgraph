@@ -11,7 +11,7 @@ type MapreduceTaskBuilder struct {
 	ReducerConfig                     []map[string]string
 }
 
-func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
+func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.MapreduceTask {
 	if taskID < t.MapperNum {
 		if int(taskID) < len(t.MapperConfig) {
 			return &mapperTask{
@@ -20,19 +20,19 @@ func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		} else {
 			return &mapperTask{}
 		}
-	} else if taskID < t.MapperNum + t.ShuffleNum {
+	} else if taskID < t.MapperNum+t.ShuffleNum {
 		return &shuffleTask{
-			// config: t.ShuffleConfig[taskID - t.MapperNum],
+		// config: t.ShuffleConfig[taskID - t.MapperNum],
 		}
-	} else if taskID < t.MapperNum + t.ShuffleNum + t.ReducerNum{
+	} else if taskID < t.MapperNum+t.ShuffleNum+t.ReducerNum {
 		return &reducerTask{
-			// config: t.ReducerConfig[taskID - t.MapperNum - t.ShuffleNum],
+		// config: t.ReducerConfig[taskID - t.MapperNum - t.ShuffleNum],
 		}
 	} else {
 		return &masterTask{
-			mapperNum : t.MapperNum,
-			shuffleNum : t.ShuffleNum,
-			reducerNum : t.ReducerNum,
+			mapperNum:  t.MapperNum,
+			shuffleNum: t.ShuffleNum,
+			reducerNum: t.ReducerNum,
 		}
 	}
 }
