@@ -44,7 +44,6 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 
 	for k := 0; !stop.Done(stt, ovalgrad.value, ovalgrad.gradient); k += 1 {
 
-		pg.projector.ClipGradient(stt, ovalgrad.gradient)
 		newPoint(stt, nxt, ovalgrad.gradient, alpha, pg.projector)
 		evaluate(loss, nxt, nvalgrad)
 
@@ -78,8 +77,13 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 		ovalgrad, nvalgrad = nvalgrad, ovalgrad
 	}
 
+	// Originally stt == vec, but stt may be swapped to newly created param (nxt). So copy it to output param here.
+	for it := vec.IndexIterator(); it.Next(); {
+		i := it.Index()
+		vec.Set(i, stt.Get(i))
+	}
+
 	// This is so that we can reuse the step size in next round.
-	// XXX(baigang): pg.alpha will be preserved to solve a different PG minimization, i.e the counterpart in the alternating setup. Shall we keep this?
 	pg.alpha = alpha
 
 	// Return the final loss func value and error.
