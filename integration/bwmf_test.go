@@ -21,7 +21,7 @@ func TestBWMF(t *testing.T) {
 	tb := &bwmf.BWMFTaskBuilder{
 		NumOfTasks: numOfTasks,
 		NumIters:   4,
-		ConfBytes: []byte(`{"OptConf": {"Sigma":0.01,"Alpha":1,"Beta":0.1,"GradTol":1e-06},
+		ConfBytes: []byte(`{"OptConf": {"Sigma":0.01,"Alpha":1,"Beta":0.1,"GradTol":1e-06, "FixedCnt": 200000},
 				    "IOConf":  {"IFs":"local",
 						"IDPath":"../example/bwmf/data/row_shard.dat",
 						"ITPath":"../example/bwmf/data/column_shard.dat",

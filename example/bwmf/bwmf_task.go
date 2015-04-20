@@ -224,11 +224,11 @@ func (t *bwmfTask) Exit() {
 func (t *bwmfTask) finish() {
 	err := SaveDenseShard(t.fsClient, t.tShard, t.config.IOConf.OTPath+"."+strconv.Itoa(int(t.taskID)))
 	if err != nil {
-		t.logger.Printf("Save tShard for task %d failed!", t.taskID)
+		t.logger.Printf("Save tShard for task %d failed with error: %v", t.taskID, err)
 	}
 	err = SaveDenseShard(t.fsClient, t.dShard, t.config.IOConf.ODPath+"."+strconv.Itoa(int(t.taskID)))
 	if err != nil {
-		t.logger.Printf("Save dShard for task %d failed!", t.taskID)
+		t.logger.Printf("Save dShard for task %d failed with error: %v", t.taskID, err)
 	}
 	t.logger.Println("Finished. Waiting for the framework to stop the task...")
 }
@@ -243,7 +243,7 @@ func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
 	t.stopCriteria = op.MakeComposedCriterion(
-		op.MakeFixCountStopCriteria(15),
+		op.MakeFixCountStopCriteria(t.config.OptConf.FixedCnt),
 		op.MakeGradientNormStopCriteria(t.config.OptConf.GradTol),
 		op.MakeTimeoutCriterion(300*time.Second),
 	)

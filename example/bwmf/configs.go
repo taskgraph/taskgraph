@@ -5,20 +5,22 @@ import (
 )
 
 type optconfig struct {
-	Sigma   float32
-	Alpha   float32
-	Beta    float32
-	GradTol float32
+	Sigma float32
+	Alpha float32
+	Beta  float32
+
+	GradTol  float32
+	FixedCnt int
 }
 
 // xFs can be "local", ""
 type ioconfig struct {
-	IFs     string
-	IDPath  string
-	ITPath  string
-	OFs     string
-	ODPath  string
-	OTPath  string
+	IFs    string
+	IDPath string
+	ITPath string
+	OFs    string
+	ODPath string
+	OTPath string
 
 	HdfsConf  hdfsConfig
 	AzureConf azureConfig
