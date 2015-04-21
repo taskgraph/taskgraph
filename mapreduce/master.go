@@ -90,7 +90,7 @@ func (m *masterTask) processReducerOut(taskID uint64) {
 		m.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
 	}
-	bufioReader := bufio.NewReader(reducerReadCloser)
+	bufioReader := bufio.NewReaderSize(reducerReadCloser, m.framework.GetReaderBufferSize())
 	var str []byte
 	err = nil
 	for err != io.EOF {
@@ -103,10 +103,7 @@ func (m *masterTask) processReducerOut(taskID uint64) {
 		outputCloser.Write(str)
 	}
 	m.logger.Printf("%s removing..\n", reducerPath)
-	err = client.Remove(reducerPath)
-	if err != nil {
-		m.logger.Fatal(err)
-	}
+	m.framework.Clean(reducerPath)
 }
 
 func (m *masterTask) EnterEpoch(ctx context.Context, epoch uint64) {

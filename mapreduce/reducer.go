@@ -23,6 +23,7 @@ type reducerTask struct {
 	shuffleNum      uint64
 	preparedShuffle map[uint64]bool
 	config          map[string]string
+	reducerFunc func(taskgraph.MapreduceFramework, string, []string)
 
 	epochChange chan *reducerEvent
 	dataReady   chan *reducerEvent
@@ -44,9 +45,11 @@ func (rd *reducerTask) Init(taskID uint64, framework taskgraph.MapreduceFramewor
 	rd.epoch = framework.GetEpoch()
 	rd.shuffleNum = uint64(len(framework.GetTopology().GetNeighbors("Prefix", rd.epoch)))
 	rd.preparedShuffle = make(map[uint64]bool)
-
+	rd.reducerFunc = rd.framework.GetReducerFunc()
 	rd.logger.Println("Reduce Task")
+	rd.framework.SetReducerOutputWriter()
 
+	// channel init
 	rd.epochChange = make(chan *reducerEvent, 1)
 	rd.metaReady = make(chan *reducerEvent, 1)
 	rd.dataReady = make(chan *reducerEvent, 1)
@@ -63,12 +66,14 @@ func (rd *reducerTask) run() {
 
 		case reducerDone := <-rd.finished:
 			rd.framework.FlagMeta(reducerDone.ctx, "Prefix", "metaReady")
-			rd.framework.Kill()
+			// rd.framework.Kill()
 
 		case metaShuffleReady := <-rd.metaReady:
+			rd.logger.Printf("Meta Ready From Shuffle %d", metaShuffleReady.fromID)
 			rd.preparedShuffle[metaShuffleReady.fromID] = true
 			rd.reducerProgress(metaShuffleReady.fromID)
 			if len(rd.preparedShuffle) == int(rd.shuffleNum) {
+				rd.framework.FinishReducer()
 				rd.finished <- &reducerEvent{ctx: metaShuffleReady.ctx}
 			}
 
@@ -96,35 +101,28 @@ func (rd *reducerTask) reducerProgress(fromID uint64) {
 		rd.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		return
 	}
-	bufioReader := bufio.NewReader(reducerReadCloser)
+	bufioReader := bufio.NewReaderSize(reducerReadCloser, rd.framework.GetReaderBufferSize())
 	var str []byte
 	err = nil
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
-
 		if err != io.EOF && err != nil {
 			rd.logger.Fatalf("MapReduce : Reducer read Error, ", err)
 			return
 		}
-
 		if err != io.EOF {
-			str = str[:len(str)]
+			str = str[:len(str) - 1]
 		}
 		rd.processKV(str)
 	}
 	rd.logger.Printf("%s removing..\n", reducerPath)
-	err = client.Remove(reducerPath)
-	if err != nil {
-		rd.logger.Fatal(err)
-	}
-
+	rd.framework.Clean(reducerPath)
 }
 
 func (rd *reducerTask) processKV(str []byte) {
-	// tmpKV, err := strings.Split(str, " ")
 	var tp shuffleEmit
 	if err := json.Unmarshal([]byte(str), &tp); err == nil {
-		rd.framework.GetReducerFunc()(rd.framework, tp.Key, tp.Value)
+		rd.reducerFunc(rd.framework, tp.Key, tp.Value)
 	}
 }
 

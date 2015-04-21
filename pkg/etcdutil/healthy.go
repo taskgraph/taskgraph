@@ -1,7 +1,7 @@
 package etcdutil
 
 import (
-	"fmt"
+	// "fmt"
 	"log"
 	"math/rand"
 	"path"
@@ -84,17 +84,24 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 		}
 	}()
 	var resp *etcd.Response
-	select {
-	case resp = <-respChan:
-	case <-time.After(100 * time.Second):
-		return 0, fmt.Errorf("WaitFailure timeout!")
+	var waitTime uint64
+	waitTime = 0
+	for {
+		select {
+		case resp = <-respChan:
+			logger.Println(resp)
+			idStr := path.Base(resp.Node.Key)
+			id, err := strconv.ParseUint(idStr, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return id, nil
+		case <-time.After(10 * time.Second):
+			waitTime++
+			logger.Printf("Wait%d0", waitTime)
+		}
 	}
-	idStr := path.Base(resp.Node.Key)
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
+	
 }
 
 func computeTTL(interval time.Duration) uint64 {

@@ -63,8 +63,8 @@ func main() {
 	reducerNum := flag.Int("reducerNum", 2, "reducerNum")
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
 	azureAccountKey := flag.String("azureAccountKey", "aaa", "azureAccountKey")
-	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreducep12", "outputContainerName")
-	outputBlobName := flag.String("outputBlobName", "result1.txt", "outputBlobName")
+	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreduce003", "outputContainerName")
+	outputBlobName := flag.String("outputBlobName", "result6.txt", "outputBlobName")
 	// inputFileSource := flag.String("inputFileName", "input1.txt", "mapperInputFileName")
 	var q []map[string][]string
 	// /q = make(map[string][]string)

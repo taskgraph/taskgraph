@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"io"
 	"log"
 	"math"
 	"net"
@@ -13,7 +12,7 @@ import (
 	"../../taskgraph"
 	"../filesystem"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"../pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
@@ -66,11 +65,15 @@ type mapreduceConfig struct {
 	client             filesystem.Client
 	outputDirName      string
 	outputFileName     string
-	shuffleWriteCloser []io.WriteCloser
-	outputWriter       io.WriteCloser
+	shuffleWriteCloser []*Writer
+	outputWriter       *Writer
 	mapperFunc         func(taskgraph.MapreduceFramework, string)
 	reducerFunc        func(taskgraph.MapreduceFramework, string, []string)
+	writerBufferSize int
+	readerBufferSize int
 }
+
+const defaultWriteBufferSize = 4096
 
 type emitKV struct {
 	Key   string `json:"key"`
@@ -99,8 +102,7 @@ func (f *mapreducerFramework) FlagMeta(ctx context.Context, linkType, meta strin
 	}
 }
 
-// When app code invoke this method on framework, we simply
-// update the etcd epoch to next uint64. All nodes should watch
+// When app code invoke this method on framework, we simply // update the etcd epoch to next uint64. All nodes should watch
 // for epoch and update their local epoch correspondingly.
 func (f *mapreducerFramework) IncEpoch(ctx context.Context) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
@@ -121,6 +123,7 @@ func (f *mapreducerFramework) GetTopology() taskgraph.Topology { return f.topolo
 func (f *mapreducerFramework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that
 	// it won't set exit epoch across cluster.
+	f.log.Fatalf("task %d finish work, kill it", f.taskID)
 	close(f.epochWatcher)
 }
 
@@ -135,9 +138,7 @@ func (f *mapreducerFramework) ShutdownJob() {
 	}
 }
 
-// TODO :
-// may have synchronization issues
-// promote to buffer stream
+
 func (f *mapreducerFramework) Emit(key string, val string) {
 	if f.shuffleNum == 0 {
 		return
@@ -154,22 +155,72 @@ func (f *mapreducerFramework) Emit(key string, val string) {
 	if err != nil {
 		f.log.Fatalf("json marshal error : ", err)
 	}
-	shufflePath := f.outputDirName + "/" + strconv.FormatUint(f.taskID, 10) + "mapper" + strconv.FormatUint(uint64(toShuffle), 10)
+	f.shuffleWriteCloser[toShuffle].Write(data)
+}
 
-	shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
+func (f *mapreducerFramework) Clean(path string) {	
+	err := f.client.Remove(path)
+	if err != nil {
+		f.log.Fatal(err)
+	}		
+}
+
+func (f *mapreducerFramework) SetMapperOutputWriter() {
+	var toShuffle uint64
+	for toShuffle = 0; toShuffle < f.shuffleNum; toShuffle++ {
+		shufflePath := f.outputDirName + "/" + strconv.FormatUint(f.taskID, 10) + "mapper" + strconv.FormatUint(toShuffle, 10)
+		f.Clean(shufflePath)
+		shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
+		if err != nil {
+			f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+		}
+		f.shuffleWriteCloser = append(f.shuffleWriteCloser, NewWriterSize(shuffleWriteCloserNow, defaultWriteBufferSize))
+	}
+}
+
+func (f *mapreducerFramework) SetReducerOutputWriter() {
+	reducerPath := f.outputDirName + "/" + "reducerResult" + strconv.FormatUint(f.taskID, 10)
+	f.Clean(reducerPath)
+	outputWriter, err := f.client.OpenWriteCloser(reducerPath)
 	if err != nil {
 		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+		return
 	}
+	f.outputWriter = NewWriterSize(outputWriter, f.writerBufferSize)
+}
 
-	shuffleWriteCloserNow.Write(data)
+func (f *mapreducerFramework) SetWriterBufferSize(bufferSize int) {
+	f.writerBufferSize = bufferSize
+	// outputWriter, err := f.client.OpenWriteCloser(f.outputDirName + "/" + f.outputFileName)
+	// if err != nil {
+	// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+	// 	return
+	// }
+	// f.outputWriter = bufio.NewWriteSize(outputWriter, f.writerBufferSize)
+} 
+
+func (f *mapreducerFramework) SetReaderBufferSize(bufferSize int) {
+	f.readerBufferSize = bufferSize
 }
 
 func (f *mapreducerFramework) Collect(key string, val string) {
-	outputWriter, err := f.client.OpenWriteCloser(f.outputDirName + "/" + "reducerResult" + strconv.FormatUint(f.taskID, 10))
-	if err != nil {
-		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
+	f.outputWriter.Write([]byte(key + " " + val + "\n"))
+
+}
+
+// func (f *mapreducerFramework) Fill(s *Writer) {
+// 	t = s.Available()
+// }
+
+func (f *mapreducerFramework) FinishMapper() {
+	var toShuffle uint64
+	for toShuffle = 0; toShuffle < f.shuffleNum; toShuffle++ {
+		_ = f.shuffleWriteCloser[toShuffle].Flush()
 	}
-	outputWriter.Write([]byte(key + " " + val + "\n"))
+}
+
+func (f *mapreducerFramework) FinishReducer() {
+	_ = f.outputWriter.Flush()
 }
 
 func (f *mapreducerFramework) GetMapperNum() uint64 { return f.mapperNum }
@@ -187,6 +238,8 @@ func (f *mapreducerFramework) GetMapperFunc() func(taskgraph.MapreduceFramework,
 func (f *mapreducerFramework) GetReducerFunc() func(taskgraph.MapreduceFramework, string, []string) {
 	return f.reducerFunc
 }
+
+func (f *mapreducerFramework) GetReaderBufferSize() int { return f.readerBufferSize }
 
 func (f *mapreducerFramework) GetOutputDirName() string { return f.outputDirName }
 

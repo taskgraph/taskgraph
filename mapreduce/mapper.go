@@ -21,6 +21,7 @@ type mapperTask struct {
 	logger    *log.Logger
 	taskID    uint64
 	config    map[string][]string
+	mapperFunc func(taskgraph.MapreduceFramework, string)
 
 	//channels
 	epochChange chan *mapperEvent
@@ -34,15 +35,14 @@ type mapperEvent struct {
 	ctx    context.Context
 	epoch  uint64
 	fromID uint64
-	// response proto.Message
 }
 
 func (mp *mapperTask) Init(taskID uint64, framework taskgraph.MapreduceFramework) {
-
 	mp.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	mp.taskID = taskID
 	mp.framework = framework
-
+	mp.framework.SetMapperOutputWriter()
+	mp.mapperFunc = mp.framework.GetMapperFunc()
 	//channel init
 	mp.epochChange = make(chan *mapperEvent, 1)
 	mp.dataReady = make(chan *mapperEvent, 1)
@@ -61,16 +61,18 @@ func (mp *mapperTask) run() {
 
 		case mapperDone := <-mp.fileUpdate:
 			mp.framework.FlagMeta(mapperDone.ctx, "Prefix", "metaReady")
-			mp.framework.Kill()
+			// mp.framework.Kill()
+
 		case <-mp.exitChan:
 			return
 		}
 	}
 }
 
+// Read given file, process it through mapper function by user setting
 func (mp *mapperTask) fileRead(ctx context.Context) {
 	fileNum := len(mp.config["files"])
-	mp.logger.Printf("fileReader, Mapper task %d %d", mp.taskID, fileNum)
+	mp.logger.Printf("FileReader, Mapper task %d, process %d file(s)", mp.taskID, fileNum)
 	files := mp.config["files"]
 	client := mp.framework.GetClient()
 	for i := 0; i < fileNum; i++ {
@@ -79,9 +81,8 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 			mp.logger.Fatalf("MapReduce : get azure storage client reader failed, ", err)
 		}
 		err = nil
-
 		var str string
-		bufioReader := bufio.NewReader(mapperReaderCloser)
+		bufioReader := bufio.NewReaderSize(mapperReaderCloser, mp.framework.GetReaderBufferSize())
 		for err != io.EOF {
 			str, err = bufioReader.ReadString('\n')
 
@@ -91,12 +92,12 @@ func (mp *mapperTask) fileRead(ctx context.Context) {
 			if err != io.EOF {
 				str = str[:len(str)-1]
 			}
-			mapperFunc := mp.framework.GetMapperFunc()
-			mapperFunc(mp.framework, str)
+			mp.mapperFunc(mp.framework, str)
 		}
 		mapperReaderCloser.Close()
 	}
 	mp.logger.Println("FileRead finished")
+	mp.framework.FinishMapper()
 	mp.fileUpdate <- &mapperEvent{ctx: ctx, epoch: mp.epoch}
 }
 
@@ -128,7 +129,6 @@ func (mp *mapperTask) CreateServer() *grpc.Server {
 
 func (mp *mapperTask) CreateOutputMessage(method string) proto.Message { return nil }
 
-func (mp *mapperTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
-}
+func (mp *mapperTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {}
 
 func (mp *mapperTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}
