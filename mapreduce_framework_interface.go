@@ -66,7 +66,7 @@ type MapreduceFramework interface {
 	DataRequest(ctx context.Context, toID uint64, method string, input proto.Message)
 	CheckGRPCContext(ctx context.Context) error
 
-	// // Mapreduce addtional interface
+	// Mapreduce framework addtional interface
 	// This is used for mapper to emit (key, value) pairs
 	Emit(key string, value string)
 
@@ -75,15 +75,38 @@ type MapreduceFramework interface {
 
 	GetEpoch() uint64
 
+	// Mapreduce task can write and read file from filesystem
 	GetClient() filesystem.Client
 
+	// Mapper task handle data by mapper functiong setting
 	GetMapperFunc() func(MapreduceFramework, string)
 
+	// Reducer task handle data by reducer functiong setting
 	GetReducerFunc() func(MapreduceFramework, string, []string)
 
+	// Get filesystem output dir path
 	GetOutputDirName() string
 
+	// Get filesystem output file name
 	GetOutputFileName() string
+
+	// Mapper task set their own task's output path
+	SetMapperOutputWriter() 
+
+	// Reducer task set their own task's output path
+	SetReducerOutputWriter()
+
+	// Provide interface to change buffer size
+	SetReaderBufferSize(int)
+	SetWriterBufferSize(int)
+	GetReaderBufferSize() int
+
+	// Notify framework mapper(or reducer) process finished, thus it can end buffer stream output
+	FinishMapper() 
+	FinishReducer()	
+
+	// Clean Function
+	Clean(string)
 }
 
 // Note that framework can decide how update can be done, and how to serve the updatelog.

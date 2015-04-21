@@ -11,7 +11,7 @@ import (
 	"../../taskgraph"
 	"../filesystem"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
+	"../pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
@@ -43,30 +43,16 @@ func (f *mapreducerFramework) InitWithMapreduceConfig(
 	reducerFunc func(taskgraph.MapreduceFramework, string, []string),
 
 ) {
-	var err error
 	f.mapperNum = mapperNum
 	f.shuffleNum = shuffleNum
 	f.reducerNum = reducerNum
 	f.outputDirName = outputDirName
 	f.outputFileName = outputFileName
 	f.client = client
-	f.outputWriter, err = f.client.OpenWriteCloser(outputDirName + "/" + outputFileName)
-	if err != nil {
-		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
-		return
-	}
 	f.mapperFunc = mapperFunc
 	f.reducerFunc = reducerFunc
-	//   for i := 0; i < int(f.shuffleNum); i++ {
-	// shufflePath := f.outputDirName + "/shuffle" + strconv.Itoa(i);
-
-	// shuffleWriteCloserNow, err := f.client.OpenWriteCloser(shufflePath)
-	// if err != nil {
-	// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
-	// 	return
-	// }
-	// f.shuffleWriteCloser = append(f.shuffleWriteCloser, shuffleWriteCloserNow)
-	//   }
+	f.readerBufferSize = defaultWriteBufferSize
+	f.writerBufferSize = defaultWriteBufferSize
 }
 
 func (f *mapreducerFramework) Start() {
@@ -131,6 +117,7 @@ func (f *mapreducerFramework) run() {
 		case nextEpoch, ok := <-f.epochWatcher:
 			f.releaseEpochResource()
 			if !ok { // task is killed
+				f.log.Fatalf("task %d is killed", f.taskID)
 				return
 			}
 

@@ -1,6 +1,12 @@
 package etcdutil
 
 import (
+<<<<<<< HEAD
+||||||| merged common ancestors
+	"fmt"
+=======
+	// "fmt"
+>>>>>>> Mapreduce : finish buffer stream io, change wait system of free node
 	"log"
 	"math/rand"
 	"path"
@@ -83,6 +89,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 		}
 	}()
 	var resp *etcd.Response
+
 	var waitTime uint64 = 0
 	for {
 		select {
@@ -98,7 +105,6 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 			logger.Printf("Node already wait failure for %d0s", waitTime)
 		}
 	}
-
 }
 
 func computeTTL(interval time.Duration) uint64 {

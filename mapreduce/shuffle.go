@@ -77,8 +77,6 @@ func (sf *shuffleTask) run() {
 			sf.doEnterEpoch(ec.ctx, ec.epoch)
 
 		case shuffleDone := <-sf.finished:
-
-			// reducerID := sf.framework.GetTopology().GetNeighbors("Suffix", sf.epoch)[0]
 			reducerPath := sf.framework.GetOutputDirName() + "/shuffle" + strconv.FormatUint(sf.taskID, 10)
 			client := sf.framework.GetClient()
 			shuffleWriteCloser, err := client.OpenWriteCloser(reducerPath)
@@ -98,10 +96,10 @@ func (sf *shuffleTask) run() {
 				shuffleWriteCloser.Write(data)
 			}
 			sf.framework.FlagMeta(shuffleDone.ctx, "Prefix", "MetaReady")
-			sf.framework.Kill()
+			// sf.framework.Kill()
 
 		case metaMapperReady := <-sf.metaReady:
-
+			sf.logger.Printf("Meta Ready From Mapper %d", metaMapperReady.fromID)
 			sf.preparedMapper[metaMapperReady.fromID] = true
 
 			if len(sf.preparedMapper) >= int(sf.mapNum) {
@@ -128,19 +126,18 @@ func (sf *shuffleTask) processKV(str []byte) {
 
 func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 	var i uint64
-	for i = 0; i < sf.mapNum; i++ {
-		client := sf.framework.GetClient()
+	client := sf.framework.GetClient()
+	for i = 0; i < sf.mapNum; i++ {	
 		shufflePath := sf.framework.GetOutputDirName() + "/" + strconv.FormatUint(i, 10) + "mapper" + strconv.FormatUint(sf.taskID-sf.mapNum, 10)
 		shuffleReadCloser, err := client.OpenReadCloser(shufflePath)
 		if err != nil {
 			sf.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		}
-		bufioReader := bufio.NewReader(shuffleReadCloser)
+		bufioReader := bufio.NewReaderSize(shuffleReadCloser, sf.framework.GetReaderBufferSize())
 		var str []byte
 		err = nil
 		for err != io.EOF {
 			str, err = bufioReader.ReadBytes('\n')
-
 			if err != io.EOF && err != nil {
 				sf.logger.Fatalf("MapReduce : Shuffle read Error, ", err)
 			}
@@ -150,10 +147,7 @@ func (sf *shuffleTask) shuffleProgress(ctx context.Context) {
 			sf.processKV(str)
 		}
 		sf.logger.Printf("%s removing..\n", shufflePath)
-		err = client.Remove(shufflePath)
-		if err != nil {
-			sf.logger.Fatal(err)
-		}
+		sf.framework.Clean(shufflePath)
 	}
 	sf.finished <- &shuffleEvent{ctx: ctx}
 
