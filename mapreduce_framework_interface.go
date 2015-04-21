@@ -100,6 +100,7 @@ type MapreduceFramework interface {
 	SetReaderBufferSize(int)
 	SetWriterBufferSize(int)
 	GetReaderBufferSize() int
+	GetWriterBufferSize() int
 
 	// Notify framework mapper(or reducer) process finished, thus it can end buffer stream output
 	FinishMapper() 

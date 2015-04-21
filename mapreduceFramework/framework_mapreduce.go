@@ -8,11 +8,12 @@ import (
 	"math"
 	"net"
 	"strconv"
+	"bufio"
 
 	"../../taskgraph"
 	"../filesystem"
-	"github.com/coreos/go-etcd/etcd"
 	"../pkg/etcdutil"
+	"github.com/coreos/go-etcd/etcd"
 	"golang.org/x/net/context"
 )
 
@@ -65,14 +66,15 @@ type mapreduceConfig struct {
 	client             filesystem.Client
 	outputDirName      string
 	outputFileName     string
-	shuffleWriteCloser []*Writer
-	outputWriter       *Writer
+	shuffleWriteCloser []*bufio.Writer
+	outputWriter       *bufio.Writer
 	mapperFunc         func(taskgraph.MapreduceFramework, string)
 	reducerFunc        func(taskgraph.MapreduceFramework, string, []string)
 	writerBufferSize int
 	readerBufferSize int
 }
 
+// set default buffer size
 const defaultWriteBufferSize = 4096
 
 type emitKV struct {
@@ -123,7 +125,7 @@ func (f *mapreducerFramework) GetTopology() taskgraph.Topology { return f.topolo
 func (f *mapreducerFramework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that
 	// it won't set exit epoch across cluster.
-	f.log.Fatalf("task %d finish work, kill it", f.taskID)
+	f.log.Fatalf("t ask %d finish work, kill it", f.taskID)
 	close(f.epochWatcher)
 }
 
@@ -138,7 +140,8 @@ func (f *mapreducerFramework) ShutdownJob() {
 	}
 }
 
-
+// When user call this on framework, it transfer key/value data to specific shuffle
+// Generally, only mapper function emit data
 func (f *mapreducerFramework) Emit(key string, val string) {
 	if f.shuffleNum == 0 {
 		return
@@ -158,6 +161,8 @@ func (f *mapreducerFramework) Emit(key string, val string) {
 	f.shuffleWriteCloser[toShuffle].Write(data)
 }
 
+// Clean
+// remove file in filesystem
 func (f *mapreducerFramework) Clean(path string) {	
 	err := f.client.Remove(path)
 	if err != nil {
@@ -165,6 +170,7 @@ func (f *mapreducerFramework) Clean(path string) {
 	}		
 }
 
+// When mapper task begin, it invoke this to create shuffleNum buffer writer
 func (f *mapreducerFramework) SetMapperOutputWriter() {
 	var toShuffle uint64
 	for toShuffle = 0; toShuffle < f.shuffleNum; toShuffle++ {
@@ -174,10 +180,12 @@ func (f *mapreducerFramework) SetMapperOutputWriter() {
 		if err != nil {
 			f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 		}
-		f.shuffleWriteCloser = append(f.shuffleWriteCloser, NewWriterSize(shuffleWriteCloserNow, defaultWriteBufferSize))
+		f.shuffleWriteCloser = append(f.shuffleWriteCloser, bufio.NewWriterSize(shuffleWriteCloserNow, defaultWriteBufferSize))
 	}
 }
 
+// When reducer task begin, 
+// it invoke this to create a buffer writer to output its result
 func (f *mapreducerFramework) SetReducerOutputWriter() {
 	reducerPath := f.outputDirName + "/" + "reducerResult" + strconv.FormatUint(f.taskID, 10)
 	f.Clean(reducerPath)
@@ -186,17 +194,11 @@ func (f *mapreducerFramework) SetReducerOutputWriter() {
 		f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
 		return
 	}
-	f.outputWriter = NewWriterSize(outputWriter, f.writerBufferSize)
+	f.outputWriter = bufio.NewWriterSize(outputWriter, f.writerBufferSize)
 }
 
 func (f *mapreducerFramework) SetWriterBufferSize(bufferSize int) {
 	f.writerBufferSize = bufferSize
-	// outputWriter, err := f.client.OpenWriteCloser(f.outputDirName + "/" + f.outputFileName)
-	// if err != nil {
-	// 	f.log.Fatalf("Create filesystem client writeCloser failed, error : %v", err)
-	// 	return
-	// }
-	// f.outputWriter = bufio.NewWriteSize(outputWriter, f.writerBufferSize)
 } 
 
 func (f *mapreducerFramework) SetReaderBufferSize(bufferSize int) {
@@ -205,22 +207,21 @@ func (f *mapreducerFramework) SetReaderBufferSize(bufferSize int) {
 
 func (f *mapreducerFramework) Collect(key string, val string) {
 	f.outputWriter.Write([]byte(key + " " + val + "\n"))
-
 }
 
-// func (f *mapreducerFramework) Fill(s *Writer) {
-// 	t = s.Available()
-// }
-
+// When mapper finished, it need invoke this to flush buffer
+// to output remaining data in buffer to shuffle
 func (f *mapreducerFramework) FinishMapper() {
 	var toShuffle uint64
 	for toShuffle = 0; toShuffle < f.shuffleNum; toShuffle++ {
-		_ = f.shuffleWriteCloser[toShuffle].Flush()
+		f.shuffleWriteCloser[toShuffle].Flush()
 	}
 }
 
+// When reducer finished, it need invoke this to flush buffer
+// to output remaining data in buffer to final task
 func (f *mapreducerFramework) FinishReducer() {
-	_ = f.outputWriter.Flush()
+	f.outputWriter.Flush()
 }
 
 func (f *mapreducerFramework) GetMapperNum() uint64 { return f.mapperNum }
@@ -240,6 +241,8 @@ func (f *mapreducerFramework) GetReducerFunc() func(taskgraph.MapreduceFramework
 }
 
 func (f *mapreducerFramework) GetReaderBufferSize() int { return f.readerBufferSize }
+
+func (f *mapreducerFramework) GetWriterBufferSize() int { return f.writerBufferSize }
 
 func (f *mapreducerFramework) GetOutputDirName() string { return f.outputDirName }
 

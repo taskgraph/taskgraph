@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	// "fmt"
 
 	"../../../taskgraph"
 	"../../controller"
@@ -19,10 +18,6 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-// azureAccountName string,
-// 		azureAccountKey string,
-// 		outputContainerName string,
-// 		outputBlobName string,
 
 func mapperFunc(framework taskgraph.MapreduceFramework, text string) {
 	textReader := bufio.NewReader(strings.NewReader(text))
@@ -55,6 +50,8 @@ func reducerFunc(framework taskgraph.MapreduceFramework, key string, val []strin
 
 var mpFiles []string
 
+
+// Input files defined in "input($mapperTaskID).txt"
 func main() {
 	programType := flag.String("type", "", "(c) controller, (m) mapper, (s) shuffle, or (r) reducer")
 	job := flag.String("job", "", "job name")
@@ -62,12 +59,12 @@ func main() {
 	shuffleNum := flag.Int("shuffleNum", 5, "shuffleNum")
 	reducerNum := flag.Int("reducerNum", 2, "reducerNum")
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
-	azureAccountKey := flag.String("azureAccountKey", "aaa", "azureAccountKey")
+	azureAccountKey := flag.String("azureAccountKey", " ", "azureAccountKey")
 	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreduce003", "outputContainerName")
-	outputBlobName := flag.String("outputBlobName", "result6.txt", "outputBlobName")
-	// inputFileSource := flag.String("inputFileName", "input1.txt", "mapperInputFileName")
+	outputBlobName := flag.String("outputBlobName", "result12.txt", "outputBlobName")
+	
 	var q []map[string][]string
-	// /q = make(map[string][]string)
+	
 	for inputM := 1; inputM <= *mapperNum; inputM++ {
 		inputFileSource := "input" + strconv.Itoa(inputM) + ".txt"
 		tmpFileReader, err := os.Open(inputFileSource)
@@ -94,8 +91,6 @@ func main() {
 	var ll *log.Logger
 	ll = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	etcdURLs := []string{"http://localhost:4001"}
-	// fmt.Println(*azureAccountKey)
-	// fmt.Println(mpFiles[1])
 	flag.Parse()
 	if *job == "" {
 		log.Fatalf("Please specify a job name")

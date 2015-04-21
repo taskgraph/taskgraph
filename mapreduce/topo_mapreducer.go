@@ -1,5 +1,13 @@
 package mapreduce
 
+type MapReduceTopology struct {
+	NumOfMapper    uint64
+	NumOfReducer   uint64
+	NumOfShuffle   uint64
+	taskID         uint64
+	prefix, suffix []uint64
+}
+
 // The mapreduce topo splits into three layer
 // Layer 1 :
 // Mapper Layer
@@ -9,15 +17,6 @@ package mapreduce
 // Reducer Layer
 // Shuffle Layer divide fairly to every Reducer node
 // Prefix and Suffix array represents the dependency relationship between layers
-
-type MapReduceTopology struct {
-	NumOfMapper    uint64
-	NumOfReducer   uint64
-	NumOfShuffle   uint64
-	taskID         uint64
-	prefix, suffix []uint64
-}
-
 func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	t.taskID = taskID
 	var numOfPrefix uint64
@@ -86,7 +85,6 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 
 func (t *MapReduceTopology) GetLinkTypes() []string {
 	return []string{"Prefix", "Suffix"}
-	// return []string{"Prefix"}
 }
 
 func (t *MapReduceTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
@@ -100,13 +98,7 @@ func (t *MapReduceTopology) GetNeighbors(linkType string, epoch uint64) []uint64
 	return res
 }
 
-// TODO, do we really need to expose this?
-
-func (t *MapReduceTopology) SetNumberOfMapper(n uint64)  { t.NumOfMapper = n }
-func (t *MapReduceTopology) SetNumberOfShuffle(n uint64) { t.NumOfShuffle = n }
-func (t *MapReduceTopology) SetNumberOfReduer(n uint64)  { t.NumOfReducer = n }
-
-// Creates a new tree topology with given fanout and number of tasks.
+// Creates a new topology with given number of mapper, shuffle, and reducer
 // This will be called during the task graph configuration.
 func NewMapReduceTopology(nm, ns, nr uint64) *MapReduceTopology {
 	m := &MapReduceTopology{

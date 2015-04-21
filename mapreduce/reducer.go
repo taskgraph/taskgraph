@@ -1,17 +1,18 @@
 package mapreduce
 
 import (
-	"../../taskgraph"
-	pb "./proto"
 	"bufio"
 	"encoding/json"
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"io"
 	"log"
 	"os"
 	"strconv"
+
+	"../../taskgraph"
+	pb "./proto"
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 type reducerTask struct {
@@ -66,7 +67,6 @@ func (rd *reducerTask) run() {
 
 		case reducerDone := <-rd.finished:
 			rd.framework.FlagMeta(reducerDone.ctx, "Prefix", "metaReady")
-			// rd.framework.Kill()
 
 		case metaShuffleReady := <-rd.metaReady:
 			rd.logger.Printf("Meta Ready From Shuffle %d", metaShuffleReady.fromID)

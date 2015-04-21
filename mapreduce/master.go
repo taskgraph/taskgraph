@@ -23,6 +23,7 @@ type masterTask struct {
 	mapperNum  uint64
 	shuffleNum uint64
 	reducerNum uint64
+	outputWriter *bufio.Writer
 
 	finishedMapper  map[uint64]bool
 	finishedShuffle map[uint64]bool
@@ -48,10 +49,21 @@ func (m *masterTask) Init(taskID uint64, framework taskgraph.MapreduceFramework)
 	m.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	m.epoch = framework.GetEpoch()
 
+	// store the finished task number
 	m.finishedMapper = make(map[uint64]bool)
 	m.finishedShuffle = make(map[uint64]bool)
 	m.finishedReducer = make(map[uint64]bool)
 
+	// initialize output path
+	var err error
+	outputCloser, err := m.framework.GetClient().OpenWriteCloser(m.framework.GetOutputDirName() + "/" + m.framework.GetOutputFileName())
+	if err != nil {
+		m.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
+		return
+	}
+	m.outputWriter = bufio.NewWriterSize(outputCloser, m.framework.GetWriterBufferSize())
+
+	// channel init
 	m.epochChange = make(chan *masterEvent, 1)
 	m.metaReady = make(chan *masterEvent, 1)
 	m.dataReady = make(chan *masterEvent, 1)
@@ -71,6 +83,7 @@ func (m *masterTask) run() {
 			m.processReducerOut(metaReady.fromID)
 
 			if len(m.finishedReducer) >= int(m.reducerNum) {
+				m.outputWriter.Flush()
 				m.framework.ShutdownJob()
 			}
 
@@ -85,22 +98,16 @@ func (m *masterTask) processReducerOut(taskID uint64) {
 	client := m.framework.GetClient()
 	reducerPath := m.framework.GetOutputDirName() + "/" + "reducerResult" + strconv.FormatUint(taskID, 10)
 	reducerReadCloser, err := client.OpenReadCloser(reducerPath)
-	outputCloser, err := client.OpenWriteCloser(m.framework.GetOutputDirName() + "/" + m.framework.GetOutputFileName())
-	if err != nil {
-		m.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
-		return
-	}
-	bufioReader := bufio.NewReaderSize(reducerReadCloser, m.framework.GetReaderBufferSize())
 	var str []byte
 	err = nil
+	bufioReader := bufio.NewReaderSize(reducerReadCloser, m.framework.GetReaderBufferSize())
 	for err != io.EOF {
 		str, err = bufioReader.ReadBytes('\n')
-
 		if err != io.EOF && err != nil {
 			m.logger.Fatalf("MapReduce : Master read Error, ", err)
 			return
 		}
-		outputCloser.Write(str)
+		m.outputWriter.Write(str)
 	}
 	m.logger.Printf("%s removing..\n", reducerPath)
 	m.framework.Clean(reducerPath)
