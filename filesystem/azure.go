@@ -1,10 +1,10 @@
-// TO-DO : updated the semantics of the Azure filesystem
+// TODO : updated the semantics of the Azure filesystem
 // Explanation : 
 // current semantics is Container/Blob like "A/B", restricted by only one slash
-// Need to update the senmatics supported mulriple slash (As same as the local system semantic)
+// Need to update the senmatics supported multiple slash (As same as the local system semantic)
 // "/A/B/C/D", ignore the first slash, "A" represents the contianer name
 // and "B/C/D" represents the Blob name.
-// Correspendingly, the Blob function need to change.
+// Correspendingly, the Blob function, Remove function need to change.
 
 package filesystem
 
@@ -46,6 +46,20 @@ func convertToAzurePath(name string) (string, string, error) {
 		return "", "", fmt.Errorf("azureClient : the length of container should be 32")
 	}
 	return afterSplit[0], afterSplit[1], nil
+}
+
+//AzureClient -> Delete function
+// Delete specific Blob for input path
+// only support for removing blob
+// TODO : 
+// implement general remove func which could remove dir
+func (c *AzureClient) Remove(name string) error {
+	containerName, blobName, err := convertToAzurePath(name)
+	if err != nil {
+		return err
+	}
+	_, err = c.blobClient.DeleteBlobIfExists(containerName, blobName)
+	return err
 }
 
 // AzureClient -> Exist function

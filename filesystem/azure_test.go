@@ -74,6 +74,33 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 }
 
+func TestAzureClientRemove(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err :=randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Remove!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	
+	cli.Remove(containerName + "/" + blobName)
+	exist, err := cli.Exists(containerName + "/" + blobName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exist {
+		t.Fatalf("Pointed file removed failed")
+	}
+}	
+
 func TestAzureClientGlob(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
@@ -139,7 +166,10 @@ func TestAzureClientRename(t *testing.T) {
 	if !exist {
 		t.Fatalf("Rename failed")
 	}
-	exist, _ = cli.Exists(containerName + "/" + blobName)
+	exist, err = cli.Exists(containerName + "/" + blobName)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exist {
 		t.Fatalf("Rename failed")
 	}
