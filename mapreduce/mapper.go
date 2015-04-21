@@ -5,10 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
-	// "strconv"
 
 	"github.com/golang/protobuf/proto"
-	// "github.com/taskgraph/taskgraph/filesystem"
 	"../../taskgraph"
 	pb "./proto"
 	"golang.org/x/net/context"
@@ -43,6 +41,7 @@ func (mp *mapperTask) Init(taskID uint64, framework taskgraph.MapreduceFramework
 	mp.framework = framework
 	mp.framework.SetMapperOutputWriter()
 	mp.mapperFunc = mp.framework.GetMapperFunc()
+	
 	//channel init
 	mp.epochChange = make(chan *mapperEvent, 1)
 	mp.dataReady = make(chan *mapperEvent, 1)
@@ -61,7 +60,6 @@ func (mp *mapperTask) run() {
 
 		case mapperDone := <-mp.fileUpdate:
 			mp.framework.FlagMeta(mapperDone.ctx, "Prefix", "metaReady")
-			// mp.framework.Kill()
 
 		case <-mp.exitChan:
 			return

@@ -89,7 +89,6 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 	for {
 		select {
 		case resp = <-respChan:
-			logger.Println(resp)
 			idStr := path.Base(resp.Node.Key)
 			id, err := strconv.ParseUint(idStr, 10, 64)
 			if err != nil {
@@ -98,7 +97,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 			return id, nil
 		case <-time.After(10 * time.Second):
 			waitTime++
-			logger.Printf("Wait%d0", waitTime)
+			logger.Printf("Node already wait %d0s", waitTime)
 		}
 	}
 	
