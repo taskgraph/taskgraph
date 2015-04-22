@@ -20,6 +20,8 @@ type ioconfig struct {
 	ITPath    string
 	ODPath    string
 	OTPath    string
+	InitDPath string
+	InitTPath string
 
 	HdfsConf  hdfsConfig
 	AzureConf azureConfig

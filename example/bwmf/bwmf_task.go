@@ -112,8 +112,29 @@ func (t *bwmfTask) initData() {
 		N: -1,
 	}
 
-	t.dShard, _ = initDenseShard(t.dims.m, t.dims.k)
-	t.tShard, _ = initDenseShard(t.dims.n, t.dims.k)
+	if t.config.IOConf.InitDPath != "" {
+		t.dShard, rsErr = LoadDenseShard(t.fsClient, t.config.IOConf.InitDPath+"."+strconv.Itoa(int(t.taskID)))
+	} else {
+		t.dShard, rsErr = initDenseShard(t.dims.m, t.dims.k)
+	}
+	if rsErr != nil {
+		t.logger.Panicf("Failed initialize dShard. %s", rsErr)
+	}
+	if (len(t.dShard.Row) != t.dims.m) || (len(t.dShard.Row[0].At) != t.dims.k) {
+		t.logger.Panic("Dimension mismatch for pre-initialized dShard.")
+	}
+
+	if t.config.IOConf.InitTPath != "" {
+		t.tShard, rsErr = LoadDenseShard(t.fsClient, t.config.IOConf.InitTPath+"."+strconv.Itoa(int(t.taskID)))
+	} else {
+		t.tShard, rsErr = initDenseShard(t.dims.n, t.dims.k)
+	}
+	if rsErr != nil {
+		t.logger.Panicf("Failed initialize tShard. %s", rsErr)
+	}
+	if (len(t.tShard.Row) != t.dims.n) || (len(t.tShard.Row[0].At) != t.dims.k) {
+		t.logger.Panic("Dimension mismatch for pre-initialized tShard.")
+	}
 }
 
 func (t *bwmfTask) initOptUtil() {
