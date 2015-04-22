@@ -56,3 +56,4 @@ go test -v ./integration
 go test -v ./op
 go test -v ./filesystem
 go test -v ./example/topo
+go test -v ./example/bwmf
