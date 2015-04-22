@@ -24,7 +24,7 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 
 	var client filesystem.Client
 	var cltErr error
-	switch config.IOConf.IFs {
+	switch config.IOConf.Fs {
 	case "local":
 		client = filesystem.NewLocalFSClient()
 	case "hdfs":
@@ -48,7 +48,7 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 			panic(cltErr)
 		}
 	default:
-		panic(fmt.Errorf("Unknow fs: %s", config.IOConf.IFs))
+		panic(fmt.Errorf("Unknow fs: %s", config.IOConf.Fs))
 	}
 
 	return &bwmfTask{
