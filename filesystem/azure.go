@@ -44,7 +44,10 @@ func convertToAzurePath(name string) (string, string, error) {
 	if len(afterSplit[0]) != 32 {
 		return "", "", fmt.Errorf("azureClient : the length of container should be 32")
 	}
-	blobName := name[len(afterSplit[0])+1:]
+	blobName := ""
+	if len(afterSplit) > 1 {
+		blobName = name[len(afterSplit[0])+1:]
+	}
 	return afterSplit[0], blobName, nil
 }
 
@@ -129,6 +132,11 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 		if err != nil {
 			return err
 		}
+		_, err = c.blobClient.CreateContainerIfNotExists(dstContainerName, storage.ContainerAccessTypeBlob)
+		if err != nil {
+			return err
+		}
+		
 		for _, blob := range resp.Blobs {
 			err = c.moveBlob(dstContainerName, blob.Name, srcContainerName, blob.Name, true)
 			if err != nil {
