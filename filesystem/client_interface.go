@@ -13,4 +13,6 @@ type Client interface {
 	// Glob returns the names of all files matching pattern or
 	// nil if there is no matching file.
 	Glob(pattern string) (matches []string, err error)
+	// Remove specific file in filesystem
+	Remove(name string) error
 }

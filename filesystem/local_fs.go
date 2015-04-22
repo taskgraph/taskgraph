@@ -45,6 +45,10 @@ func (c *localFSClient) Glob(pattern string) (matches []string, err error) {
 	return filepath.Glob(pattern)
 }
 
+func (c *localFSClient) Remove(name string) error {
+	return os.Remove(name)
+}
+
 func existCommon(err error) (bool, error) {
 	if err == nil {
 		return true, nil

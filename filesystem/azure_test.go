@@ -74,6 +74,118 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 }
 
+func TestAzureClientExistContainer(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, err := cli.Exists(containerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Errorf("Existing contianer returned as non-existing: %s/%s", containerName, blobName)
+	}
+
+	err = cli.blobClient.DeleteContainer(containerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, err = cli.Exists(containerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Errorf("Non-existing contianer returned as existing: %s/%s", containerName, blobName)
+	}
+}
+
+func TestAzureClientExistBlob(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Exist!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	ok, err := cli.Exists(containerName + "/" + blobName + ".foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Errorf("Non-existing blob returned as existing: %s/%s", containerName, blobName)
+	}
+	ok, err = cli.Exists(containerName + "/" + blobName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Errorf("Existing blob returned as non-existing: %s/%s", containerName, blobName)
+	}
+}
+
+func TestAzureClientRemoveBlob(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Remove!"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
+
+	cli.Remove(containerName + "/" + blobName)
+	exist, err := cli.Exists(containerName + "/" + blobName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exist {
+		t.Fatalf("Pointed blob removed failed")
+	}
+}
+
+func TestAzureClientRemoveContainer(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.blobClient.DeleteContainer(containerName)
+
+	cli.Remove(containerName)
+	exist, err := cli.Exists(containerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exist {
+		t.Fatalf("Pointed contianer removed failed")
+	}
+}
+
 func TestAzureClientGlob(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
@@ -119,7 +231,7 @@ func TestAzureClientGlob(t *testing.T) {
 	}
 }
 
-func TestAzureClientRename(t *testing.T) {
+func TestAzureClientRenameBlob(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
 	if err != nil {
@@ -139,43 +251,63 @@ func TestAzureClientRename(t *testing.T) {
 	if !exist {
 		t.Fatalf("Rename failed")
 	}
-	exist, _ = cli.Exists(containerName + "/" + blobName)
+	exist, err = cli.Exists(containerName + "/" + blobName)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if exist {
 		t.Fatalf("Rename failed")
 	}
 	defer cli.blobClient.DeleteBlob(containerName, blobName+"-Rename")
 }
 
-func TestAzureClientExist(t *testing.T) {
+func TestAzureClientRenameContainer(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	srcContainerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
+
+	dstContainerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(containerName)
-	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Exist!"))
+	blobName := "rename"
+	_, err = cli.blobClient.CreateContainerIfNotExists(srcContainerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(containerName, blobName)
-	ok, err := cli.Exists(containerName + "/" + blobName + ".foo")
+	defer cli.blobClient.DeleteContainer(srcContainerName)
+	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"01", strings.NewReader("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ok {
-		t.Errorf("Non-existing blob returned as existing: %s/%s", containerName, blobName)
-	}
-	ok, err = cli.Exists(containerName + "/" + blobName)
+	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"02", strings.NewReader("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok {
-		t.Errorf("Existing blob returned as non-existing: %s/%s", containerName, blobName)
+
+	cli.Rename(srcContainerName, dstContainerName)
+	exist, _ := cli.Exists(dstContainerName + "/" + blobName + "01")
+	if !exist {
+		t.Fatalf("Rename failed")
 	}
+	exist, err = cli.Exists(dstContainerName + "/" + blobName + "02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exist {
+		t.Fatalf("Rename failed")
+	}
+
+	exist, err = cli.Exists(srcContainerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exist {
+		t.Fatalf("Rename failed")
+	}
+	defer cli.blobClient.DeleteContainer(dstContainerName)
 }
 
 func setupAzureTest(t *testing.T) *AzureClient {
