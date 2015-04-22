@@ -1,10 +1,12 @@
 // TODO : updated the semantics of the Azure filesystem
 // Explanation : 
 // current semantics is Container/Blob like "A/B", restricted by only one slash
-// Need to update the senmatics supported multiple slash (As same as the local system semantic)
+// Might need to update the senmatics supported multiple slash 
+// (As same as the local system semantic)
 // "/A/B/C/D", ignore the first slash, "A" represents the contianer name
 // and "B/C/D" represents the Blob name.
-// Correspendingly, the Blob function, Remove function need to change.
+// Correspendingly, the Blob function, Remove function, 
+// Exist function, Rename function need to change.
 
 package filesystem
 
@@ -39,45 +41,73 @@ type AzureFile struct {
 // It will return any error while converting
 func convertToAzurePath(name string) (string, string, error) {
 	afterSplit := strings.Split(name, "/")
-	if len(afterSplit) != 2 {
-		return "", "", fmt.Errorf("azureClient : need correct Azure storage path, example : container/blob")
-	}
 	if len(afterSplit[0]) != 32 {
 		return "", "", fmt.Errorf("azureClient : the length of container should be 32")
 	}
-	return afterSplit[0], afterSplit[1], nil
+	blobName := name[len(afterSplit[0])+1:]
+	return afterSplit[0], blobName, nil
 }
 
 //AzureClient -> Delete function
 // Delete specific Blob for input path
-// only support for removing blob
-// TODO : 
-// implement general remove func which could remove dir
 func (c *AzureClient) Remove(name string) error {
+	afterSplit := strings.Split(name, "/")
+	if len(afterSplit) == 1 && len(afterSplit[0]) == 32 {
+		_, err := c.blobClient.DeleteContainerIfExists(name)
+		if err != nil {
+			return err
+		}
+		return nil
+	} 
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
 		return err
 	}
 	_, err = c.blobClient.DeleteBlobIfExists(containerName, blobName)
 	return err
+	
 }
 
 // AzureClient -> Exist function
-// Only check the BlobName if exist or not
-// User should Provide corresponding ContainerName
+// support check the contianer or blob if exist or not
 func (c *AzureClient) Exists(name string) (bool, error) {
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
 		return false, err
 	}
-	return c.blobClient.BlobExists(containerName, blobName)
+	if blobName != "" {
+		return c.blobClient.BlobExists(containerName, blobName)
+	} else {
+		return c.blobClient.ContainerExists(containerName)
+	}
+
 }
 
-// AzureClient -> Rename function
+
 // Azure prevent user renaming their blob
 // Thus this function firstly copy the source blob,
 // when finished, delete the source blob.
 // http://stackoverflow.com/questions/3734672/azure-storage-blob-rename
+func (c *AzureClient) moveBlob(dstContainerName, dstBlobName, srcContainerName, srcBlobName string, isContainerRename bool) error {
+	dstBlobUrl := c.blobClient.GetBlobUrl(dstContainerName, dstBlobName)
+	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
+	if dstBlobUrl != srcBlobUrl {
+		err := c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
+		if err != nil {
+			return err
+		}
+		if !isContainerRename {
+			err = c.blobClient.DeleteBlob(srcContainerName, srcBlobName)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// AzureClient -> Rename function
+// support rename contianer and blob
 func (c *AzureClient) Rename(oldpath, newpath string) error {
 	exist, err := c.Exists(oldpath)
 	if err != nil {
@@ -94,18 +124,27 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 	if err != nil {
 		return err
 	}
-	dstBlobUrl := c.blobClient.GetBlobUrl(dstContainerName, dstBlobName)
-	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
-	err = c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
-	if err != nil {
-		return err
-	}
-	if dstBlobUrl != srcBlobUrl {
-		err = c.blobClient.DeleteBlob(srcContainerName, srcBlobName)
+	if srcBlobName == "" && dstBlobName == "" {
+		resp, err := c.blobClient.ListBlobs(srcContainerName, storage.ListBlobsParameters{Marker: ""})
 		if err != nil {
 			return err
 		}
+		for _, blob := range resp.Blobs {
+			err = c.moveBlob(dstContainerName, blob.Name, srcContainerName, blob.Name, true)
+			if err != nil {
+				return err
+			}
+		}
+		err = c.blobClient.DeleteContainer(srcContainerName)
+		if err != nil {
+			return err
+		}
+	} else if srcBlobName != "" && dstBlobName != "" {
+		c.moveBlob(dstContainerName, dstBlobName, srcContainerName, srcBlobName, false)
+	} else {
+		return fmt.Errorf("Rename path does not match")
 	}
+	
 	return nil
 }
 
