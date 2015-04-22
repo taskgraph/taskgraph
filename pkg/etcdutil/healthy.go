@@ -83,8 +83,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 		}
 	}()
 	var resp *etcd.Response
-	var waitTime uint64
-	waitTime = 0
+	var waitTime uint64 = 0
 	for {
 		select {
 		case resp = <-respChan:
