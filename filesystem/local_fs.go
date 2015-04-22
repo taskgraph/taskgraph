@@ -29,7 +29,7 @@ func (c *localFSClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 		}
 		return f, nil
 	}
-	return os.Open(name)
+	return os.OpenFile(name, os.O_WRONLY, 0)
 }
 
 func (c *localFSClient) Exists(name string) (bool, error) {
