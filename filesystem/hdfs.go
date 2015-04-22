@@ -46,6 +46,10 @@ func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
 	}, nil
 }
 
+func (c *HdfsClient) Remove(name string) error {
+	return c.client.Remove(name)
+}
+
 func (c *HdfsClient) OpenReadCloser(name string) (io.ReadCloser, error) {
 	return c.client.Open(name)
 }
