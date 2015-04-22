@@ -15,12 +15,11 @@ type optconfig struct {
 
 // xFs can be "local", ""
 type ioconfig struct {
-	IFs    string
-	IDPath string
-	ITPath string
-	OFs    string
-	ODPath string
-	OTPath string
+	Fs        string
+	IDPath    string
+	ITPath    string
+	ODPath    string
+	OTPath    string
 
 	HdfsConf  hdfsConfig
 	AzureConf azureConfig

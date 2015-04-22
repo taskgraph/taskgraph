@@ -15,12 +15,11 @@ func TestParseDump(t *testing.T) {
 			GradTol: 1e-6,
 		},
 		IOConf: ioconfig{
-			IFs:     "local",
-			IDPath:  "./row_shard.dat",
-			ITPath:  "./column_shard.dat",
-			OFs:     "local",
-			ODPath:  "./dShard.dat",
-			OTPath:  "./tShard.dat",
+			Fs:     "local",
+			IDPath: "./row_shard.dat",
+			ITPath: "./column_shard.dat",
+			ODPath: "./dShard.dat",
+			OTPath: "./tShard.dat",
 			HdfsConf: hdfsConfig{
 				NamenodeAddr: "name node addr",
 				WebHdfsAddr:  "web hdfs addr",
@@ -49,8 +48,8 @@ func TestParseDump(t *testing.T) {
 	}
 
 	fmt.Println("Parsed config is: ", *newConfig)
-	if newConfig.IOConf.IFs != config.IOConf.IFs {
-		t.Errorf("ioConf.iFs not equal.")
+	if newConfig.IOConf.Fs != config.IOConf.Fs {
+		t.Errorf("ioConf.Fs not equal.")
 	}
 
 	if newConfig.OptConf.Alpha != config.OptConf.Alpha {
