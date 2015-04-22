@@ -33,19 +33,3 @@ type MapreduceTask interface {
 	CreateOutputMessage(methodName string) proto.Message
 	CreateServer() *grpc.Server
 }
-
-type UpdateLog interface {
-	UpdateID()
-}
-
-// Backupable is an interface that task need to implement if they want to have
-// hot standby copy. This is another can of beans.
-type Backupable interface {
-	// Some hooks that need for master slave etc.
-	BecamePrimary()
-	BecameBackup()
-
-	// Framework notify this copy to update. This should be the only way that
-	// one update the state of copy.
-	Update(log UpdateLog)
-}
