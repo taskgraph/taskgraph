@@ -139,7 +139,7 @@ func TestAzureClientExistBlob(t *testing.T) {
 
 func TestAzureClientRemoveBlob(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err :=randString(32)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestAzureClientRemoveBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
-	
+
 	cli.Remove(containerName + "/" + blobName)
 	exist, err := cli.Exists(containerName + "/" + blobName)
 	if err != nil {
@@ -162,11 +162,11 @@ func TestAzureClientRemoveBlob(t *testing.T) {
 	if exist {
 		t.Fatalf("Pointed blob removed failed")
 	}
-}	
+}
 
 func TestAzureClientRemoveContainer(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err :=randString(32)
+	containerName, err := randString(32)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,11 +278,11 @@ func TestAzureClientRenameContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteContainer(srcContainerName)
-	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName + "01", strings.NewReader("Rename!"))
+	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"01", strings.NewReader("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName + "02", strings.NewReader("Rename!"))
+	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"02", strings.NewReader("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,6 @@ func TestAzureClientRenameContainer(t *testing.T) {
 	}
 	defer cli.blobClient.DeleteContainer(dstContainerName)
 }
-
 
 func setupAzureTest(t *testing.T) *AzureClient {
 	if TestAzureAccountName == "" || TestAzureAccountKey == "" || TestAzureBlobServiceBaseUrl == "" {

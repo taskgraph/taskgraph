@@ -1,11 +1,11 @@
 // TODO : updated the semantics of the Azure filesystem
-// Explanation : 
+// Explanation :
 // current semantics is Container/Blob like "A/B", restricted by only one slash
-// Might need to update the senmatics supported multiple slash 
+// Might need to update the senmatics supported multiple slash
 // (As same as the local system semantic)
 // "/A/B/C/D", ignore the first slash, "A" represents the contianer name
 // and "B/C/D" represents the Blob name.
-// Correspendingly, the Blob function, Remove function, 
+// Correspendingly, the Blob function, Remove function,
 // Exist function, Rename function need to change.
 
 package filesystem
@@ -61,14 +61,14 @@ func (c *AzureClient) Remove(name string) error {
 			return err
 		}
 		return nil
-	} 
+	}
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
 		return err
 	}
 	_, err = c.blobClient.DeleteBlobIfExists(containerName, blobName)
 	return err
-	
+
 }
 
 // AzureClient -> Exist function
@@ -85,7 +85,6 @@ func (c *AzureClient) Exists(name string) (bool, error) {
 	}
 
 }
-
 
 // Azure prevent user renaming their blob
 // Thus this function firstly copy the source blob,
@@ -136,7 +135,7 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		for _, blob := range resp.Blobs {
 			err = c.moveBlob(dstContainerName, blob.Name, srcContainerName, blob.Name, true)
 			if err != nil {
@@ -152,7 +151,7 @@ func (c *AzureClient) Rename(oldpath, newpath string) error {
 	} else {
 		return fmt.Errorf("Rename path does not match")
 	}
-	
+
 	return nil
 }
 
