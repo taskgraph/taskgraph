@@ -57,6 +57,9 @@ func (pg *ProjectedGradient) Minimize(loss Function, stop StopCriteria, vec Para
 				alpha /= pg.beta
 				newPoint(stt, cdd, ovalgrad.gradient, alpha/pg.beta, pg.projector)
 				evaluate(loss, cdd, tvalgrad)
+				if pg.isTooClose(cdd, nxt) {
+					break
+				}
 			}
 		} else {
 			// Now we decrease alpha barely enough to make sufficient decrease
@@ -96,6 +99,16 @@ func (pg *ProjectedGradient) isGoodStep(owts, nwts Parameter, ovg, nvg *vgpair) 
 		sum += float64(ovg.gradient.Get(i) * (nwts.Get(i) - owts.Get(i)))
 	}
 	return valdiff <= pg.sigma*float32(sum)
+}
+
+func (pg *ProjectedGradient) isTooClose(owts, nwts Parameter) bool {
+	sum := float64(0)
+	for it := owts.IndexIterator(); it.Next(); {
+		i := it.Index()
+		diff := float64(owts.Get(i) - nwts.Get(i))
+		sum += diff * diff
+	}
+	return sum < 1e-16*float64(owts.IndexIterator().Size())
 }
 
 // This creates a new point based on current point, step size and gradient.
