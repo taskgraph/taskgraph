@@ -3,13 +3,12 @@ package bwmf
 import (
 	"fmt"
 	"testing"
+	"github.com/taskgraph/taskgraph/filesystem"
 )
 
 func TestLoadShard(t *testing.T) {
-	conf := ioconfig{
-		IFs: "local",
-	}
-	shard, ldErr := LoadSparseShard(conf, "./data/row_shard.dat.1")
+	client := filesystem.NewLocalFSClient()
+	shard, ldErr := LoadSparseShard(client, "./data/row_shard.dat.1")
 
 	if ldErr != nil {
 		t.Errorf("Loading shard failed: %s", ldErr)
