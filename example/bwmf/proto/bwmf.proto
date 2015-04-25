@@ -15,19 +15,13 @@ message Request {
 
 message Response {
   uint64 blockId = 1;
-  DenseMatrixShard shard = 2;
+  MatrixShard shard = 2;
 }
 
-message DenseMatrixShard {
-  message DenseRow {
-    repeated float at = 1;
+message MatrixShard {
+  message RowData {
+    int32 rowId = 1;
+    map<int32, float> at = 2;
   }
-  repeated DenseRow row = 1;
-}
-
-message SparseMatrixShard {
-  message SparseRow {
-    map<int32, float> at = 1;
-  }
-  repeated SparseRow row = 1;
+  repeated RowData row = 1;
 }
