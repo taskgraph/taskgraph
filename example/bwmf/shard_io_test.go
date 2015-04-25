@@ -3,35 +3,63 @@ package bwmf
 import (
 	"fmt"
 	"testing"
+
+	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/filesystem"
 )
 
-func TestLoadShard(t *testing.T) {
+func TestShardIO(t *testing.T) {
 	client := filesystem.NewLocalFSClient()
-	shard, ldErr := LoadSparseShard(client, "./data/row_shard.dat.1")
+	path := "./.testShardIO.text.dat"
 
-	if ldErr != nil {
-		t.Errorf("Loading shard failed: %s", ldErr)
+	oldShard := &pb.MatrixShard{
+		Row: []*pb.MatrixShard_RowData{
+			&pb.MatrixShard_RowData{At: make(map[int32]float32)},
+			&pb.MatrixShard_RowData{At: make(map[int32]float32)},
+		},
 	}
 
-	fmt.Println("Loaded matrix shard is: ", shard)
+	oldShard.Row[0].At[0] = 0.70
+	oldShard.Row[0].At[1] = 1.00
+	oldShard.Row[0].At[2] = 0.90
+	oldShard.Row[1].At[1] = 0.70
+	oldShard.Row[1].At[2] = 0.80
+	oldShard.Row[1].At[3] = 0.90
+
+	client.Remove(path)
+	sErr := SaveMatrixShard(client, oldShard, path)
+	if sErr != nil {
+		t.Errorf("Saving shard failed: %s", sErr)
+	}
+
+	newShard, lErr := LoadMatrixShard(client, path)
+	if sErr != nil {
+		t.Errorf("Loading shard failed: %s", lErr)
+	}
+
 	// shard should be:
 	// -----------------------------
 	// | 0.70 | 1.00 | 0.90 | 0.00 |
 	// -----------------------------
-	if len(shard.GetRow()) != 1 {
-		t.Errorf("num of rows wrong. Expected 1, actual %d", len(shard.GetRow()))
+	// | 0.00 | 0.70 | 0.80 | 0.90 |
+	// -----------------------------
+	fmt.Println("Original matrix shard is: ", oldShard)
+	fmt.Println("Loaded matrix shard is: ", newShard)
+
+	if len(newShard.GetRow()) != len(oldShard.GetRow()) {
+		t.Errorf("num of rows wrong. Expected %d, actual %d", len(oldShard.GetRow()), len(newShard.GetRow()))
 	}
-	if shard.GetRow()[0].At[0] != 0.70 {
-		t.Errorf("M[0][0] incorrect. Expected 0.20, actual %f", shard.GetRow()[0].At[0])
-	}
-	if shard.GetRow()[0].At[1] != 1.00 {
-		t.Errorf("M[0][0] incorrect. Expected 1.00, actual %f", shard.GetRow()[0].At[1])
-	}
-	if shard.GetRow()[0].At[2] != 0.90 {
-		t.Errorf("M[0][0] incorrect. Expected 0.90, actual %f", shard.GetRow()[0].At[2])
-	}
-	if shard.GetRow()[0].At[3] != 0.00 {
-		t.Errorf("M[0][0] incorrect. Expected 0, actual %f", shard.GetRow()[0].At[3])
+
+	for i := 0; i < 2; i++ {
+		for k, v := range oldShard.Row[i].At {
+			if newShard.Row[i].At[k] != v {
+				t.Errorf("M[%d][%d] incorrect. Mismatched old %f, new %f", i, k, v, newShard.Row[i].At[k])
+			}
+		}
+		for k, v := range newShard.Row[i].At {
+			if oldShard.Row[i].At[k] != v {
+				t.Errorf("M[%d][%d] incorrect. Mismatched old %f, new %f", i, k, v, oldShard.Row[i].At[k])
+			}
+		}
 	}
 }
