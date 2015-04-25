@@ -46,12 +46,12 @@ type bwmfTask struct {
 	numIters   uint64
 	curIter    uint64
 
-	rowShard    *pb.SparseMatrixShard
-	columnShard *pb.SparseMatrixShard
-	dShard      *pb.DenseMatrixShard
-	tShard      *pb.DenseMatrixShard
+	rowShard    *pb.MatrixShard
+	columnShard *pb.MatrixShard
+	dShard      *pb.MatrixShard
+	tShard      *pb.MatrixShard
 
-	peerShards  map[uint64]*pb.DenseMatrixShard
+	peerShards  map[uint64]*pb.MatrixShard
 	peerUpdated map[uint64]bool
 
 	dims      *dimensions
@@ -63,6 +63,8 @@ type bwmfTask struct {
 	// optimization toolkits
 	dLoss        *KLDivLoss
 	tLoss        *KLDivLoss
+	dParam       op.Parameter
+	tParam       op.Parameter
 	optimizer    *op.ProjectedGradient
 	stopCriteria op.StopCriteria
 
@@ -95,11 +97,11 @@ type dimensions struct {
 func (t *bwmfTask) initData() {
 	var rsErr, csErr error
 
-	t.rowShard, rsErr = LoadSparseShard(t.fsClient, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
+	t.rowShard, rsErr = LoadMatrixShard(t.fsClient, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
 	if rsErr != nil {
 		t.logger.Panicf("Failed load rowShard. %s", rsErr)
 	}
-	t.columnShard, csErr = LoadSparseShard(t.fsClient, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
+	t.columnShard, csErr = LoadMatrixShard(t.fsClient, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
 	if csErr != nil {
 		t.logger.Panicf("Failed load columnShard. %s", csErr)
 	}
@@ -113,37 +115,84 @@ func (t *bwmfTask) initData() {
 	}
 
 	if t.config.IOConf.InitDPath != "" {
-		t.dShard, rsErr = LoadDenseShard(t.fsClient, t.config.IOConf.InitDPath+"."+strconv.Itoa(int(t.taskID)))
-	} else {
-		t.dShard, rsErr = initDenseShard(t.dims.m, t.dims.k)
-	}
-	if rsErr != nil {
-		t.logger.Panicf("Failed initialize dShard. %s", rsErr)
-	}
-	if (len(t.dShard.Row) != t.dims.m) || (len(t.dShard.Row[0].At) != t.dims.k) {
-		t.logger.Panic("Dimension mismatch for pre-initialized dShard.")
+		t.dShard, rsErr = LoadMatrixShard(t.fsClient, t.config.IOConf.InitDPath+"."+strconv.Itoa(int(t.taskID)))
+		if rsErr != nil {
+			t.logger.Panicf("Failed initialize dShard. %s", rsErr)
+		}
+		if len(t.dShard.Row) != t.dims.m {
+			t.logger.Panic("Dimension mismatch for pre-initialized dShard.")
+		}
 	}
 
 	if t.config.IOConf.InitTPath != "" {
-		t.tShard, rsErr = LoadDenseShard(t.fsClient, t.config.IOConf.InitTPath+"."+strconv.Itoa(int(t.taskID)))
-	} else {
-		t.tShard, rsErr = initDenseShard(t.dims.n, t.dims.k)
-	}
-	if rsErr != nil {
-		t.logger.Panicf("Failed initialize tShard. %s", rsErr)
-	}
-	if (len(t.tShard.Row) != t.dims.n) || (len(t.tShard.Row[0].At) != t.dims.k) {
-		t.logger.Panic("Dimension mismatch for pre-initialized tShard.")
+		t.tShard, rsErr = LoadMatrixShard(t.fsClient, t.config.IOConf.InitTPath+"."+strconv.Itoa(int(t.taskID)))
+		if rsErr != nil {
+			t.logger.Panicf("Failed initialize tShard. %s", rsErr)
+		}
+		if len(t.tShard.Row) != t.dims.n {
+			t.logger.Panic("Dimension mismatch for pre-initialized tShard.")
+		}
 	}
 }
 
 func (t *bwmfTask) initOptUtil() {
 	// init optimization utils
+	tParamLen := t.dims.n * t.dims.k
+	dParamLen := t.dims.m * t.dims.k
+
+	t.tParam = op.NewVecParameter(tParamLen)
+	t.dParam = op.NewVecParameter(dParamLen)
+
+	if t.tShard == nil {
+		// XXX: Initialize it random and sparse.
+		t.tShard = &pb.MatrixShard{
+			Row: make([]*pb.MatrixShard_RowData, t.dims.n),
+		}
+		m1 := int32((10 + t.dims.n) / 10)
+		for r, _ := range t.tShard.Row {
+			t.tShard.Row[r] = &pb.MatrixShard_RowData{At: make(map[int32]float32)}
+			if rand.Int31()%m1 == 0 {
+				for k := 0; k < t.dims.k; k++ {
+					t.tShard.Row[r].At[int32(k)] = rand.Float32()
+				}
+			}
+		}
+	}
+	// assign loaded tshard to tparam
+	for r, m := range t.tShard.GetRow() {
+		for c, v := range m.At {
+			t.tParam.Set(r*t.dims.k+int(c), v)
+		}
+	}
+
+	if t.dShard == nil {
+		// XXX: Initial at 0.0.
+		t.dShard = &pb.MatrixShard{
+			Row: make([]*pb.MatrixShard_RowData, t.dims.m),
+		}
+		m2 := int32((10 + t.dims.m) / 10)
+		for r, _ := range t.dShard.Row {
+			t.dShard.Row[r] = &pb.MatrixShard_RowData{At: make(map[int32]float32)}
+
+			if rand.Int31()%m2 == 0 {
+				for k := 0; k < t.dims.k; k++ {
+					t.tShard.Row[r].At[int32(k)] = rand.Float32()
+				}
+			}
+		}
+	}
+	// assign loaded dshard to dparam
+	for r, m := range t.dShard.GetRow() {
+		for c, v := range m.At {
+			t.dParam.Set(r*t.dims.k+int(c), v)
+		}
+	}
+
 	projLen := 0
-	if t.dims.m > t.dims.n {
-		projLen = t.dims.m * t.dims.k
+	if tParamLen > dParamLen {
+		projLen = tParamLen
 	} else {
-		projLen = t.dims.n * t.dims.k
+		projLen = dParamLen
 	}
 
 	t.optimizer = op.NewProjectedGradient(
@@ -155,19 +204,6 @@ func (t *bwmfTask) initOptUtil() {
 		t.config.OptConf.Sigma,
 		t.config.OptConf.Alpha,
 	)
-}
-
-func initDenseShard(l, k int) (*pb.DenseMatrixShard, error) {
-	shard := &pb.DenseMatrixShard{
-		Row: make([]*pb.DenseMatrixShard_DenseRow, l),
-	}
-	for i, _ := range shard.Row {
-		shard.Row[i] = &pb.DenseMatrixShard_DenseRow{At: make([]float32, k)}
-		for j, _ := range shard.Row[i].At {
-			shard.Row[i].At[j] = rand.Float32()
-		}
-	}
-	return shard, nil
 }
 
 // This is useful to bring the task up to speed from scratch or if it recovers.
@@ -243,14 +279,15 @@ func (t *bwmfTask) Exit() {
 }
 
 func (t *bwmfTask) finish() {
-	err := SaveDenseShard(t.fsClient, t.tShard, t.config.IOConf.OTPath+"."+strconv.Itoa(int(t.taskID)))
+	err := SaveMatrixShard(t.fsClient, t.tShard, t.config.IOConf.OTPath+"."+strconv.Itoa(int(t.taskID)))
 	if err != nil {
 		t.logger.Printf("Save tShard for task %d failed with error: %v", t.taskID, err)
 	}
-	err = SaveDenseShard(t.fsClient, t.dShard, t.config.IOConf.ODPath+"."+strconv.Itoa(int(t.taskID)))
+	err = SaveMatrixShard(t.fsClient, t.dShard, t.config.IOConf.ODPath+"."+strconv.Itoa(int(t.taskID)))
 	if err != nil {
 		t.logger.Printf("Save dShard for task %d failed with error: %v", t.taskID, err)
 	}
+
 	t.logger.Println("Finished. Waiting for the framework to stop the task...")
 }
 
@@ -260,7 +297,7 @@ func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 
 func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	t.logger.Printf("doEnterEpoch, task %d, epoch %d", t.taskID, epoch)
-	t.peerShards = make(map[uint64]*pb.DenseMatrixShard)
+	t.peerShards = make(map[uint64]*pb.MatrixShard)
 	t.peerUpdated = make(map[uint64]bool)
 	t.epoch = epoch
 	t.stopCriteria = op.MakeComposedCriterion(
@@ -314,28 +351,24 @@ func (t *bwmfTask) updateDShard(ctx context.Context) {
 		for _, m := range t.peerShards {
 			t.dims.N += len(m.Row)
 		}
-		wh := make([][]float32, t.dims.N)
-		for i, _ := range wh {
-			wh[i] = make([]float32, t.dims.m)
-		}
-		t.dLoss = &KLDivLoss{
-			V:  t.rowShard,
-			WH: wh,
-			m:  t.dims.N,
-			n:  t.dims.m,
-			k:  t.dims.k,
-		}
 	}
 
-	t.dLoss.W = NewBlocksParameter(&t.peerShards)
-	param := NewSingleBlockParameter(t.dShard)
+	W := make([]*pb.MatrixShard, t.numOfTasks)
+	for i, m := range t.peerShards {
+		W[i] = m
+	}
+	t.dLoss = NewKLDivLoss(t.rowShard, W, t.dims.N, t.dims.m, t.dims.k, 1e-9)
 
-	loss, optErr := t.optimizer.Minimize(t.dLoss, t.stopCriteria, param)
+	loss, optErr := t.optimizer.Minimize(t.dLoss, t.stopCriteria, t.dParam)
 	if optErr != nil {
 		t.logger.Panicf("Failed minimizing over dShard: %s", optErr)
 		// handle re-run
 		// XXX(baigang) just kill the framework and wait for restarting?
 	}
+
+	// save dParam to dShard
+	copyParamToShard(t.dParam, t.dShard, t.dims.k)
+
 	t.logger.Printf("Updated dShard, loss is %f", loss)
 
 	t.updateDone <- &event{ctx: ctx}
@@ -347,30 +380,39 @@ func (t *bwmfTask) updateTShard(ctx context.Context) {
 		for _, m := range t.peerShards {
 			t.dims.M += len(m.Row)
 		}
-		wh := make([][]float32, t.dims.M)
-		for i, _ := range wh {
-			wh[i] = make([]float32, t.dims.n)
-		}
-		t.tLoss = &KLDivLoss{
-			V:  t.columnShard,
-			WH: wh,
-			m:  t.dims.M,
-			n:  t.dims.n,
-			k:  t.dims.k,
-		}
 	}
 
-	t.tLoss.W = NewBlocksParameter(&t.peerShards)
-	param := NewSingleBlockParameter(t.tShard)
+	W := make([]*pb.MatrixShard, t.numOfTasks)
+	for i, m := range t.peerShards {
+		W[i] = m
+	}
+	t.tLoss = NewKLDivLoss(t.columnShard, W, t.dims.M, t.dims.n, t.dims.k, 1e-9)
 
-	loss, optErr := t.optimizer.Minimize(t.tLoss, t.stopCriteria, param)
+	loss, optErr := t.optimizer.Minimize(t.tLoss, t.stopCriteria, t.tParam)
 	if optErr != nil {
 		t.logger.Panicf("Failed minimizing over tShard:", optErr)
-		// TODO handle re-run
 	}
+
+	// save tParam to tShard
+	copyParamToShard(t.tParam, t.tShard, t.dims.k)
+
 	t.logger.Printf("Updated tShard, loss is %f", loss)
 
 	t.updateDone <- &event{ctx: ctx}
+}
+
+func copyParamToShard(param op.Parameter, shard *pb.MatrixShard, k int) {
+	for iter := param.IndexIterator(); iter.Next(); {
+		index := iter.Index()
+		r := index / k
+		c := index % k
+		v := param.Get(index)
+		if v > 1e-6 {
+			shard.Row[r].At[int32(c)] = v
+		} else {
+			delete(shard.Row[r].At, int32(c))
+		}
+	}
 }
 
 func (t *bwmfTask) notifyMaster(ctx context.Context) {
