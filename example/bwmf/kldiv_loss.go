@@ -57,31 +57,37 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 	H := param
 	op.Fill(gradient, 0.0)
 	value := float32(0.0)
-	wi := make([]float32, l.k)
 	for i := 0; i < l.m; i++ {
 		for j := 0; j < l.n; j++ {
-			v, _ := l.V.GetRow()[j].At[int32(i)]
-			wh := l.smooth // move away from 0
+			v, ve := l.V.GetRow()[j].At[int32(i)]
+			// wh := l.smooth // move away from 0
+			wh := float32(0.0)
 
-			for k := 0; k < l.k; k++ {
-				w := l.GetWElem(i, k)
-				wi[k] = w
-				wh += w * H.Get(j*l.k+k)
+			wRow := l.GetWRow(i)
+			for k, wk := range *wRow {
+				wh += wk * H.Get(j*l.k+int(k))
 			}
 
-			// evaluate element-wise KL-divergence
-			value += -v*float32(math.Log(float64(wh))) + wh
-
 			// accumulate to grad vec
-			for k := 0; k < l.k; k++ {
-				gradient.Add(j*l.k+k, wi[k]*(wh-v)/wh)
+			if ve {
+				// v is non-zero
+				value += -v*float32(math.Log(float64(wh+l.smooth))) + wh
+				for k, wk := range *wRow {
+					gradient.Add(j*l.k+int(k), wk*(1.0-(v+l.smooth)/(wh+l.smooth)))
+				}
+			} else {
+				// v is zero
+				value += wh
+				for k, wk := range *wRow {
+					gradient.Add(j*l.k+int(k), wk)
+				}
 			}
 		}
 	}
 	return value
 }
 
-func (l *KLDivLoss) GetWElem(row, column int) float32 {
+func (l *KLDivLoss) GetWRow(row int) *map[int32]float32 {
 	b := sort.Search(len(l.ends), func(i int) bool { return l.ends[i] > row }) - 1
-	return l.W[b].Row[row-l.ends[b]].At[int32(column)]
+	return &l.W[b].Row[row-l.ends[b]].At
 }
