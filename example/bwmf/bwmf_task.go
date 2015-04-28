@@ -331,69 +331,44 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 		if t.epoch%2 == 0 {
 			t.logger.Printf("Full D ready, task %d, epoch %d", t.taskID, t.epoch)
 			// XXX Starting an intensive computation.
-			go t.updateTShard(ctx)
+			if t.dims.M == -1 {
+				t.dims.M = 0
+				for _, m := range t.peerShards {
+					t.dims.M += len(m.Row)
+				}
+			}
+			go t.updateShard(ctx, t.dims.M, t.dims.n, t.dims.k, t.tParam, t.tShard, t.columnShard)
 		} else {
 			t.logger.Printf("Full T ready, task %d, epoch %d", t.taskID, t.epoch)
 			// XXX Starting an intensive computation.
-			go t.updateDShard(ctx)
+			if t.dims.N == -1 {
+				t.dims.N = 0
+				for _, m := range t.peerShards {
+					t.dims.N += len(m.Row)
+				}
+			}
+			go t.updateShard(ctx, t.dims.N, t.dims.m, t.dims.k, t.dParam, t.dShard, t.rowShard)
 		}
 	}
 }
 
-// These two function carry out actual optimization.
-func (t *bwmfTask) updateDShard(ctx context.Context) {
-	if t.dims.N == -1 {
-		t.dims.N = 0
-		for _, m := range t.peerShards {
-			t.dims.N += len(m.Row)
-		}
-	}
-
+func (t *bwmfTask) updateShard(ctx context.Context, m, n, k int,
+	param op.Parameter, shard *pb.MatrixShard, full *pb.MatrixShard) {
 	W := make([]*pb.MatrixShard, t.numOfTasks)
 	for i, m := range t.peerShards {
 		W[i] = m
 	}
-	t.dLoss = NewKLDivLoss(t.rowShard, W, t.dims.N, t.dims.m, t.dims.k, 1e-9)
 
-	loss, optErr := t.optimizer.Minimize(t.dLoss, t.stopCriteria, t.dParam)
+	loss := NewKLDivLoss(full, W, m, n, k, 1e-9)
+	val, optErr := t.optimizer.Minimize(loss, t.stopCriteria, param)
 	if optErr != nil {
-		t.logger.Panicf("Failed minimizing over dShard: %s", optErr)
+		t.logger.Panicf("Failed minimizing over shard: %s", optErr)
 		// handle re-run
 		// XXX(baigang) just kill the framework and wait for restarting?
 	}
 
-	// save dParam to dShard
-	copyParamToShard(t.dParam, t.dShard, t.dims.k)
-
-	t.logger.Printf("Updated dShard, loss is %f", loss)
-
-	t.updateDone <- &event{ctx: ctx}
-}
-
-func (t *bwmfTask) updateTShard(ctx context.Context) {
-	if t.dims.M == -1 {
-		t.dims.M = 0
-		for _, m := range t.peerShards {
-			t.dims.M += len(m.Row)
-		}
-	}
-
-	W := make([]*pb.MatrixShard, t.numOfTasks)
-	for i, m := range t.peerShards {
-		W[i] = m
-	}
-	t.tLoss = NewKLDivLoss(t.columnShard, W, t.dims.M, t.dims.n, t.dims.k, 1e-9)
-
-	loss, optErr := t.optimizer.Minimize(t.tLoss, t.stopCriteria, t.tParam)
-	if optErr != nil {
-		t.logger.Panicf("Failed minimizing over tShard:", optErr)
-	}
-
-	// save tParam to tShard
-	copyParamToShard(t.tParam, t.tShard, t.dims.k)
-
-	t.logger.Printf("Updated tShard, loss is %f", loss)
-
+	copyParamToShard(param, shard, k)
+	t.logger.Printf("Updated shard, loss is %f", val)
 	t.updateDone <- &event{ctx: ctx}
 }
 
