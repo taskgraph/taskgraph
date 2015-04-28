@@ -19,9 +19,10 @@ message Response {
 }
 
 message MatrixShard {
-  message RowData {
-    int32 rowId = 1;
-    map<int32, float> at = 2;
-  }
-  repeated RowData row = 1;
+  bool is_sparse = 1;
+  uint32 m = 2;
+  uint32 n = 3;
+  repeated float val = 4;
+  repeated uint32 ir = 5;
+  repeated uint32 jc = 6;
 }
