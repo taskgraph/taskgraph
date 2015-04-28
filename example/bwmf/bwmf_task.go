@@ -148,13 +148,10 @@ func (t *bwmfTask) initOptUtil() {
 		t.tShard = &pb.MatrixShard{
 			Row: make([]*pb.MatrixShard_RowData, t.dims.n),
 		}
-		m1 := int32((10 + t.dims.n) / 10)
 		for r, _ := range t.tShard.Row {
 			t.tShard.Row[r] = &pb.MatrixShard_RowData{RowId: int32(r), At: make(map[int32]float32)}
-			if rand.Int31()%m1 == 0 {
-				for k := 0; k < t.dims.k; k++ {
-					t.tShard.Row[r].At[int32(k)] = rand.Float32()
-				}
+			for k := 0; k < t.dims.k; k++ {
+				t.tShard.Row[r].At[int32(k)] = rand.Float32()
 			}
 		}
 	}
@@ -171,13 +168,10 @@ func (t *bwmfTask) initOptUtil() {
 			Row: make([]*pb.MatrixShard_RowData, t.dims.m),
 		}
 
-		m2 := int32((10 + t.dims.m) / 10)
 		for r, _ := range t.dShard.Row {
 			t.dShard.Row[r] = &pb.MatrixShard_RowData{RowId: int32(r), At: make(map[int32]float32)}
-			if rand.Int31()%m2 == 0 {
-				for k := 0; k < t.dims.k; k++ {
-					t.dShard.Row[r].At[int32(k)] = rand.Float32()
-				}
+			for k := 0; k < t.dims.k; k++ {
+				t.dShard.Row[r].At[int32(k)] = rand.Float32()
 			}
 		}
 	}
