@@ -62,11 +62,11 @@ func TaskMasterWork(appName, workStr string) string {
 }
 
 func TaskMasterWorkForType(appName, workType, idStr string) string {
-	return path.Join("/", appName, WorkDir, workStr)
+	return path.Join("/", appName, WorkDir, idStr)
 }
 
-func FreeWorkDir(appName, workType string) string {
-	return path.Join("/", appName, FreeDirForWork, workType)
+func FreeWorkDir(appName string) string {
+	return path.Join("/", appName, FreeDirForWork)
 }
 
 func FreeWorkPath(appName, workStr string) string {

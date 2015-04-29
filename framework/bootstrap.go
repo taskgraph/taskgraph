@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"../pkg/etcdutil"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
@@ -164,16 +164,16 @@ func (f *framework) releaseResource() {
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() error {
 	for {
-		freeTask, err := etcdutil.WaitFreeNode(FreeTaskDir(f.name), f.etcdClient, f.name, f.log)
+		freeTask, err := etcdutil.WaitFreeNode(etcdutil.FreeTaskDir(f.name), f.etcdClient, f.log)
 		if err != nil {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
 		idStr := strconv.FormatUint(freeTask, 10)
 		ok, err := etcdutil.TryOccupyNode(
-			FreeTaskPath(f.name, freeTask),
-			TaskHealthyPath(f.name, idStr),
-			TaskMasterPath(f.name, freeTask),
+			etcdutil.FreeTaskPath(f.name, idStr),
+			etcdutil.TaskHealthyPath(f.name, freeTask),
+			etcdutil.TaskMasterPath(f.name, freeTask),
 			f.etcdClient,
 			f.ln.Addr().String(),
 		)

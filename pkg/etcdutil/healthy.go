@@ -84,13 +84,12 @@ func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger) (
 	go func() {
 		for {
 			logger.Printf("start to wait failure at index %d", watchIndex)
-			resp, err := client.Watch(freeNodePath, watchIndex, true, nil, nil)
+			resp, err := client.Watch(freeNodeDir, watchIndex, true, nil, nil)
 			if err != nil {
 				logger.Printf("WARN: WaitFailure watch failed: %v", err)
 				return
 			}
-			if resp.Action == "set" 
-			{
+			if resp.Action == "set" {
 				respChan <- resp
 				return
 			}

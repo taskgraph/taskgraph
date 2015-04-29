@@ -6,7 +6,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func TryOccupyNode(freeNodePath, healthyPath string, setPath []string, client *etcd.Client, name string, nodeID uint64, connection string) (bool, error) {
+func TryOccupyNode(freeNodePath, healthyPath string, setPath string, client *etcd.Client, connection string) (bool, error) {
 	if healthyPath != "" {
 		_, err := client.Create(healthyPath, "health", 3)
 		if err != nil {
@@ -18,7 +18,7 @@ func TryOccupyNode(freeNodePath, healthyPath string, setPath []string, client *e
 	}
 	//
 	client.Delete(freeNodePath, false)
-	_, err = client.Set(setPath, connection, 0)
+	_, err := client.Set(setPath, connection, 0)
 	if err != nil {
 		return false, err
 	}
