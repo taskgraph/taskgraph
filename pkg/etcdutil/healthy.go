@@ -44,12 +44,26 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 // If a framework detects a failure, it tries to report failure to /FreeTasks/{taskID}
 func ReportFailure(client *etcd.Client, name, failedTask string) error {
 	_, err := client.Set(FreeTaskPath(name, failedTask), "failed", 0)
-	return err
+	if err != nil {
+		return err
+	}
+	work, err := client.Get(TaskMasterWork(name, failedTask), false, false)
+	if err != nil {
+		return err
+	}
+	if work != nil {
+		_, err := client.Set(FreeWorkPath(name, work.Node.Value), "failed", 0)
+		if err != nil {
+			return err
+		}
+		client.Delete(TaskMasterWork(name, failedTask), false)
+	}
+	return nil
 }
 
 // WaitFreeTask blocks until it gets a hint of free task
-func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64, error) {
-	slots, err := client.Get(FreeTaskDir(name), false, true)
+func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger) (uint64, error) {
+	slots, err := client.Get(freeNodeDir, false, true)
 	if err != nil {
 		return 0, err
 	}
@@ -70,12 +84,13 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 	go func() {
 		for {
 			logger.Printf("start to wait failure at index %d", watchIndex)
-			resp, err := client.Watch(FreeTaskDir(name), watchIndex, true, nil, nil)
+			resp, err := client.Watch(freeNodePath, watchIndex, true, nil, nil)
 			if err != nil {
 				logger.Printf("WARN: WaitFailure watch failed: %v", err)
 				return
 			}
-			if resp.Action == "set" {
+			if resp.Action == "set" 
+			{
 				respChan <- resp
 				return
 			}

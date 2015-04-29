@@ -1,23 +1,24 @@
 package etcdutil
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func TryOccupyTask(client *etcd.Client, name string, taskID uint64, connection string) (bool, error) {
-	_, err := client.Create(TaskHealthyPath(name, taskID), "health", 3)
-	if err != nil {
-		if strings.Contains(err.Error(), "Key already exists") {
-			return false, nil
+func TryOccupyNode(freeNodePath, healthyPath string, setPath []string, client *etcd.Client, name string, nodeID uint64, connection string) (bool, error) {
+	if healthyPath != "" {
+		_, err := client.Create(healthyPath, "health", 3)
+		if err != nil {
+			if strings.Contains(err.Error(), "Key already exists") {
+				return false, nil
+			}
+			return false, err
 		}
-		return false, err
 	}
-	idStr := strconv.FormatUint(taskID, 10)
-	client.Delete(FreeTaskPath(name, idStr), false)
-	_, err = client.Set(TaskMasterPath(name, taskID), connection, 0)
+	//
+	client.Delete(freeNodePath, false)
+	_, err = client.Set(setPath, connection, 0)
 	if err != nil {
 		return false, err
 	}

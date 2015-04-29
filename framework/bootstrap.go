@@ -164,12 +164,19 @@ func (f *framework) releaseResource() {
 // occupyTask will grab the first unassigned task and register itself on etcd.
 func (f *framework) occupyTask() error {
 	for {
-		freeTask, err := etcdutil.WaitFreeTask(f.etcdClient, f.name, f.log)
+		freeTask, err := etcdutil.WaitFreeNode(FreeTaskDir(f.name), f.etcdClient, f.name, f.log)
 		if err != nil {
 			return err
 		}
 		f.log.Printf("standby grabbed free task %d", freeTask)
-		ok, err := etcdutil.TryOccupyTask(f.etcdClient, f.name, freeTask, f.ln.Addr().String())
+		idStr := strconv.FormatUint(freeTask, 10)
+		ok, err := etcdutil.TryOccupyNode(
+			FreeTaskPath(f.name, freeTask),
+			TaskHealthyPath(f.name, idStr),
+			TaskMasterPath(f.name, freeTask),
+			f.etcdClient,
+			f.ln.Addr().String(),
+		)
 		if err != nil {
 			return err
 		}

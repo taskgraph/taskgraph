@@ -30,7 +30,7 @@ const (
 	NodeTTL        = "ttl"
 	Healthy        = "healthy"
 	FreeDirForWork = "freeWorks"
-	}        = "work"
+	WorkDir        = "work"
 )
 
 func EpochPath(appName string) string {
@@ -57,15 +57,24 @@ func FreeTaskPath(appName, idStr string) string {
 	return path.Join(FreeTaskDir(appName), idStr)
 }
 
-func TaskMasterWork(appName, idStr string) string {
-	return path.Join("/", appName, WorkDir, idStr)
+func TaskMasterWork(appName, workStr string) string {
+	return path.Join("/", appName, WorkDir, workStr)
 }
 
-func FreeWorkDir(appName string) string {
-	return path.Join("/", appName, FreeDirForWork)
+func TaskMasterWorkForType(appName, workType, idStr string) string {
+	return path.Join("/", appName, WorkDir, workStr)
 }
-func FreeWorkPath(appName, idStr string) string {
-	return path.Join(FreeWorkDir(appName), idStr)
+
+func FreeWorkDir(appName, workType string) string {
+	return path.Join("/", appName, FreeDirForWork, workType)
+}
+
+func FreeWorkPath(appName, workStr string) string {
+	return path.Join(FreeWorkDir(appName), workStr)
+}
+
+func FreeWorkPathForType(appName, workType, idStr string) string {
+	return path.Join(FreeWorkDir(appName), workType, idStr)
 }
 
 func TaskDirPath(appName string) string {
