@@ -176,7 +176,7 @@ func (t *bwmfTask) initOptUtil() {
 
 			if rand.Int31()%m2 == 0 {
 				for k := 0; k < t.dims.k; k++ {
-					t.tShard.Row[r].At[int32(k)] = rand.Float32()
+					t.dShard.Row[r].At[int32(k)] = rand.Float32()
 				}
 			}
 		}
