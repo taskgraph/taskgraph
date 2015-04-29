@@ -26,3 +26,19 @@ func BenchmarkMatrix(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMatrixRaw(b *testing.B) {
+	wData := make([]float32, nRow * nTopic)
+	tData := make([]float32, nTopic * nColumn)
+
+	for iter := 0; iter < b.N; iter++ {
+		sum := float32(0.0)
+		for i := uint32(0); i < nRow; i++ {
+			for k := uint32(0); k < nTopic; k++ {
+				for j := uint32(0); j < nColumn; j++ {
+					sum += wData[i * nTopic + k] * tData[k * nTopic + j]
+				}
+			}
+		}
+	}
+}

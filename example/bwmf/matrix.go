@@ -8,6 +8,8 @@ type Matrix struct {
 	data 	*pb.MatrixShard
 }
 
+// The use of following functions to access matrxies is NOT recommanded,
+// as it will harm the performace given golang's limited inline support.
 func (self *Matrix) Get(r, c uint32) float32 {
 	return self.data.Val[r*self.data.N + c]
 }
