@@ -20,8 +20,6 @@ func TestEvaluation(t *testing.T) {
 
 	kld_loss := newKLDivLoss()
 
-	fmt.Println("KLDIVLOSS is: ", kld_loss)
-
 	loss_val := kld_loss.Evaluate(h, g)
 
 	fmt.Println("loss val is ", loss_val)
@@ -50,9 +48,9 @@ func TestEvaluation(t *testing.T) {
 }
 
 func newKLDivLoss() *KLDivLoss {
-	m := 3
-	n := 2
-	k := 2
+	m := uint32(3)
+	n := uint32(2)
+	k := uint32(2)
 
 	// v is
 	// -------------
@@ -63,10 +61,9 @@ func newKLDivLoss() *KLDivLoss {
 	// | 0.5 | 0.5 |
 	// |-----|-----|
 	v := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{
-			&pb.MatrixShard_RowData{RowId: 0, At: map[int32]float32{1: 1.0, 2: 0.5}},
-			&pb.MatrixShard_RowData{RowId: 1, At: map[int32]float32{0: 1.0, 2: 0.5}},
-		},
+		M: 2,
+		N: 3,
+		Val: []float32 {0.0, 1.0, 0.5, 1.0, 0.0, 0.5},
 	}
 
 	// w is composed by two shards:
@@ -84,15 +81,14 @@ func newKLDivLoss() *KLDivLoss {
 	//
 	w := []*pb.MatrixShard{
 		&pb.MatrixShard{
-			Row: []*pb.MatrixShard_RowData{
-				&pb.MatrixShard_RowData{RowId: 0, At: map[int32]float32{0: 1.0}},
-				&pb.MatrixShard_RowData{RowId: 1, At: map[int32]float32{1: 1.0}},
-			},
+			M: 2,
+			N: n,
+			Val: []float32 {1.0, 0, 0.0, 1.0},
 		},
 		&pb.MatrixShard{
-			Row: []*pb.MatrixShard_RowData{
-				&pb.MatrixShard_RowData{RowId: 0, At: map[int32]float32{0: 0.5, 1: 0.5}},
-			},
+			M: 1,
+			N: n,
+			Val: []float32 {0.5, 0.5},
 		},
 	}
 
