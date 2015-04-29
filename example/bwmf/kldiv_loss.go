@@ -57,28 +57,32 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 	value := float32(0.0)
 
 	M, N, K := l.W.M(), l.V.M(), l.W.N()
+	H_data := H.Data()
+	grad_data := gradient.Data()
+	w_data := l.W.data.Val
+	V_data := l.V.data.Val
 
 	for i := uint32(0); i < M; i++ {
 		for j := uint32(0); j < N; j++ {
-			v := l.V.Get(j, i)
 			wh := float32(0.0)
 			for k := uint32(0); k < K; k += 1 {
-				wh += l.W.Get(i,k) * H.Get(int(j*K+k))
+				wh += w_data[i*K+k] * H_data[j*K+k]
 			}
-			// accumulate to grad vec
 
+			// accumulate to grad vec
+			v := V_data[j*M + i]
 			if v != 0.0 {
 				// v is non-zero
 				value += -v*float32(math.Log(float64(wh+l.smooth))) + wh
 				for k := uint32(0); k < K; k += 1 {
-					gradient.Add(int(j*K+k), l.W.Get(i,k)*(1.0-(v+l.smooth)/(wh+l.smooth)))
+					grad_data[j*K+k] += w_data[i*K+k]*(1.0-(v+l.smooth)/(wh+l.smooth))
 				}
 			} else {
 				// v is zero
 				value += wh
 
 				for k := uint32(0); k < K; k += 1 {
-					gradient.Add(int(j*K+k), l.W.Get(i,k))
+					grad_data[j*K+k] += w_data[i*K+k]
 				}
 			}
 		}

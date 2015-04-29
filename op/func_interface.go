@@ -26,6 +26,9 @@ type Parameter interface {
 
 	// This allow one to enumerate through all parameters
 	IndexIterator() IndexIterator
+
+	// Return raw data pointer
+	Data() []float32
 }
 
 // This func is useful to fill the parameter with the same value
