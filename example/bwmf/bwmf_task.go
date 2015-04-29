@@ -88,8 +88,8 @@ type event struct {
 }
 
 type dimensions struct {
-	m, n, k int
-	M, N    int
+	m, n, k uint32
+	M, N    uint32
 }
 
 func (t *bwmfTask) initData() {
@@ -107,11 +107,11 @@ func (t *bwmfTask) initData() {
 	}
 
 	t.dims = &dimensions{
-		m: len(t.rowShard.Row),
-		n: len(t.columnShard.Row),
+		m: t.rowShard.M,
+		n: t.columnShard.M,
 		k: t.config.OptConf.DimLatent,
-		M: -1,
-		N: -1,
+		M: 0,
+		N: 0,
 	}
 
 	if t.config.IOConf.InitDPath != "" {
@@ -119,7 +119,7 @@ func (t *bwmfTask) initData() {
 		if rsErr != nil {
 			t.logger.Panicf("Failed initialize dShard. %s", rsErr)
 		}
-		if len(t.dShard.Row) != t.dims.m {
+		if t.dShard.M != t.dims.m {
 			t.logger.Panic("Dimension mismatch for pre-initialized dShard.")
 		}
 	}
@@ -129,7 +129,7 @@ func (t *bwmfTask) initData() {
 		if rsErr != nil {
 			t.logger.Panicf("Failed initialize tShard. %s", rsErr)
 		}
-		if len(t.tShard.Row) != t.dims.n {
+		if t.tShard.M != t.dims.n {
 			t.logger.Panic("Dimension mismatch for pre-initialized tShard.")
 		}
 	}
@@ -140,49 +140,43 @@ func (t *bwmfTask) initOptUtil() {
 	tParamLen := t.dims.n * t.dims.k
 	dParamLen := t.dims.m * t.dims.k
 
-	t.tParam = op.NewVecParameter(tParamLen)
-	t.dParam = op.NewVecParameter(dParamLen)
+	t.tParam = op.NewVecParameter(int(tParamLen))
+	t.dParam = op.NewVecParameter(int(dParamLen))
 
 	if t.tShard == nil {
 		// XXX: Initialize it random and sparse.
-		t.tShard = &pb.MatrixShard{
-			Row: make([]*pb.MatrixShard_RowData, t.dims.n),
+		t.tShard = &pb.MatrixShard {
+			M: t.dims.n,
+			N: t.dims.k,
+			Val: make([]float32, t.dims.n * t.dims.k),
 		}
-		for r, _ := range t.tShard.Row {
-			t.tShard.Row[r] = &pb.MatrixShard_RowData{RowId: int32(r), At: make(map[int32]float32)}
-			for k := 0; k < t.dims.k; k++ {
-				t.tShard.Row[r].At[int32(k)] = rand.Float32()
-			}
+		for i := uint32(0); i < t.tShard.M * t.tShard.N; i++ {
+			t.tShard.Val[i] = rand.Float32()
 		}
 	}
 	// assign loaded tshard to tparam
-	for r, m := range t.tShard.GetRow() {
-		for c, v := range m.At {
-			t.tParam.Set(r*t.dims.k+int(c), v)
-		}
+	for i := 0; i < int(t.tShard.M * t.tShard.N); i++ {
+		t.tParam.Set(i, t.tShard.Val[i])
 	}
 
 	if t.dShard == nil {
 		// XXX: Initial at 0.0.
-		t.dShard = &pb.MatrixShard{
-			Row: make([]*pb.MatrixShard_RowData, t.dims.m),
+		t.dShard = &pb.MatrixShard {
+			M: t.dims.m,
+			N: t.dims.k,
+			Val: make([]float32, t.dims.m * t.dims.k),
 		}
 
-		for r, _ := range t.dShard.Row {
-			t.dShard.Row[r] = &pb.MatrixShard_RowData{RowId: int32(r), At: make(map[int32]float32)}
-			for k := 0; k < t.dims.k; k++ {
-				t.dShard.Row[r].At[int32(k)] = rand.Float32()
-			}
+		for i := uint32(0); i < t.dShard.M * t.dShard.N; i++ {
+			t.dShard.Val[i] = rand.Float32()
 		}
 	}
 	// assign loaded dshard to dparam
-	for r, m := range t.dShard.GetRow() {
-		for c, v := range m.At {
-			t.dParam.Set(r*t.dims.k+int(c), v)
-		}
+	for i := 0; i < int(t.dShard.M * t.dShard.N); i++ {
+		t.dParam.Set(i, t.dShard.Val[i])
 	}
 
-	projLen := 0
+	projLen := uint32(0)
 	if tParamLen > dParamLen {
 		projLen = tParamLen
 	} else {
@@ -191,8 +185,8 @@ func (t *bwmfTask) initOptUtil() {
 
 	t.optimizer = op.NewProjectedGradient(
 		op.NewProjection(
-			op.NewAllTheSameParameter(1e20, projLen),
-			op.NewAllTheSameParameter(1e-8, projLen),
+			op.NewAllTheSameParameter(1e20, int(projLen)),
+			op.NewAllTheSameParameter(1e-8, int(projLen)),
 		),
 		t.config.OptConf.Beta,
 		t.config.OptConf.Sigma,
@@ -331,20 +325,20 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 		if t.epoch%2 == 0 {
 			t.logger.Printf("Full D ready, task %d, epoch %d", t.taskID, t.epoch)
 			// XXX Starting an intensive computation.
-			if t.dims.M == -1 {
+			if t.dims.M == 0 {
 				t.dims.M = 0
 				for _, m := range t.peerShards {
-					t.dims.M += len(m.Row)
+					t.dims.M += m.M
 				}
 			}
 			go t.updateShard(ctx, t.dims.M, t.dims.n, t.dims.k, t.tParam, t.tShard, t.columnShard)
 		} else {
 			t.logger.Printf("Full T ready, task %d, epoch %d", t.taskID, t.epoch)
 			// XXX Starting an intensive computation.
-			if t.dims.N == -1 {
+			if t.dims.N == 0 {
 				t.dims.N = 0
 				for _, m := range t.peerShards {
-					t.dims.N += len(m.Row)
+					t.dims.N += m.M
 				}
 			}
 			go t.updateShard(ctx, t.dims.N, t.dims.m, t.dims.k, t.dParam, t.dShard, t.rowShard)
@@ -352,7 +346,7 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 	}
 }
 
-func (t *bwmfTask) updateShard(ctx context.Context, m, n, k int,
+func (t *bwmfTask) updateShard(ctx context.Context, m, n, k uint32,
 	param op.Parameter, shard *pb.MatrixShard, full *pb.MatrixShard) {
 	W := make([]*pb.MatrixShard, t.numOfTasks)
 	for i, m := range t.peerShards {
@@ -367,22 +361,16 @@ func (t *bwmfTask) updateShard(ctx context.Context, m, n, k int,
 		// XXX(baigang) just kill the framework and wait for restarting?
 	}
 
-	copyParamToShard(param, shard, k)
+	copyParamToShard(param, shard)
 	t.logger.Printf("Updated shard, loss is %f", val)
 	t.updateDone <- &event{ctx: ctx}
 }
 
-func copyParamToShard(param op.Parameter, shard *pb.MatrixShard, k int) {
+func copyParamToShard(param op.Parameter, shard *pb.MatrixShard) {
 	for iter := param.IndexIterator(); iter.Next(); {
 		index := iter.Index()
-		r := index / k
-		c := index % k
 		v := param.Get(index)
-		if v > 1e-6 {
-			shard.Row[r].At[int32(c)] = v
-		} else {
-			delete(shard.Row[r].At, int32(c))
-		}
+		shard.Val[index] = v
 	}
 }
 
