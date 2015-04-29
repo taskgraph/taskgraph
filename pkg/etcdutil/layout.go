@@ -19,16 +19,18 @@ import (
 //   /{app}/FreeTasks/{taskID}
 
 const (
-	TasksDir   = "tasks"
-	NodesDir   = "nodes"
-	ConfigDir  = "config"
-	FreeDir    = "freeTasks"
-	Epoch      = "epoch"
-	Status     = "status"
-	TaskMaster = "0"
-	NodeAddr   = "address"
-	NodeTTL    = "ttl"
-	Healthy    = "healthy"
+	TasksDir       = "tasks"
+	NodesDir       = "nodes"
+	ConfigDir      = "config"
+	FreeDir        = "freeTasks"
+	Epoch          = "epoch"
+	Status         = "status"
+	TaskMaster     = "0"
+	NodeAddr       = "address"
+	NodeTTL        = "ttl"
+	Healthy        = "healthy"
+	FreeDirForWork = "freeWorks"
+	}        = "work"
 )
 
 func EpochPath(appName string) string {
@@ -46,11 +48,24 @@ func HealthyPath(appName string) string {
 func TaskHealthyPath(appName string, taskID uint64) string {
 	return path.Join(HealthyPath(appName), strconv.FormatUint(taskID, 10))
 }
+
 func FreeTaskDir(appName string) string {
 	return path.Join("/", appName, FreeDir)
 }
+
 func FreeTaskPath(appName, idStr string) string {
 	return path.Join(FreeTaskDir(appName), idStr)
+}
+
+func TaskMasterWork(appName, idStr string) string {
+	return path.Join("/", appName, WorkDir, idStr)
+}
+
+func FreeWorkDir(appName string) string {
+	return path.Join("/", appName, FreeDirForWork)
+}
+func FreeWorkPath(appName, idStr string) string {
+	return path.Join(FreeWorkDir(appName), idStr)
 }
 
 func TaskDirPath(appName string) string {
