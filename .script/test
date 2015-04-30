@@ -6,9 +6,16 @@ if [ ! -d ".tmp" ]; then
     mkdir .tmp
 fi
 
+clean_test_files() {
+  rm	example/bwmf/data/dShard.dat.0 > /dev/null 2>&1
+  rm	example/bwmf/data/dShard.dat.1 > /dev/null 2>&1
+  rm	example/bwmf/data/tShard.dat.0 > /dev/null 2>&1
+  rm	example/bwmf/data/tShard.dat.1 > /dev/null 2>&1
+}
 cleanup() {
   kill $(jobs -p) 2>/dev/null
   rm -r $ETCDTESTDIR
+  clean_test_files
 }
 # cleanup on any kind of exit
 trap "cleanup" SIGINT SIGTERM EXIT
@@ -49,13 +56,6 @@ else
   exit 1
 fi
 
-clean_test_files() {
-  rm	example/bwmf/data/dShard.dat.0
-  rm	example/bwmf/data/dShard.dat.1
-  rm	example/bwmf/data/tShard.dat.0
-  rm	example/bwmf/data/tShard.dat.1
-}
-
 # testing
 go test -v ./controller
 go test -v ./framework
@@ -64,5 +64,3 @@ go test -v ./op
 go test -v ./filesystem
 go test -v ./example/topo
 go test -v ./example/bwmf
-
-clean_test_files
