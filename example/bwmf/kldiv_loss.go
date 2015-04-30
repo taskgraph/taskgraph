@@ -58,12 +58,12 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 	op.Fill(gradient, 0.0)
 	value := float32(0.0)
 	for i := 0; i < l.m; i++ {
+		wRow := l.GetWRow(i)
 		for j := 0; j < l.n; j++ {
 			v, ve := l.V.GetRow()[j].At[int32(i)]
 			// wh := l.smooth // move away from 0
 			wh := float32(0.0)
 
-			wRow := l.GetWRow(i)
 			for k, wk := range *wRow {
 				wh += wk * H.Get(j*l.k+int(k))
 			}
