@@ -153,9 +153,9 @@ func RegisterBlockDataServer(s *grpc.Server, srv BlockDataServer) {
 	s.RegisterService(&_BlockData_serviceDesc, srv)
 }
 
-func _BlockData_GetTShard_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
+func _BlockData_GetTShard_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(Request)
-	if err := proto1.Unmarshal(buf, in); err != nil {
+	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(BlockDataServer).GetTShard(ctx, in)
@@ -165,9 +165,9 @@ func _BlockData_GetTShard_Handler(srv interface{}, ctx context.Context, buf []by
 	return out, nil
 }
 
-func _BlockData_GetDShard_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
+func _BlockData_GetDShard_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(Request)
-	if err := proto1.Unmarshal(buf, in); err != nil {
+	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(BlockDataServer).GetDShard(ctx, in)
