@@ -49,6 +49,13 @@ else
   exit 1
 fi
 
+clean_test_files() {
+  rm	example/bwmf/data/dShard.dat.0
+  rm	example/bwmf/data/dShard.dat.1
+  rm	example/bwmf/data/tShard.dat.0
+  rm	example/bwmf/data/tShard.dat.1
+}
+
 # testing
 go test -v ./controller
 go test -v ./framework
@@ -57,3 +64,5 @@ go test -v ./op
 go test -v ./filesystem
 go test -v ./example/topo
 go test -v ./example/bwmf
+
+clean_test_files
