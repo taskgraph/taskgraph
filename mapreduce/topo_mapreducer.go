@@ -17,7 +17,7 @@ type MapReduceTopology struct {
 // Reducer Layer
 // Shuffle Layer divide fairly to every Reducer node
 // Prefix and Suffix array represents the dependency relationship between layers
-func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
+func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	t.prefix = make([][]uint64, 0, 2)
 	t.suffix = make([][]uint64, 0, 2)
 	t.master = make([][]uint64, 0, 2)
@@ -56,7 +56,7 @@ func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
 
 	suffix := make([]uint64, 0, numOfSuffix)
 	for index := scopeL; index < scopeL+numOfSuffix; index++ {
-		suffix = append(t.suffix, index)
+		suffix = append(suffix, index)
 	}
 
 	master := make([]uint64, 0, 1)
@@ -64,7 +64,7 @@ func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
 	if taskID != t.NumOfMapper+t.NumOfShuffle {
 		master = append(master, t.NumOfMapper+t.NumOfShuffle)
 	} else {
-		for index := 0; index < NumOfMapper+t.NumOfShuffle; index++ {
+		for index := uint64(0); index < t.NumOfMapper+t.NumOfShuffle; index++ {
 			slave = append(slave, index)
 		}
 	}
@@ -128,11 +128,11 @@ func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
 	}
 
 	master = make([]uint64, 0, 1)
-	slave := make([]uint64, 0, t.NumOfReducer+t.NumOfShuffle)
+	slave = make([]uint64, 0, t.NumOfReducer+t.NumOfShuffle)
 	if taskID != t.NumOfReducer+t.NumOfShuffle {
 		master = append(master, t.NumOfReducer+t.NumOfShuffle)
 	} else {
-		for index := 0; index < t.NumOfReducer+t.NumOfShuffle; index++ {
+		for index := uint64(0); index < t.NumOfReducer+t.NumOfShuffle; index++ {
 			slave = append(slave, index)
 		}
 	}
@@ -144,11 +144,11 @@ func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
 
 }
 
-func (t *MapperShuffleTopology) GetLinkTypes() []string {
+func (t *MapReduceTopology) GetLinkTypes() []string {
 	return []string{"Master", "Slave", "Prefix", "Suffix"}
 }
 
-func (t *MapperShuffleTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *MapReduceTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
 	case linkType == "Prefix":
@@ -157,7 +157,7 @@ func (t *MapperShuffleTopology) GetNeighbors(linkType string, epoch uint64) []ui
 		res = t.suffix[epoch]
 	case linkType == "Master":
 		res = t.master[epoch]
-	case lineType == "Slave":
+	case linkType == "Slave":
 		res = t.slave[epoch]
 	}
 	return res
@@ -165,8 +165,8 @@ func (t *MapperShuffleTopology) GetNeighbors(linkType string, epoch uint64) []ui
 
 // Creates a new topology with given number of mapper, shuffle, and reducer
 // This will be called during the task graph configuration.
-func NewMapReduceTopology(nm, ns, nr uint64) *MapperShuffleTopology {
-	m := &MapperShuffleTopology{
+func NewMapReduceTopology(nm, ns, nr uint64) *MapReduceTopology {
+	m := &MapReduceTopology{
 		NumOfMapper:  nm,
 		NumOfShuffle: ns,
 		NumOfReducer: nr,

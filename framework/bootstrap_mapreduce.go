@@ -1,4 +1,4 @@
-package mapreduceFramework
+package framework
 
 import (
 	"fmt"
@@ -9,50 +9,36 @@ import (
 	"strings"
 
 	"../../taskgraph"
-	"../filesystem"
+	"../mapreduce/pkg/etcdutil"
 	"github.com/coreos/go-etcd/etcd"
-	"../pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
-// One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.MapreduceBootstrap {
-	return &mapreducerFramework{
-		name:     jobName,
-		etcdURLs: etcdURLs,
-		ln:       ln,
-		log:      logger,
-	}
+type mapreducerFramework struct {
+	framework
+	config    taskgraph.MapreduceConfig
+	epochTopo taskgraph.Topology
 }
 
-func (f *mapreducerFramework) SetTaskBuilder(taskBuilder taskgraph.MapreduceTaskBuilder) {
+// One need to pass in at least these two for framework to start.
+func NewMapreduceBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.MapreduceBootstrap {
+	mpFramework := mapreducerFramework{}
+	mpFramework.name = jobName
+	mpFramework.etcdURLs = etcdURLs
+	mpFramework.ln = ln
+	mpFramework.log = logger
+	return &mpFramework
+}
+
+func (f *mapreducerFramework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
 func (f *mapreducerFramework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
 // Initialize Mapreduce configuration
-func (f *mapreducerFramework) InitWithMapreduceConfig(
-	mapperNum uint64,
-	shuffleNum uint64,
-	reducerNum uint64,
-	client filesystem.Client,
-	outputDirName string,
-	outputFileName string,
-	mapperFunc func(taskgraph.MapreduceFramework, string),
-	reducerFunc func(taskgraph.MapreduceFramework, string, []string),
-
-) {
-	f.mapperNum = mapperNum
-	f.shuffleNum = shuffleNum
-	f.reducerNum = reducerNum
-	f.outputDirName = outputDirName
-	f.outputFileName = outputFileName
-	f.client = client
-	f.mapperFunc = mapperFunc
-	f.reducerFunc = reducerFunc
-	f.readerBufferSize = defaultWriteBufferSize
-	f.writerBufferSize = defaultWriteBufferSize
+func (f *mapreducerFramework) InitWithMapreduceConfig(config taskgraph.MapreduceConfig) {
+	f.config = config
 }
 
 func (f *mapreducerFramework) Start() {
@@ -93,6 +79,7 @@ func (f *mapreducerFramework) Start() {
 	f.heartbeat()
 	f.setup()
 	f.task.Init(f.taskID, f)
+	f.task.(taskgraph.MapreduceTask).MapreduceConfiguration(f.config)
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
@@ -259,8 +246,4 @@ func (f *mapreducerFramework) handleMetaChange(ctx context.Context, taskID uint6
 	f.metaNotified[tm] = true
 
 	f.task.MetaReady(ctx, taskID, linkType, meta)
-}
-
-func taskMeta(taskID uint64, meta string) string {
-	return fmt.Sprintf("%s-%s", strconv.FormatUint(taskID, 10), meta)
 }

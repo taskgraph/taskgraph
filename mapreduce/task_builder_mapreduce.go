@@ -6,6 +6,6 @@ import (
 
 type MapreduceTaskBuilder struct{}
 
-func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.MapreduceTask {
+func (t *MapreduceTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 	return &mapreduceTask{}
 }

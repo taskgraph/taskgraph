@@ -1,35 +1,11 @@
 package taskgraph
 
-import (
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-)
-
-// Task is a logic repersentation of a computing unit.
+// MapreduceTask is a logic repersentation of a computing unit in mapreduce framework.
 // Each task contain at least one Node.
-// Each task has exact one master Node and might have multiple salve Nodes.
 
-// All event handler functions and should be non-blocking.
 type MapreduceTask interface {
-	// This is useful to bring the task up to speed from scratch or if it recovers.
-	Init(taskID uint64, framework MapreduceFramework)
-
-	// Task is finished up for exit. Last chance to save some task specific work.
-	Exit()
-
-	// Framework tells user task what current epoch is.
-	// This give the task an opportunity to cleanup and regroup.
-	EnterEpoch(ctx context.Context, epoch uint64)
-
-	// The meta/data notifications obey exactly-once semantics. Note that the same
-	// meta string will be notified only once even if you flag the meta more than once.
-	// TODO: one can also get this from channel.
-	MetaReady(ctx context.Context, fromID uint64, linkType, meta string)
-
-	// This is the callback when data from server is ready.
-	DataReady(ctx context.Context, fromID uint64, method string, output proto.Message)
-
-	CreateOutputMessage(methodName string) proto.Message
-	CreateServer() *grpc.Server
+	Task                    // task interface of task graph
+	Emit(string, string)    // commit interface for mapper
+	Collect(string, string) // commit interface for
+	MapreduceConfiguration(MapreduceConfig)
 }

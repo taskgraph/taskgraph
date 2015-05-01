@@ -49,3 +49,7 @@ type Backupable interface {
 	// one update the state of copy.
 	Update(log UpdateLog)
 }
+
+type MapreduceController interface {
+	Start(MapreduceConfig)
+}

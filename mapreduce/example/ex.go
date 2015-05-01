@@ -18,7 +18,6 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
-
 func mapperFunc(framework taskgraph.MapreduceFramework, text string) {
 	textReader := bufio.NewReader(strings.NewReader(text))
 	var err error
@@ -50,7 +49,6 @@ func reducerFunc(framework taskgraph.MapreduceFramework, key string, val []strin
 
 var mpFiles []string
 
-
 // Input files defined in "input($mapperTaskID).txt"
 func main() {
 	programType := flag.String("type", "", "(c) controller, (m) mapper, (s) shuffle, or (r) reducer")
@@ -62,9 +60,9 @@ func main() {
 	azureAccountKey := flag.String("azureAccountKey", " ", "azureAccountKey")
 	outputContainerName := flag.String("outputContainerName", "defaultoutputpathformapreduce003", "outputContainerName")
 	outputBlobName := flag.String("outputBlobName", "result12.txt", "outputBlobName")
-	
+
 	var q []map[string][]string
-	
+
 	for inputM := 1; inputM <= *mapperNum; inputM++ {
 		inputFileSource := "input" + strconv.Itoa(inputM) + ".txt"
 		tmpFileReader, err := os.Open(inputFileSource)
