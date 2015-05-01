@@ -106,7 +106,7 @@ func main() {
 		ReducerFunc:      reducerFunc,
 		UserDefined:      true,
 		AppName:          *job,
-		InterDir:         "",
+		InterDir:         "mapreducerprocesstemporaryresult",
 		OutputDir:        *outputDir,
 		EtcdURLs:         etcdURLs,
 		FilesystemClient: azureClient,
@@ -125,6 +125,7 @@ func main() {
 		for i := uint64(0); i < mapreduceConfig.ReducerNum; i++ {
 			etcdutil.MustCreate(etcdClient, ll, etcdutil.FreeWorkPathForType(mapreduceConfig.AppName, "shuffle", strconv.FormatUint(i, 10)), "", 0)
 		}
+		etcdClient.CreateDir(etcdutil.FreeWorkDirForType(mapreduceConfig.AppName, "reducer"), 0)
 		controller := controller.New(mapreduceConfig.AppName, etcd.NewClient(mapreduceConfig.EtcdURLs), uint64(ntask), []string{"Prefix", "Suffix", "Master", "Slave"})
 		controller.Start()
 		controller.WaitForJobDone()

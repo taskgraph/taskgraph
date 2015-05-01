@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 
 	"../../taskgraph"
@@ -40,6 +41,8 @@ type mapreduceTask struct {
 	config           map[string]string
 	shuffleContainer map[string][]string
 	lenFinishedTask  uint64
+	mapperWorkNum    uint64
+	stopGrabTask     chan bool
 
 	//channels
 	epochChange  chan *mapreduceEvent
@@ -47,8 +50,8 @@ type mapreduceTask struct {
 	metaReady    chan *mapreduceEvent
 	finishedChan chan *mapreduceEvent
 	notifyChan   chan *mapreduceEvent
-	stopGrabTask chan *mapreduceEvent
-	exitChan     chan struct{}
+	// stopGrabTask chan *mapreduceEvent
+	exitChan chan struct{}
 
 	//work channels
 	mapperWorkChan  chan *mapreduceEvent
@@ -116,6 +119,7 @@ func (mp *mapreduceTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.finishedTask = make(map[uint64]bool)
 
 	//channel init
+	mp.stopGrabTask = make(chan bool, 1)
 	mp.epochChange = make(chan *mapreduceEvent, 1)
 	mp.dataReady = make(chan *mapreduceEvent, 1)
 	mp.metaReady = make(chan *mapreduceEvent, 1)
@@ -175,13 +179,14 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 	// 				go processMapperWork(ctx)
 	// 	}
 	case "master":
-		switch meta {
-		case "MapperWorkFinished":
+		match, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
+		switch {
+		case match:
 			mp.mapperNumCount++
-			if mp.mapreduceConfig.MapperNum <= mp.mapperNumCount {
+			if mp.mapperWorkNum <= mp.mapperNumCount {
 				mp.framework.IncEpoch(ctx)
 			}
-		case "ReducerWorkFinished":
+		case meta == "ReducerWorkFinished":
 			mp.reducerNumCount++
 			if mp.mapreduceConfig.ReducerNum <= mp.reducerNumCount {
 				mp.framework.ShutdownJob()
@@ -205,6 +210,7 @@ func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
 		mp.processWork(ctx, mp.reducerWorkChan)
 	case "master":
 		mp.mapperNumCount = 0
+		mp.mapperWorkNum = uint64(len(mp.mapreduceConfig.WorkDir["mapper"]))
 		mp.reducerNumCount = 0
 	}
 }
@@ -212,7 +218,7 @@ func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
 func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
 	mp.logger.Println("In grab work function, grab", grabWorkType)
 	for {
-		freeWork, err := etcdutil.WaitFreeNode(etcdutil.FreeWorkDirForType(mp.mapreduceConfig.AppName, grabWorkType), mp.etcdClient, mp.logger)
+		freeWork, err := etcdutil.WaitFreeNode(etcdutil.FreeWorkDirForType(mp.mapreduceConfig.AppName, grabWorkType), mp.etcdClient, mp.logger, mp.stopGrabTask)
 		if err != nil {
 			return err
 		}
@@ -260,18 +266,18 @@ func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapredu
 	go mp.etcdClient.Watch(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), 0, false, receiver, stop)
 	var num uint64 = 0
 	for resp := range receiver {
-		num = 0
-		mp.logger.Printf("Mapreduce : %s task process No.%d work", mp.taskType, num)
 		if resp.Action != "delete" {
 			continue
 		}
+		num++
+		mp.logger.Printf("Mapreduce : %s task process No.%d work", mp.taskType, num)
 		mp.workID = nonExistWork
 		err := mp.grabWork(mp.epoch, mp.taskType)
 		if err != nil {
 			mp.logger.Fatalf("MapReduce : Mapper task grab work Error, ", err)
 		}
 		if mp.workID != nonExistWork {
-			workChan <- &mapreduceEvent{ctx: ctx}
+			workChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch}
 		} else {
 			close(stop)
 			return
@@ -282,7 +288,7 @@ func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapredu
 // Read given file, process it through mapper function by user setting
 func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 	file := work.Config["inputFile"]
-	mp.logger.Printf("FileReader, Mapper task %d, process s", mp.taskID, file)
+	mp.logger.Printf("FileReader, Mapper task %d, process %s, %s", mp.taskID, file, mp.mapreduceConfig.InterDir)
 	var i uint64
 	mp.mapperWriteCloser = make([]bufio.Writer, 0)
 	for i = 0; i < mp.mapreduceConfig.ReducerNum; i++ {
@@ -315,8 +321,9 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 	}
 	mapperReaderCloser.Close()
 	mp.logger.Println("FileRead finished")
+	mp.notifyChan <- &mapreduceEvent{ctx: ctx, workID: mp.workID, fromID: mp.taskID, linkType: "Slave", meta: "MapperWorkFinished" + strconv.FormatUint(mp.workID, 10)}
 	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
-	mp.notifyChan <- &mapreduceEvent{ctx: ctx, workID: mp.workID, fromID: mp.taskID, linkType: "Slave", meta: "MapperWorkFinished"}
+
 	// mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType : "Prefix", meta : "mapperDataNeedCommit"}
 }
 
@@ -350,6 +357,7 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 // }
 
 func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
+	mp.logger.Println("In transfer Data function")
 	mp.shuffleContainer = make(map[string][]string)
 	workNum := len(mp.mapreduceConfig.WorkDir["mapper"])
 	for i := 0; i < workNum; i++ {
@@ -488,9 +496,11 @@ func (mp *mapreduceTask) EnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (mp *mapreduceTask) doEnterEpoch(ctx context.Context, epoch uint64) {
-	mp.logger.Printf("doEnterEpoch, Mapper task %d, epoch %d", mp.taskID, epoch)
+	close(mp.stopGrabTask)
+	mp.stopGrabTask = make(chan bool, 1)
 	mp.epoch = epoch
 	mp.taskType = mp.getNodeTaskType()
+	mp.logger.Printf("doEnterEpoch, %s task %d, epoch %d", mp.taskType, mp.taskID, epoch)
 	mp.logger.Println(mp.taskType, " task is running on this node")
 	go mp.initializeTaskEnv(ctx)
 

@@ -123,7 +123,7 @@ func computeTTL(interval time.Duration) uint64 {
 }
 
 // WaitFreeTask blocks until it gets a hint of free task
-func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger) (uint64, error) {
+func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger, stop chan bool) (uint64, error) {
 	slots, err := client.Get(freeNodeDir, false, true)
 	if err != nil {
 		return 0, err
@@ -136,7 +136,7 @@ func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger) (
 		if err != nil {
 			return 0, err
 		}
-		logger.Printf("got free task %v, randomly choose %d to try...", ListKeys(slots.Node.Nodes), ri)
+		logger.Printf("got free work %v, randomly choose %d to try...", ListKeys(slots.Node.Nodes), ri)
 		return id, nil
 	}
 
@@ -171,6 +171,9 @@ func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger) (
 		case <-time.After(10 * time.Second):
 			waitTime++
 			logger.Printf("Node already wait failure for %d0s", waitTime)
+		case <-stop:
+			logger.Printf("Exit Node wait %s", freeNodeDir)
+			return 0, nil
 		}
 	}
 
