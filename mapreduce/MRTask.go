@@ -179,14 +179,15 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 	// 				go processMapperWork(ctx)
 	// 	}
 	case "master":
-		match, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
+		matchMapper, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
+		matchReducer, _ := regexp.MatchString("^ReducerWorkFinished[0-9]+$", meta)
 		switch {
-		case match:
+		case matchMapper:
 			mp.mapperNumCount++
 			if mp.mapperWorkNum <= mp.mapperNumCount {
 				mp.framework.IncEpoch(ctx)
 			}
-		case meta == "ReducerWorkFinished":
+		case matchReducer:
 			mp.reducerNumCount++
 			if mp.mapreduceConfig.ReducerNum <= mp.reducerNumCount {
 				mp.framework.ShutdownJob()
@@ -293,8 +294,9 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 	mp.mapperWriteCloser = make([]bufio.Writer, 0)
 	for i = 0; i < mp.mapreduceConfig.ReducerNum; i++ {
 		path := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(i, 10) + "from" + strconv.FormatUint(mp.workID, 10)
+		mp.logger.Println("Output Path ", path)
 		mp.Clean(path)
-		tmpWrite, err := mp.mapreduceConfig.FilesystemClient.OpenWriteCloser(file)
+		tmpWrite, err := mp.mapreduceConfig.FilesystemClient.OpenWriteCloser(path)
 		if err != nil {
 			mp.logger.Println("MapReduce : get azure storage client writer failed, ", err)
 		}
@@ -320,6 +322,9 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 		mp.mapreduceConfig.MapperFunc(mp, str)
 	}
 	mapperReaderCloser.Close()
+	for i = 0; i < mp.mapreduceConfig.ReducerNum; i++ {
+		mp.mapperWriteCloser[i].Flush()
+	}
 	mp.logger.Println("FileRead finished")
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, workID: mp.workID, fromID: mp.taskID, linkType: "Slave", meta: "MapperWorkFinished" + strconv.FormatUint(mp.workID, 10)}
 	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
@@ -363,6 +368,7 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 	for i := 0; i < workNum; i++ {
 		shufflePath := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(mp.workID, 10) + "from" + strconv.Itoa(i)
 		shuffleReadCloser, err := mp.mapreduceConfig.FilesystemClient.OpenReadCloser(shufflePath)
+		mp.logger.Println("get shuffle data from ", shufflePath)
 		if err != nil {
 			mp.logger.Fatalf("MapReduce : get azure storage client failed, ", err)
 		}
@@ -383,6 +389,7 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 
 	tranferPath := mp.mapreduceConfig.InterDir + "/shuffle" + strconv.FormatUint(mp.workID, 10)
 	mp.Clean(tranferPath)
+	mp.logger.Println("output shuffle data to ", tranferPath)
 	shuffleWriteCloser, err := mp.mapreduceConfig.FilesystemClient.OpenWriteCloser(tranferPath)
 	bufferWriter := bufio.NewWriterSize(shuffleWriteCloser, mp.mapreduceConfig.WriterBufferSize)
 	if err != nil {
@@ -403,7 +410,9 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 	bufferWriter.Flush()
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ShuffleWorkFinished"}
 	key := etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, "reducer", strconv.FormatUint(mp.workID, 10))
-	_ = etcdutil.MustCreate(mp.etcdClient, mp.logger, key, "", 0)
+	mp.logger.Println("shuffle finished, add reducer work ", key)
+	// _ = etcdutil.MustCreate(mp.etcdClient, mp.logger, key, "", 0)
+	mp.etcdClient.Set(key, "begin", 0)
 	for i := 0; i < workNum; i++ {
 		shufflePath := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(mp.workID, 10) + "from" + strconv.Itoa(i)
 		mp.Clean(shufflePath)
@@ -465,7 +474,7 @@ func (mp *mapreduceTask) reducerProcess(ctx context.Context) {
 	mp.outputWriter.Flush()
 	mp.logger.Printf("%s removing..\n", reducerPath)
 	mp.Clean(reducerPath)
-	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ReducerWorkFinished"}
+	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ReducerWorkFinished" + strconv.FormatUint(mp.workID, 10)}
 }
 
 func (mp *mapreduceTask) processReducerKV(str []byte) {

@@ -18,6 +18,7 @@ type MapReduceTopology struct {
 // Shuffle Layer divide fairly to every Reducer node
 // Prefix and Suffix array represents the dependency relationship between layers
 func (t *MapReduceTopology) SetTaskID(taskID uint64) {
+	//epoch 0
 	t.prefix = make([][]uint64, 0, 2)
 	t.suffix = make([][]uint64, 0, 2)
 	t.master = make([][]uint64, 0, 2)
@@ -74,6 +75,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	t.master = append(t.master, master)
 	t.slave = append(t.slave, slave)
 
+	//epoch 1
 	var shardQuotient uint64 = 0
 	var shardReminder uint64 = 0
 	if t.NumOfReducer != 0 {
@@ -83,7 +85,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	}
 	switch {
 	case taskID < t.NumOfShuffle:
-		numOfPrefix = t.NumOfMapper
+		numOfPrefix = 0
 		scopeL = 0
 	case taskID < t.NumOfShuffle+shardReminder:
 		numOfPrefix = shardQuotient + 1
@@ -95,6 +97,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	default:
 		numOfPrefix = 0
 	}
+
 	prefix = make([]uint64, 0, numOfPrefix)
 	for index := scopeL; index < scopeL+numOfPrefix; index++ {
 		prefix = append(prefix, index)
@@ -116,7 +119,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 			}
 		}
 	case taskID < t.NumOfShuffle+t.NumOfReducer:
-		numOfSuffix = 1
+		numOfSuffix = 0
 		scopeL = t.NumOfReducer + t.NumOfShuffle
 	default:
 		numOfSuffix = 0

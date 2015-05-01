@@ -150,6 +150,7 @@ func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger, s
 				logger.Printf("WARN: WaitFailure watch failed: %v", err)
 				return
 			}
+			logger.Println(resp.Action)
 			if resp.Action == "set" {
 				respChan <- resp
 				return
