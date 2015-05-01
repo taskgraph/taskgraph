@@ -1,11 +1,11 @@
 package mapreduce
 
 type MapReduceTopology struct {
-	NumOfMapper    uint64
-	NumOfReducer   uint64
-	NumOfShuffle   uint64
-	taskID         uint64
-	prefix, suffix []uint64
+	NumOfMapper                   uint64
+	NumOfShuffle                  uint64
+	NumOfReducer                  uint64
+	taskID                        uint64
+	prefix, suffix, master, slave [][]uint64
 }
 
 // The mapreduce topo splits into three layer
@@ -17,11 +17,63 @@ type MapReduceTopology struct {
 // Reducer Layer
 // Shuffle Layer divide fairly to every Reducer node
 // Prefix and Suffix array represents the dependency relationship between layers
-func (t *MapReduceTopology) SetTaskID(taskID uint64) {
+func (t *MapperShuffleTopology) SetTaskID(taskID uint64) {
+	t.prefix = make([][]uint64, 0, 2)
+	t.suffix = make([][]uint64, 0, 2)
+	t.master = make([][]uint64, 0, 2)
+	t.slave = make([][]uint64, 0, 2)
+
 	t.taskID = taskID
 	var numOfPrefix uint64
 	var numOfSuffix uint64
 	var scopeL uint64
+	switch {
+	case taskID < t.NumOfMapper:
+		numOfPrefix = 0
+		scopeL = 0
+	case taskID < t.NumOfMapper+t.NumOfShuffle:
+		numOfPrefix = t.NumOfMapper
+		scopeL = 0
+	default:
+		numOfPrefix = 0
+		scopeL = t.NumOfMapper + t.NumOfShuffle
+	}
+
+	prefix := make([]uint64, 0, numOfPrefix)
+	for index := scopeL; index < scopeL+numOfPrefix; index++ {
+		prefix = append(prefix, index)
+	}
+
+	switch {
+	case taskID < t.NumOfMapper:
+		numOfSuffix = t.NumOfShuffle
+		scopeL = t.NumOfMapper
+	case taskID < t.NumOfMapper+t.NumOfShuffle:
+		numOfSuffix = 0
+	default:
+		numOfSuffix = 0
+	}
+
+	suffix := make([]uint64, 0, numOfSuffix)
+	for index := scopeL; index < scopeL+numOfSuffix; index++ {
+		suffix = append(t.suffix, index)
+	}
+
+	master := make([]uint64, 0, 1)
+	slave := make([]uint64, 0, t.NumOfMapper+t.NumOfShuffle)
+	if taskID != t.NumOfMapper+t.NumOfShuffle {
+		master = append(master, t.NumOfMapper+t.NumOfShuffle)
+	} else {
+		for index := 0; index < NumOfMapper+t.NumOfShuffle; index++ {
+			slave = append(slave, index)
+		}
+	}
+
+	t.prefix = append(t.prefix, prefix)
+	t.suffix = append(t.suffix, suffix)
+	t.master = append(t.master, master)
+	t.slave = append(t.slave, slave)
+
 	var shardQuotient uint64 = 0
 	var shardReminder uint64 = 0
 	if t.NumOfReducer != 0 {
@@ -30,78 +82,91 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 		shardReminder = t.NumOfShuffle
 	}
 	switch {
-	case taskID < t.NumOfMapper:
-		numOfPrefix = 0
-		scopeL = 0
-	case taskID < t.NumOfMapper+t.NumOfShuffle:
+	case taskID < t.NumOfShuffle:
 		numOfPrefix = t.NumOfMapper
 		scopeL = 0
-	case taskID < t.NumOfMapper+t.NumOfShuffle+shardReminder:
+	case taskID < t.NumOfShuffle+shardReminder:
 		numOfPrefix = shardQuotient + 1
-		scopeL = t.NumOfMapper + (shardQuotient+1)*(taskID-t.NumOfMapper-t.NumOfShuffle)
-	case taskID < t.NumOfMapper+t.NumOfShuffle+t.NumOfReducer:
+		scopeL = (shardQuotient + 1) * (taskID - t.NumOfMapper - t.NumOfShuffle)
+	case taskID < t.NumOfShuffle+t.NumOfReducer:
 		numOfPrefix = t.NumOfShuffle / t.NumOfReducer
-		scopeL = t.NumOfMapper + t.NumOfShuffle%t.NumOfReducer*(shardQuotient+1)
-		scopeL += (taskID - t.NumOfMapper - t.NumOfShuffle - shardReminder) * shardQuotient
+		scopeL = t.NumOfShuffle % t.NumOfReducer * (shardQuotient + 1)
+		scopeL += (taskID - t.NumOfShuffle - shardReminder) * shardQuotient
 	default:
-		numOfPrefix = t.NumOfReducer
-		scopeL = t.NumOfMapper + t.NumOfShuffle
+		numOfPrefix = 0
 	}
-	t.prefix = make([]uint64, 0, numOfPrefix)
+	prefix = make([]uint64, 0, numOfPrefix)
 	for index := scopeL; index < scopeL+numOfPrefix; index++ {
-		t.prefix = append(t.prefix, index)
+		prefix = append(prefix, index)
 	}
 
 	switch {
-	case taskID < t.NumOfMapper:
-		numOfSuffix = t.NumOfShuffle
-		scopeL = t.NumOfMapper
-	case taskID < t.NumOfMapper+t.NumOfShuffle:
+	case taskID < t.NumOfShuffle:
 		if t.NumOfReducer != 0 {
 			numOfSuffix = 1
-			tmpAcc := taskID - t.NumOfMapper
+			tmpAcc := taskID
 			if tmpAcc/(shardQuotient+1) < shardReminder {
-				scopeL = tmpAcc/(shardQuotient+1) + t.NumOfShuffle + t.NumOfMapper
+				scopeL = tmpAcc/(shardQuotient+1) + t.NumOfShuffle
 			} else {
 				scopeL = tmpAcc - shardReminder*(shardQuotient+1)
 				if shardQuotient != 0 {
 					scopeL = scopeL / shardQuotient
 				}
-				scopeL += scopeL + t.NumOfShuffle + t.NumOfMapper + shardReminder
+				scopeL += scopeL + t.NumOfShuffle + shardReminder
 			}
 		}
-	case taskID < t.NumOfMapper+t.NumOfShuffle+t.NumOfReducer:
+	case taskID < t.NumOfShuffle+t.NumOfReducer:
 		numOfSuffix = 1
-		scopeL = t.NumOfMapper + t.NumOfReducer + t.NumOfShuffle
+		scopeL = t.NumOfReducer + t.NumOfShuffle
 	default:
 		numOfSuffix = 0
 	}
 
-	t.suffix = make([]uint64, 0, numOfSuffix)
+	suffix = make([]uint64, 0, numOfSuffix)
 	for index := scopeL; index < scopeL+numOfSuffix; index++ {
-		t.suffix = append(t.suffix, index)
+		suffix = append(suffix, index)
 	}
+
+	master = make([]uint64, 0, 1)
+	slave := make([]uint64, 0, t.NumOfReducer+t.NumOfShuffle)
+	if taskID != t.NumOfReducer+t.NumOfShuffle {
+		master = append(master, t.NumOfReducer+t.NumOfShuffle)
+	} else {
+		for index := 0; index < t.NumOfReducer+t.NumOfShuffle; index++ {
+			slave = append(slave, index)
+		}
+	}
+
+	t.prefix = append(t.prefix, prefix)
+	t.suffix = append(t.suffix, suffix)
+	t.master = append(t.master, master)
+	t.slave = append(t.slave, slave)
+
 }
 
-func (t *MapReduceTopology) GetLinkTypes() []string {
-	return []string{"Prefix", "Suffix"}
+func (t *MapperShuffleTopology) GetLinkTypes() []string {
+	return []string{"Master", "Slave", "Prefix", "Suffix"}
 }
 
-func (t *MapReduceTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *MapperShuffleTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	switch {
 	case linkType == "Prefix":
-		res = t.prefix
+		res = t.prefix[epoch]
 	case linkType == "Suffix":
-		res = t.suffix
+		res = t.suffix[epoch]
+	case linkType == "Master":
+		res = t.master[epoch]
+	case lineType == "Slave":
+		res = t.slave[epoch]
 	}
 	return res
 }
 
 // Creates a new topology with given number of mapper, shuffle, and reducer
 // This will be called during the task graph configuration.
-func NewMapReduceTopology(nm, ns, nr uint64) *MapReduceTopology {
-	m := &MapReduceTopology{
+func NewMapReduceTopology(nm, ns, nr uint64) *MapperShuffleTopology {
+	m := &MapperShuffleTopology{
 		NumOfMapper:  nm,
 		NumOfShuffle: ns,
 		NumOfReducer: nr,
