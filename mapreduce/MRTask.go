@@ -136,7 +136,7 @@ func (mp *mapreduceTask) run() {
 	for {
 		select {
 		case ec := <-mp.epochChange:
-			mp.doEnterEpoch(ec.ctx, ec.epoch)
+			go mp.doEnterEpoch(ec.ctx, ec.epoch)
 
 		// case done := <-mp.finishedChan:
 		// 	mp.framework.FlagMeta(done.ctx, done.linkType, done.message)
@@ -149,10 +149,13 @@ func (mp *mapreduceTask) run() {
 
 		case <-mp.exitChan:
 			return
+
 		case work := <-mp.mapperWorkChan:
 			go mp.fileRead(work.ctx, mp.mapreduceConfig.WorkDir["mapper"][mp.workID])
+
 		case work := <-mp.shuffleWorkChan:
 			go mp.transferShuffleData(work.ctx)
+
 		case work := <-mp.reducerWorkChan:
 			go mp.reducerProcess(work.ctx)
 		}
@@ -189,35 +192,40 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 }
 
 func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
-	close(mp.stopGrabTask)
-	mp.stopGrabTask = make(chan *mapreduceEvent, 1)
+	// close(mp.stopGrabTask)
+	// mp.stopGrabTask = make(chan *mapreduceEvent, 1)
 	switch mp.taskType {
 	case "mapper":
-		go mp.processWork(ctx, mp.mapperWorkChan)
+		mp.processWork(ctx, mp.mapperWorkChan)
 	case "shuffle":
 		if mp.epoch == 1 {
-			go mp.processWork(ctx, mp.shuffleWorkChan)
+			mp.processWork(ctx, mp.shuffleWorkChan)
 		}
 	case "reducer":
-		go mp.processWork(ctx, mp.reducerWorkChan)
+		mp.processWork(ctx, mp.reducerWorkChan)
 	case "master":
 		mp.mapperNumCount = 0
 		mp.reducerNumCount = 0
 	}
 }
 
-func (mp *mapreduceTask) grabWork(grabWorkType string) error {
+func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
+	mp.logger.Println("In grab work function, grab", grabWorkType)
 	for {
 		freeWork, err := etcdutil.WaitFreeNode(etcdutil.FreeWorkDirForType(mp.mapreduceConfig.AppName, grabWorkType), mp.etcdClient, mp.logger)
 		if err != nil {
 			return err
 		}
+		if liveEpoch != mp.epoch {
+			return nil
+		}
 		mp.logger.Printf("standby grabbed free work %d", freeWork)
-		idStr := strconv.FormatUint(freeWork, 10)
+		workIDStr := strconv.FormatUint(freeWork, 10)
+		taskIDStr := strconv.FormatUint(mp.taskID, 10)
 		ok, err := etcdutil.TryOccupyNode(
-			etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, idStr),
+			etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, workIDStr),
 			"",
-			etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, grabWorkType, idStr),
+			etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, grabWorkType, taskIDStr),
 			mp.etcdClient,
 			path.Join(mp.taskType, strconv.FormatUint(freeWork, 10)),
 		)
@@ -237,9 +245,19 @@ func (mp *mapreduceTask) grabWork(grabWorkType string) error {
 }
 
 func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapreduceEvent) {
+	mp.logger.Println("In process work function, process", mp.taskType)
+	mp.workID = nonExistWork
+	err := mp.grabWork(mp.epoch, mp.taskType)
+	mp.logger.Println("Already get work", mp.workID)
+	if err != nil {
+		mp.logger.Fatalf("MapReduce : Mapper task grab work Error, ", err)
+	}
+	if mp.workID != nonExistWork {
+		workChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch}
+	}
 	receiver := make(chan *etcd.Response, 1)
 	stop := make(chan bool, 1)
-	go mp.etcdClient.Watch(etcdutil.FreeWorkDirForType(mp.mapreduceConfig.AppName, mp.taskType), 0, false, receiver, stop)
+	go mp.etcdClient.Watch(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), 0, false, receiver, stop)
 	var num uint64 = 0
 	for resp := range receiver {
 		num = 0
@@ -248,13 +266,14 @@ func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapredu
 			continue
 		}
 		mp.workID = nonExistWork
-		err := mp.grabWork(mp.taskType)
+		err := mp.grabWork(mp.epoch, mp.taskType)
 		if err != nil {
 			mp.logger.Fatalf("MapReduce : Mapper task grab work Error, ", err)
 		}
 		if mp.workID != nonExistWork {
 			workChan <- &mapreduceEvent{ctx: ctx}
 		} else {
+			close(stop)
 			return
 		}
 	}
@@ -472,7 +491,9 @@ func (mp *mapreduceTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 	mp.logger.Printf("doEnterEpoch, Mapper task %d, epoch %d", mp.taskID, epoch)
 	mp.epoch = epoch
 	mp.taskType = mp.getNodeTaskType()
-	mp.initializeTaskEnv(ctx)
+	mp.logger.Println(mp.taskType, " task is running on this node")
+	go mp.initializeTaskEnv(ctx)
+
 }
 
 func (mp *mapreduceTask) Exit() {

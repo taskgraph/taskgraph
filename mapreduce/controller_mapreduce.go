@@ -20,14 +20,14 @@ type MapreduceController interface {
 }
 
 type mapreduceController struct {
-	config taskgraph.MapreduceConfig
+	Config taskgraph.MapreduceConfig
 	logger *log.Logger
 }
 
 func (mpc *mapreduceController) setFreeWork() {
-	etcdClient := etcd.NewClient(mpc.config.EtcdURLs)
-	for i := 0; i < len(mpc.config.WorkDir["mapper"]); i++ {
-		etcdutil.MustCreate(etcdClient, mpc.logger, etcdutil.FreeWorkPathForType(mpc.config.AppName, "mapper", strconv.Itoa(i)), "", 0)
+	etcdClient := etcd.NewClient(mpc.Config.EtcdURLs)
+	for i := 0; i < len(mpc.Config.WorkDir["mapper"]); i++ {
+		etcdutil.MustCreate(etcdClient, mpc.logger, etcdutil.FreeWorkPathForType(mpc.Config.AppName, "mapper", strconv.Itoa(i)), "", 0)
 
 	}
 }
@@ -37,6 +37,21 @@ func max(a uint64, b uint64) uint64 {
 		return a
 	}
 	return b
+}
+
+func (mpc *mapreduceController) runController(ntask uint64) {
+	controller := controller.New(mpc.Config.AppName, etcd.NewClient(mpc.Config.EtcdURLs), uint64(ntask), []string{"Prefix", "Suffix", "Master", "Slave"})
+	controller.Start()
+	controller.WaitForJobDone()
+}
+
+func (mpc *mapreduceController) runBootstrap() {
+	bootstrap := framework.NewMapreduceBootStrap(mpc.Config.AppName, mpc.Config.EtcdURLs, createListener(), mpc.logger)
+	taskBuilder := &MapreduceTaskBuilder{}
+	bootstrap.SetTaskBuilder(taskBuilder)
+	bootstrap.SetTopology(NewMapReduceTopology(mpc.Config.MapperNum, mpc.Config.ShuffleNum, mpc.Config.ReducerNum))
+	bootstrap.InitWithMapreduceConfig(mpc.Config)
+	bootstrap.Start()
 }
 
 func (mpc *mapreduceController) Start(config taskgraph.MapreduceConfig) {
@@ -53,22 +68,15 @@ func (mpc *mapreduceController) Start(config taskgraph.MapreduceConfig) {
 	if config.WriterBufferSize == 0 {
 		config.WriterBufferSize = defaultBufferSize
 	}
-	mpc.config = config
-	mpc.setFreeWork()
+	mpc.Config = config
 
 	ntask := max(config.MapperNum+config.ShuffleNum, config.ShuffleNum+config.ReducerNum) + 1
-	controller := controller.New(config.AppName, etcd.NewClient(config.EtcdURLs), uint64(ntask), []string{"Prefix", "Suffix", "Master", "Slave"})
-	controller.Start()
-	controller.WaitForJobDone()
+	go mpc.runController(ntask)
+	mpc.setFreeWork()
 	var i uint64 = 0
 	mpc.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 	for ; i < ntask+5; i++ {
-		bootstrap := framework.NewMapreduceBootStrap(config.AppName, config.EtcdURLs, createListener(), mpc.logger)
-		taskBuilder := &MapreduceTaskBuilder{}
-		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(NewMapReduceTopology(config.MapperNum, config.ShuffleNum, config.ReducerNum))
-		bootstrap.InitWithMapreduceConfig(config)
-		bootstrap.Start()
+		go mpc.runBootstrap()
 	}
 	// New Controller
 
