@@ -304,7 +304,7 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 		mp.Clean(path)
 		tmpWrite, err := mp.mapreduceConfig.FilesystemClient.OpenWriteCloser(path)
 		if err != nil {
-			mp.logger.Println("MapReduce : get azure storage client writer failed, ", err)
+			mp.logger.Fatalf("MapReduce : get azure storage client writer failed, ", err)
 		}
 		mp.mapperWriteCloser = append(mp.mapperWriteCloser, *bufio.NewWriterSize(tmpWrite, mp.mapreduceConfig.WriterBufferSize))
 	}
@@ -423,27 +423,40 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 		shufflePath := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(mp.workID, 10) + "from" + strconv.Itoa(i)
 		mp.Clean(shufflePath)
 	}
+	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
 
 }
 
 func (mp *mapreduceTask) getNodeTaskType() string {
-	prefix := len(mp.framework.GetTopology().GetNeighbors("Prefix", mp.epoch))
-	suffix := len(mp.framework.GetTopology().GetNeighbors("Suffix", mp.epoch))
+	// prefix := len(mp.framework.GetTopology().GetNeighbors("Prefix", mp.epoch))
+	// suffix := len(mp.framework.GetTopology().GetNeighbors("Suffix", mp.epoch))
 	master := len(mp.framework.GetTopology().GetNeighbors("Master", mp.epoch))
 	if master == 0 {
 		return "master"
 	}
-	if prefix == 0 {
-		if mp.epoch == 0 {
+	switch mp.epoch {
+	case 0:
+		if mp.taskID < mp.mapreduceConfig.MapperNum {
 			return "mapper"
 		}
 		return "shuffle"
-	}
-	if suffix == 0 {
-		if mp.epoch == 0 {
+	case 1:
+		if mp.taskID < mp.mapreduceConfig.ShuffleNum {
 			return "shuffle"
 		}
+		return "reducer"
 	}
+	// if prefix == 0 {
+	// 	if mp.epoch == 0 {
+	// 		return "mapper"
+	// 	}
+	// 	return "shuffle"
+	// }
+	// if suffix == 0 {
+	// 	if mp.epoch == 0 {
+	// 		 return "shuffle"
+	// 	}
+	// }
 	return "reducer"
 }
 
@@ -480,6 +493,7 @@ func (mp *mapreduceTask) reducerProcess(ctx context.Context) {
 	mp.outputWriter.Flush()
 	mp.logger.Printf("%s removing..\n", reducerPath)
 	mp.Clean(reducerPath)
+	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ReducerWorkFinished" + strconv.FormatUint(mp.workID, 10)}
 }
 

@@ -66,7 +66,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 
 	master := make([]uint64, 0, 1)
 	slave := make([]uint64, 0, GlobalSlaveNum)
-	if taskID != t.NumOfMapper+t.NumOfShuffle {
+	if taskID != GlobalSlaveNum {
 		master = append(master, GlobalSlaveNum)
 	} else {
 		for index := uint64(0); index < GlobalSlaveNum; index++ {
@@ -93,7 +93,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 		scopeL = 0
 	case taskID < t.NumOfShuffle+shardReminder:
 		numOfPrefix = shardQuotient + 1
-		scopeL = (shardQuotient + 1) * (taskID - t.NumOfMapper - t.NumOfShuffle)
+		scopeL = (shardQuotient + 1) * (taskID - t.NumOfShuffle)
 	case taskID < t.NumOfShuffle+t.NumOfReducer:
 		numOfPrefix = t.NumOfShuffle / t.NumOfReducer
 		scopeL = t.NumOfShuffle % t.NumOfReducer * (shardQuotient + 1)
@@ -136,7 +136,7 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 
 	master = make([]uint64, 0, 1)
 	slave = make([]uint64, 0, GlobalSlaveNum)
-	if taskID != t.NumOfReducer+t.NumOfShuffle {
+	if taskID != GlobalSlaveNum {
 		master = append(master, GlobalSlaveNum)
 	} else {
 		for index := uint64(0); index < GlobalSlaveNum; index++ {
