@@ -13,9 +13,9 @@ sleep 2
 ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www1.txt &
 ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www2.txt &
 ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www3.txt &
-# ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www4.txt &
-# ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www5.txt &
-# ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www6.txt &
+./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www4.txt &
+./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www5.txt &
+./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www6.txt &
 # ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www7.txt &
 # ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www8.txt &
 # ./ex -job="mapreduce test" -type=t -azureAccountKey=$azureAccountKey > www9.txt &

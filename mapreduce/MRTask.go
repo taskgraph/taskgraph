@@ -231,8 +231,9 @@ func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
 		taskIDStr := strconv.FormatUint(mp.taskID, 10)
 		ok, err := etcdutil.TryOccupyNode(
 			etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, workIDStr),
-			"",
+			etcdutil.OccupyWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, workIDStr),
 			etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, grabWorkType, taskIDStr),
+			0,
 			mp.etcdClient,
 			path.Join(mp.taskType, strconv.FormatUint(freeWork, 10)),
 		)

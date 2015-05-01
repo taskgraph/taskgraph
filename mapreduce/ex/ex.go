@@ -60,12 +60,12 @@ func max(a uint64, b uint64) uint64 {
 func main() {
 	programType := flag.String("type", "", "(c) controller, (m) mapper, (s) shuffle, or (r) reducer")
 	job := flag.String("job", "", "job name")
-	mapperNum := flag.Int("mapperNum", 1, "mapperNum")
+	mapperNum := flag.Int("mapperNum", 3, "mapperNum")
 	shuffleNum := flag.Int("shuffleNum", 1, "shuffleNum")
 	reducerNum := flag.Int("reducerNum", 1, "reducerNum")
 	azureAccountName := flag.String("azureAccountName", "spluto", "azureAccountName")
 	azureAccountKey := flag.String("azureAccountKey", "", "azureAccountKey")
-	outputDir := flag.String("outputDir", "defaultoutputpathformapreduce003", "outputDir")
+	outputDir := flag.String("outputDir", "0newmapreducepathformapreduce000", "outputDir")
 
 	flag.Parse()
 	if *job == "" {

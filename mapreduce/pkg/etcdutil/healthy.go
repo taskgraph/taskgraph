@@ -56,6 +56,7 @@ func ReportFailure(client *etcd.Client, name, failedTask string) error {
 		if err != nil {
 			return err
 		}
+		client.Delete(OccupyWorkPath(name, work.Node.Value), false)
 		client.Delete(TaskMasterWork(name, failedTask), false)
 	}
 	return nil

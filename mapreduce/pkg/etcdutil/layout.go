@@ -31,6 +31,7 @@ const (
 	Healthy        = "healthy"
 	FreeDirForWork = "freeWorks"
 	WorkDir        = "work"
+	WorkOccupyDir  = "occupyWork"
 )
 
 func EpochPath(appName string) string {
@@ -85,8 +86,16 @@ func FreeWorkPath(appName, workStr string) string {
 	return path.Join(FreeWorkDir(appName), workStr)
 }
 
+func OccupyWorkPath(appName, workStr string) string {
+	return path.Join(appName, WorkOccupyDir, workStr)
+}
+
 func TaskMasterWorkForType(appName, workType, idStr string) string {
 	return path.Join("/", appName, WorkDir, idStr)
+}
+
+func OccupyWorkPathForType(appName, workType, idStr string) string {
+	return path.Join(appName, WorkOccupyDir, workType, idStr)
 }
 
 func FreeWorkDirForType(appName, workDir string) string {
