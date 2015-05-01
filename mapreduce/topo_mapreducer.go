@@ -23,6 +23,10 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	t.suffix = make([][]uint64, 0, 2)
 	t.master = make([][]uint64, 0, 2)
 	t.slave = make([][]uint64, 0, 2)
+	GlobalSlaveNum := t.NumOfReducer + t.NumOfShuffle
+	if t.NumOfMapper+t.NumOfShuffle > GlobalSlaveNum {
+		GlobalSlaveNum = t.NumOfMapper + t.NumOfShuffle
+	}
 
 	t.taskID = taskID
 	var numOfPrefix uint64
@@ -61,11 +65,11 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	}
 
 	master := make([]uint64, 0, 1)
-	slave := make([]uint64, 0, t.NumOfMapper+t.NumOfShuffle)
+	slave := make([]uint64, 0, GlobalSlaveNum)
 	if taskID != t.NumOfMapper+t.NumOfShuffle {
-		master = append(master, t.NumOfMapper+t.NumOfShuffle)
+		master = append(master, GlobalSlaveNum)
 	} else {
-		for index := uint64(0); index < t.NumOfMapper+t.NumOfShuffle; index++ {
+		for index := uint64(0); index < GlobalSlaveNum; index++ {
 			slave = append(slave, index)
 		}
 	}
@@ -131,11 +135,11 @@ func (t *MapReduceTopology) SetTaskID(taskID uint64) {
 	}
 
 	master = make([]uint64, 0, 1)
-	slave = make([]uint64, 0, t.NumOfReducer+t.NumOfShuffle)
+	slave = make([]uint64, 0, GlobalSlaveNum)
 	if taskID != t.NumOfReducer+t.NumOfShuffle {
-		master = append(master, t.NumOfReducer+t.NumOfShuffle)
+		master = append(master, GlobalSlaveNum)
 	} else {
-		for index := uint64(0); index < t.NumOfReducer+t.NumOfShuffle; index++ {
+		for index := uint64(0); index < GlobalSlaveNum; index++ {
 			slave = append(slave, index)
 		}
 	}

@@ -122,6 +122,10 @@ func (mp *mapreduceTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.stopGrabTask = make(chan bool, 1)
 	mp.epochChange = make(chan *mapreduceEvent, 1)
 	mp.dataReady = make(chan *mapreduceEvent, 1)
+	// metaNum := mp.mapreduceConfig.MapperNum
+	// if mp.mapreduceConfig.ReducerNum > metaNum {
+	// 	metaNum = mp.mapreduceConfig.ReducerNum
+	// }
 	mp.metaReady = make(chan *mapreduceEvent, 1)
 	mp.exitChan = make(chan struct{})
 	mp.notifyChan = make(chan *mapreduceEvent, 1)
@@ -184,6 +188,7 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 		switch {
 		case matchMapper:
 			mp.mapperNumCount++
+			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.mapperNumCount, mp.mapperWorkNum, meta)
 			if mp.mapperWorkNum <= mp.mapperNumCount {
 				mp.framework.IncEpoch(ctx)
 			}

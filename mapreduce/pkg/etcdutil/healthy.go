@@ -110,7 +110,7 @@ func WaitFreeTask(client *etcd.Client, name string, logger *log.Logger) (uint64,
 			return id, nil
 		case <-time.After(10 * time.Second):
 			waitTime++
-			logger.Printf("Node already wait failure for %d0s", waitTime)
+			logger.Printf("Node already wait task failure for %d0s", waitTime)
 		}
 	}
 
@@ -172,7 +172,7 @@ func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger, s
 			return id, nil
 		case <-time.After(10 * time.Second):
 			waitTime++
-			logger.Printf("Node already wait failure for %d0s", waitTime)
+			logger.Printf("Node already wait work failure for %d0s", waitTime)
 		case <-stop:
 			logger.Printf("Exit Node wait %s", freeNodeDir)
 			return 0, nil
