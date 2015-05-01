@@ -194,6 +194,7 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 			}
 		case matchReducer:
 			mp.reducerNumCount++
+			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.reducerNumCount, mp.mapreduceConfig.ReducerNum, meta)
 			if mp.mapreduceConfig.ReducerNum <= mp.reducerNumCount {
 				mp.framework.ShutdownJob()
 			}
@@ -231,7 +232,7 @@ func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
 		if liveEpoch != mp.epoch {
 			return nil
 		}
-		mp.logger.Printf("standby grabbed free work %d", freeWork)
+		mp.logger.Printf("standby grabbed free %s work %d", mp.taskType, freeWork)
 		workIDStr := strconv.FormatUint(freeWork, 10)
 		taskIDStr := strconv.FormatUint(mp.taskID, 10)
 		ok, err := etcdutil.TryOccupyNode(
@@ -247,10 +248,6 @@ func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
 		}
 		if ok {
 			mp.workID = freeWork
-			return nil
-		}
-		select {
-		case <-mp.stopGrabTask:
 			return nil
 		}
 		mp.logger.Printf("standby tried work %d failed. Wait free work again.", freeWork)
@@ -493,8 +490,9 @@ func (mp *mapreduceTask) reducerProcess(ctx context.Context) {
 	mp.outputWriter.Flush()
 	mp.logger.Printf("%s removing..\n", reducerPath)
 	mp.Clean(reducerPath)
-	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ReducerWorkFinished" + strconv.FormatUint(mp.workID, 10)}
+	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
+
 }
 
 func (mp *mapreduceTask) processReducerKV(str []byte) {
