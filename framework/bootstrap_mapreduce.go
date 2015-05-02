@@ -20,7 +20,8 @@ type mapreducerFramework struct {
 	epochTopo taskgraph.Topology
 }
 
-// One need to pass in at least these two for framework to start.
+// mapreduceFramework extends from framework, thus it could not use anonymous construction
+// All mapreduceFramework function is same as framework, only need to do is convert to framework namespace
 func NewMapreduceBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.MapreduceBootstrap {
 	mpFramework := mapreducerFramework{}
 	mpFramework.name = jobName

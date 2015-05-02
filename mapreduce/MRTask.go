@@ -121,10 +121,6 @@ func (mp *mapreduceTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.stopGrabTask = make(chan bool, 1)
 	mp.epochChange = make(chan *mapreduceEvent, 1)
 	mp.dataReady = make(chan *mapreduceEvent, 1)
-	// metaNum := mp.mapreduceConfig.MapperNum
-	// if mp.mapreduceConfig.ReducerNum > metaNum {
-	// 	metaNum = mp.mapreduceConfig.ReducerNum
-	// }
 	mp.metaReady = make(chan *mapreduceEvent, 1)
 	mp.exitChan = make(chan struct{})
 	mp.notifyChan = make(chan *mapreduceEvent, 1)
@@ -144,9 +140,6 @@ func (mp *mapreduceTask) run() {
 		select {
 		case ec := <-mp.epochChange:
 			go mp.doEnterEpoch(ec.ctx, ec.epoch)
-
-		// case done := <-mp.finishedChan:
-		// 	mp.framework.FlagMeta(done.ctx, done.linkType, done.message)
 
 		case notify := <-mp.notifyChan:
 			mp.framework.FlagMeta(notify.ctx, notify.linkType, notify.meta)
@@ -171,16 +164,6 @@ func (mp *mapreduceTask) run() {
 
 func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, linkType string, meta string) {
 	switch mp.taskType {
-	// case 2 :
-	// 	switch meta {
-	// 		case "mapperDataNeedCommit":
-	// 			go shuffleCommitMapperData(fromID)
-	// 	}
-	// case 1 :
-	// 	switch meta {
-	// 		case "shuffleProcessFinished":
-	// 				go processMapperWork(ctx)
-	// 	}
 	case "master":
 		matchMapper, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
 		matchReducer, _ := regexp.MatchString("^ReducerWorkFinished[0-9]+$", meta)
@@ -202,9 +185,8 @@ func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, link
 	}
 }
 
+// By type of task, decide eclusive progress to run
 func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
-	// close(mp.stopGrabTask)
-	// mp.stopGrabTask = make(chan *mapreduceEvent, 1)
 	switch mp.taskType {
 	case "mapper":
 		mp.processWork(ctx, mp.mapperWorkChan)
@@ -254,6 +236,7 @@ func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
 }
 
 func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapreduceEvent) {
+	// At the beginning, the task must be idle, thus it grab a free work at defined path
 	mp.logger.Println("In process work function, process", mp.taskType)
 	mp.workID = nonExistWork
 	err := mp.grabWork(mp.epoch, mp.taskType)
@@ -264,6 +247,9 @@ func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapredu
 	if mp.workID != nonExistWork {
 		workChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch}
 	}
+
+	// Then the task watch its work status.
+	// Once it is being released, the task continue to grab a free work to process
 	receiver := make(chan *etcd.Response, 1)
 	stop := make(chan bool, 1)
 	go mp.etcdClient.Watch(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), 0, false, receiver, stop)
@@ -328,39 +314,13 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 		mp.mapperWriteCloser[i].Flush()
 	}
 	mp.logger.Println("FileRead finished")
+	// notify the master mapper work has been done
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, workID: mp.workID, fromID: mp.taskID, linkType: "Slave", meta: "MapperWorkFinished" + strconv.FormatUint(mp.workID, 10)}
+	// release the task to grab a new work
 	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
 }
 
-// func (mp *mapreduceTask) shuffleCommitMapperData(uint64 fromID) {
-// 	conveyReader, err := mp.mapreduceConfig.filesystemClient.OpenReadClose(mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(fromID, 10))
-// 	if err != nil {
-// 		mp.logger.Fatalf("MapReduce : shuffle commit error, ", err)
-// 	}
-// 	bufioReader := bufio.NewReaderSize(shuffleReadCloser, mp.mapreduceConfig.ReadBufferSize)
-// 	mp.etcdClient.Get(key, sort, recursive)
-// 	work, err := client.Get(etcdutil.TaskMasterWork(mp.mapreduceConfig.AppName, fromID), false, false)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	commitPath := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(mp.taskID - mp.mapreduceConfig.MapperNum, 10)  + "from" + strconv.FormatUint(work.Value, 10)
-// 	mp.Clean(commitPath)
-// 	conveyWriter, err := mp.mapreduceConfig.filesystemClient.OpenWriteClose(commitPath)
-// 	if err != nil {
-// 		mp.logger.Fatalf("MapReduce : shuffle commit error, ", err)
-// 	}
-// 	bufioWriter := bufio.NewReaderSize(shuffleReadCloser, mp.mapreduceConfig.ReadBufferSize)
-// 	n, err := bufioReader.WriterTo(bufioWriter)
-// 	if err != nil {
-// 		mp.logger.Fatalf("MapReduce : shuffle commit error, ", err)
-// 	}
-// 	mp.finishedTask[work.Value] = true
-// 	client.Delete(etcdutil.TaskMasterWork(mp.mapreduceConfig.AppName, fromID), false)
-// 	if len(mp.finishedTask) == mp.lenFinishedTask {
-// 		mp.notifyChan <- &mapperEvent{ctx: ctx, epoch: mp.epoch, linkType : "Slave", meta : "shuffleCommitFinished"}
-// 	}
-// }
-
+// Read mapper data, shuffle, set a new reducer work
 func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 	mp.logger.Println("In transfer Data function")
 	mp.shuffleContainer = make(map[string][]string)
@@ -411,7 +371,7 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType: "Slave", meta: "ShuffleWorkFinished"}
 	key := etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, "reducer", strconv.FormatUint(mp.workID, 10))
 	mp.logger.Println("shuffle finished, add reducer work ", key)
-	// _ = etcdutil.MustCreate(mp.etcdClient, mp.logger, key, "", 0)
+
 	mp.etcdClient.Set(key, "begin", 0)
 	for i := 0; i < workNum; i++ {
 		shufflePath := mp.mapreduceConfig.InterDir + "/" + strconv.FormatUint(mp.workID, 10) + "from" + strconv.Itoa(i)
@@ -422,8 +382,6 @@ func (mp *mapreduceTask) transferShuffleData(ctx context.Context) {
 }
 
 func (mp *mapreduceTask) getNodeTaskType() string {
-	// prefix := len(mp.framework.GetTopology().GetNeighbors("Prefix", mp.epoch))
-	// suffix := len(mp.framework.GetTopology().GetNeighbors("Suffix", mp.epoch))
 	master := len(mp.framework.GetTopology().GetNeighbors("Master", mp.epoch))
 	if master == 0 {
 		return "master"
@@ -440,17 +398,6 @@ func (mp *mapreduceTask) getNodeTaskType() string {
 		}
 		return "reducer"
 	}
-	// if prefix == 0 {
-	// 	if mp.epoch == 0 {
-	// 		return "mapper"
-	// 	}
-	// 	return "shuffle"
-	// }
-	// if suffix == 0 {
-	// 	if mp.epoch == 0 {
-	// 		 return "shuffle"
-	// 	}
-	// }
 	return "reducer"
 }
 
