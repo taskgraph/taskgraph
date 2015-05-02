@@ -43,7 +43,6 @@ func reducerFunc(mp taskgraph.MapreduceTask, key string, val []string) {
 	mp.Collect(key, strconv.Itoa(sum))
 }
 
-// Input files defined in "input($mapperTaskID).txt"
 func main() {
 	// programType := flag.String("type", "", "(c) controller, (m) mapper, (s) shuffle, or (r) reducer")
 	job := flag.String("job", "mapredectest", "job name")

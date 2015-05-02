@@ -32,7 +32,6 @@ func TryOccupyNode(freeNodePath, healthyPath, setPath string, ttl uint64, client
 		}
 		return false, err
 	}
-	//
 	client.Delete(freeNodePath, false)
 	_, err = client.Set(setPath, connection, 0)
 	if err != nil {

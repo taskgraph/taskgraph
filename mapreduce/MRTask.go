@@ -42,7 +42,6 @@ type mapreduceTask struct {
 	shuffleContainer map[string][]string
 	lenFinishedTask  uint64
 	mapperWorkNum    uint64
-	stopGrabTask     chan bool
 
 	//channels
 	epochChange  chan *mapreduceEvent
@@ -50,8 +49,8 @@ type mapreduceTask struct {
 	metaReady    chan *mapreduceEvent
 	finishedChan chan *mapreduceEvent
 	notifyChan   chan *mapreduceEvent
-	// stopGrabTask chan *mapreduceEvent
-	exitChan chan struct{}
+	exitChan     chan struct{}
+	stopGrabTask chan bool
 
 	//work channels
 	mapperWorkChan  chan *mapreduceEvent
@@ -331,8 +330,6 @@ func (mp *mapreduceTask) fileRead(ctx context.Context, work taskgraph.Work) {
 	mp.logger.Println("FileRead finished")
 	mp.notifyChan <- &mapreduceEvent{ctx: ctx, workID: mp.workID, fromID: mp.taskID, linkType: "Slave", meta: "MapperWorkFinished" + strconv.FormatUint(mp.workID, 10)}
 	mp.etcdClient.Delete(etcdutil.TaskMasterWorkForType(mp.mapreduceConfig.AppName, mp.taskType, strconv.FormatUint(mp.taskID, 10)), false)
-
-	// mp.notifyChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch, linkType : "Prefix", meta : "mapperDataNeedCommit"}
 }
 
 // func (mp *mapreduceTask) shuffleCommitMapperData(uint64 fromID) {
@@ -508,13 +505,6 @@ func (mp *mapreduceTask) processShuffleKV(str []byte) {
 		mp.shuffleContainer[tp.Key] = append(mp.shuffleContainer[tp.Key], tp.Value)
 	}
 }
-
-// func (mp *mapreduceTask) shuffleProcess() {
-// 	mp.shuffleDepositWriter.Write(p)
-
-// 	mp.finished <- &shuffleEvent{ctx: ctx}
-
-// }
 
 // At present, epoch is not a required parameter for mapper
 // but it may be useful in the future

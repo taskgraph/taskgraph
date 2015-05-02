@@ -43,6 +43,7 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log
 
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /FreeTasks/{taskID}
+// release work the task possesses to allow other tasks grabbing
 func ReportFailure(client *etcd.Client, name, failedTask string, logger *log.Logger) error {
 	_, err := client.Set(FreeTaskPath(name, failedTask), "failed", 0)
 	if err != nil {
@@ -128,7 +129,7 @@ func computeTTL(interval time.Duration) uint64 {
 	return 3 * uint64(interval/time.Second)
 }
 
-// WaitFreeTask blocks until it gets a hint of free task
+// WaitFreeNode blocks until it gets a hint of free unit, freeNodeDir represents the path to get free unit
 func WaitFreeNode(freeNodeDir string, client *etcd.Client, logger *log.Logger, stop chan bool) (uint64, error) {
 	slots, err := client.Get(freeNodeDir, false, true)
 	if err != nil {
