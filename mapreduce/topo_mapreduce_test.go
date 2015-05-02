@@ -7,7 +7,7 @@ import (
 func TestMapReduceTopology(t *testing.T) {
 	topo := NewMapReduceTopology(3, 5, 2)
 	linkTypes := topo.GetLinkTypes()
-	if len(linkTypes) != 2 {
+	if len(linkTypes) != 4 {
 		t.Error()
 	}
 	topo.SetTaskID(1)
@@ -40,52 +40,41 @@ func TestMapReduceTopology(t *testing.T) {
 		t.Error()
 	}
 
-	topo.SetTaskID(5)
+	topo.SetTaskID(0)
 
-	if topo.taskID != 5 {
-		t.Error()
-	}
-	m := topo.GetNeighbors("Prefix", 0)
-	if len(m) != 3 {
+	if topo.taskID != 0 {
 		t.Error()
 	}
 
-	m = topo.GetNeighbors("Suffix", 0)
+	m := topo.GetNeighbors("Suffix", 1)
 	if len(m) != 1 {
 		t.Error()
 	}
 
-	if m[0] != 8 {
+	if m[0] != 5 {
 		t.Error()
 	}
 
 	topo.SetTaskID(8)
 
-	m = topo.GetNeighbors("Prefix", 0)
-	if len(m) != 3 {
+	m = topo.GetNeighbors("Slave", 0)
+	if len(m) != 8 {
 		t.Error()
 	}
 
-	if m[2] != 5 {
+	m = topo.GetNeighbors("Slave", 1)
+	if len(m) != 8 {
 		t.Error()
 	}
 
-	topo = NewMapReduceTopology(1, 1, 1)
-	topo.SetTaskID(0)
-	m = topo.GetNeighbors("Suffix", 0)
-	if len(m) != 1 {
-		t.Error()
-	}
-	if m[0] != 1 {
-		t.Error()
-	}
 	topo.SetTaskID(2)
-	m = topo.GetNeighbors("Prefix", 0)
+
+	m = topo.GetNeighbors("Master", 1)
 	if len(m) != 1 {
 		t.Error()
 	}
-	if m[0] != 1 {
-		t.Error(m[0])
+	if m[0] != 8 {
+		t.Error()
 	}
 
 }
