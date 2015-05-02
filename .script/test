@@ -6,16 +6,6 @@ if [ ! -d ".tmp" ]; then
     mkdir .tmp
 fi
 
-# Fix current code.google.com/ path problem
-fix_google_code_goprotobuf() {
-  mkdir -p .dep/src/code.google.com/p
-  cd .dep/src/code.google.com/p
-  git clone https://github.com/golang/protobuf goprotobuf
-  cd ../../../..
-  export GOPATH=$GOPATH:$(pwd)/.dep/
-}
-fix_google_code_goprotobuf
-
 clean_test_files() {
   rm	example/bwmf/data/dShard.dat.0 > /dev/null 2>&1
   rm	example/bwmf/data/dShard.dat.1 > /dev/null 2>&1
