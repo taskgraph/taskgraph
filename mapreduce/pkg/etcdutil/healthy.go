@@ -26,7 +26,7 @@ func Heartbeat(client *etcd.Client, name string, taskID uint64, interval time.Du
 }
 
 // detect failure of the given taskID
-func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log.Logger) error {
+func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 	receiver := make(chan *etcd.Response, 1)
 	go client.Watch(HealthyPath(name), 0, true, receiver, stop)
 	for resp := range receiver {
@@ -34,7 +34,7 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log
 			continue
 		}
 
-		if err := ReportFailure(client, name, path.Base(resp.Node.Key), logger); err != nil {
+		if err := ReportFailure(client, name, path.Base(resp.Node.Key)); err != nil {
 			return err
 		}
 	}
@@ -44,15 +44,12 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool, logger *log
 // report failure to etcd cluster
 // If a framework detects a failure, it tries to report failure to /FreeTasks/{taskID}
 // release work the task possesses to allow other tasks grabbing
-func ReportFailure(client *etcd.Client, name, failedTask string, logger *log.Logger) error {
+func ReportFailure(client *etcd.Client, name, failedTask string) error {
 	_, err := client.Set(FreeTaskPath(name, failedTask), "failed", 0)
 	if err != nil {
 		return err
 	}
 	work, err := client.Get(TaskMasterWork(name, failedTask), false, false)
-	logger.Println("Detect Failure at", name, failedTask)
-	logger.Println("Delete ", OccupyWorkPath(name, work.Node.Value), " And ", TaskMasterWork(name, failedTask))
-	logger.Println("Set ", FreeWorkPath(name, work.Node.Value))
 
 	if err != nil {
 		return err
