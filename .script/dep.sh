@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# For Go plugin update, please see:
+#   https://github.com/grpc/grpc-common/tree/master/go
+
 go get -u github.com/coreos/go-etcd/etcd
 go get -u github.com/colinmarc/hdfs
 go get -u golang.org/x/net/context

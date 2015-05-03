@@ -99,9 +99,9 @@ func RegisterRegressionServer(s *grpc.Server, srv RegressionServer) {
 	s.RegisterService(&_Regression_serviceDesc, srv)
 }
 
-func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
+func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(Input)
-	if err := proto1.Unmarshal(buf, in); err != nil {
+	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(RegressionServer).GetParameter(ctx, in)
@@ -111,9 +111,9 @@ func _Regression_GetParameter_Handler(srv interface{}, ctx context.Context, buf 
 	return out, nil
 }
 
-func _Regression_GetGradient_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
+func _Regression_GetGradient_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(Input)
-	if err := proto1.Unmarshal(buf, in); err != nil {
+	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(RegressionServer).GetGradient(ctx, in)

@@ -16,13 +16,12 @@ on a standard set of events (typed neighbors fail/restart, primary/backup switch
 to task implementation so that it can do application dependent recovery.
 
 
-TaskGrpah supports an event driven pull model for communication. When one task
+TaskGraph supports an event driven pull model for communication. When one task
 want to talk to some other task, it set a flag via framework, and framework will
 notify recipient, which can decide whether or when to fetch data via Framework.
 Framework will handle communication failures via automatic retry, reconnect to
 new task node, etc. In another word, it provides exactly-once semantic on data
 request.
-
 
 An TaskGraph application usually has three layers. And application implementation
 need to configure TaskGraph in driver layer and also implement Task/TaskBuilder/Topology
