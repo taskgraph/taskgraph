@@ -14,6 +14,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const defaultBufferSize = 4096
+
 type mapreducerFramework struct {
 	framework
 	config    taskgraph.MapreduceConfig
@@ -37,8 +39,18 @@ func (f *mapreducerFramework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) 
 
 func (f *mapreducerFramework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
-// Initialize Mapreduce configuration
+// Initialize Mapreduce configuration.
+// Set default value to specfic variable
 func (f *mapreducerFramework) InitWithMapreduceConfig(config taskgraph.MapreduceConfig) {
+	if config.InterDir == "" {
+		config.InterDir = "MapreducerProcessTemporaryResult"
+	}
+	if config.ReaderBufferSize == 0 {
+		config.ReaderBufferSize = defaultBufferSize
+	}
+	if config.WriterBufferSize == 0 {
+		config.WriterBufferSize = defaultBufferSize
+	}
 	f.config = config
 }
 

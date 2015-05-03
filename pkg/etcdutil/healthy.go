@@ -1,12 +1,6 @@
 package etcdutil
 
 import (
-<<<<<<< HEAD
-||||||| merged common ancestors
-	"fmt"
-=======
-	// "fmt"
->>>>>>> Mapreduce : finish buffer stream io, change wait system of free node
 	"log"
 	"math/rand"
 	"path"
