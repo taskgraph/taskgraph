@@ -9,28 +9,52 @@ import (
 	"strings"
 
 	"../../taskgraph"
+	"../mapreduce/pkg/etcdutil"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
 
-// One need to pass in at least these two for framework to start.
-func NewBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.Bootstrap {
-	return &framework{
-		name:     jobName,
-		etcdURLs: etcdURLs,
-		ln:       ln,
-		log:      logger,
-	}
+const defaultBufferSize = 4096
+
+type mapreducerFramework struct {
+	framework
+	config    taskgraph.MapreduceConfig
+	epochTopo taskgraph.Topology
 }
 
-func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
+// mapreduceFramework extends from framework, thus it could not use anonymous construction
+// All mapreduceFramework function is same as framework, only need to do is convert to framework namespace
+func NewMapreduceBootStrap(jobName string, etcdURLs []string, ln net.Listener, logger *log.Logger) taskgraph.MapreduceBootstrap {
+	mpFramework := mapreducerFramework{}
+	mpFramework.name = jobName
+	mpFramework.etcdURLs = etcdURLs
+	mpFramework.ln = ln
+	mpFramework.log = logger
+	return &mpFramework
+}
+
+func (f *mapreducerFramework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
+func (f *mapreducerFramework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
 
-func (f *framework) Start() {
+// Initialize Mapreduce configuration.
+// Set default value to specfic variable
+func (f *mapreducerFramework) InitWithMapreduceConfig(config taskgraph.MapreduceConfig) {
+	if config.InterDir == "" {
+		config.InterDir = "MapreducerProcessTemporaryResult"
+	}
+	if config.ReaderBufferSize == 0 {
+		config.ReaderBufferSize = defaultBufferSize
+	}
+	if config.WriterBufferSize == 0 {
+		config.WriterBufferSize = defaultBufferSize
+	}
+	f.config = config
+}
+
+func (f *mapreducerFramework) Start() {
 	var err error
 
 	if f.log == nil {
@@ -68,12 +92,13 @@ func (f *framework) Start() {
 	f.heartbeat()
 	f.setup()
 	f.task.Init(f.taskID, f)
+	f.task.(taskgraph.MapreduceTask).MapreduceConfiguration(f.config)
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
 }
 
-func (f *framework) setup() {
+func (f *mapreducerFramework) setup() {
 	f.globalStop = make(chan struct{})
 	f.metaChan = make(chan *metaChange, 1)
 	f.dataReqtoSendChan = make(chan *dataRequest, 1)
@@ -81,7 +106,7 @@ func (f *framework) setup() {
 	f.epochCheckChan = make(chan *epochCheck, 1)
 }
 
-func (f *framework) run() {
+func (f *mapreducerFramework) run() {
 	f.log.Printf("framework starts to run")
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
@@ -92,9 +117,12 @@ func (f *framework) run() {
 		case nextEpoch, ok := <-f.epochWatcher:
 			f.releaseEpochResource()
 			if !ok { // task is killed
+				f.log.Fatalf("task %d is killed", f.taskID)
 				return
 			}
+
 			f.epoch = nextEpoch
+			f.log.Printf("join epoch %d", nextEpoch)
 			if f.epoch == exitEpoch {
 				return
 			}
@@ -131,7 +159,7 @@ func (f *framework) run() {
 	}
 }
 
-func (f *framework) setEpochStarted() {
+func (f *mapreducerFramework) setEpochStarted() {
 	// Each epoch have a new meta map
 	f.metaNotified = make(map[string]bool)
 
@@ -145,7 +173,7 @@ func (f *framework) setEpochStarted() {
 	}
 }
 
-func (f *framework) releaseEpochResource() {
+func (f *mapreducerFramework) releaseEpochResource() {
 	f.userCtxCancel()
 	for _, c := range f.metaStops {
 		c <- true
@@ -154,7 +182,7 @@ func (f *framework) releaseEpochResource() {
 }
 
 // release resources: heartbeat, epoch watch.
-func (f *framework) releaseResource() {
+func (f *mapreducerFramework) releaseResource() {
 	f.log.Printf("framework is releasing resources...\n")
 	f.epochWatchStop <- true
 	close(f.globalStop)
@@ -162,7 +190,7 @@ func (f *framework) releaseResource() {
 }
 
 // occupyTask will grab the first unassigned task and register itself on etcd.
-func (f *framework) occupyTask() error {
+func (f *mapreducerFramework) occupyTask() error {
 	for {
 		freeTask, err := etcdutil.WaitFreeTask(f.etcdClient, f.name, f.log)
 		if err != nil {
@@ -181,9 +209,9 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
+func (f *mapreducerFramework) watchMeta(linkType string, taskIDs []uint64) {
 	stops := make([]chan bool, len(taskIDs))
-
+	f.log.Println(f.taskID, linkType, taskIDs)
 	for i, taskID := range taskIDs {
 		stop := make(chan bool, 1)
 		stops[i] = stop
@@ -222,7 +250,7 @@ func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
 	f.metaStops = append(f.metaStops, stops...)
 }
 
-func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
+func (f *mapreducerFramework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {
@@ -231,8 +259,4 @@ func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkTyp
 	f.metaNotified[tm] = true
 
 	f.task.MetaReady(ctx, taskID, linkType, meta)
-}
-
-func taskMeta(taskID uint64, meta string) string {
-	return fmt.Sprintf("%s-%s", strconv.FormatUint(taskID, 10), meta)
 }

@@ -6,8 +6,8 @@ import (
 	"math"
 	"net"
 
+	"../../taskgraph"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
