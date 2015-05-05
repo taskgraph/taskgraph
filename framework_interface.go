@@ -94,11 +94,13 @@ type GRPCHandlerInterceptor interface {
 // completed, etc.) of each workers and make decisions when state changes. This is important
 // when task restart happens and reset state to "initial".
 //   The framework keep tracks of physical addresses of connected workers assuming that
-// workers always talk to master first. Any NotifyWorker() failure implicates task restart.
+// workers always talk to master first. Basically, the first time a worker do notify on
+// master, framework should carry the address of grpc server in hidden and set it
+// automatically.
 //
 // What about worker?
 //   Workers do the actual computation and data flow.
-//   The framework keeps track of master address(es).
+//   The framework keeps track of master address(es) in etcd.
 
 type MasterFrame interface {
 	// User can use this interface to simplify sending the messages to worker. By keeping
