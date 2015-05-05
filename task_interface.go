@@ -49,3 +49,15 @@ type Backupable interface {
 	// one update the state of copy.
 	Update(log UpdateLog)
 }
+
+type MasterTask interface {
+	// Corresponds to NotifyMaster
+	OnNotify(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
+}
+
+type WorkerTask interface {
+	// Corresponds to NotifyWorker
+	OnNotify(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+	// Corresponds to DataRequest
+	ServeData(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+}

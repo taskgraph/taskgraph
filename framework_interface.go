@@ -60,3 +60,61 @@ type BackedUpFramework interface {
 	// of one primary and some backup copies.
 	Update(taskID uint64, log UpdateLog)
 }
+
+type bootCommon interface {
+	SetTopology(Topology)
+	Start()
+}
+
+type MasterBoot interface {
+	SetTask(MasterTask)
+	bootCommon
+}
+
+type WorkerBoot interface {
+	SetTask(WorkerTask)
+	bootCommon
+}
+
+type frameCommon interface {
+	// Currently grpc doesn't support interceptor functionality. We need to rely on user
+	// to call this at handler implementation.
+	GRPCHandlerIntercept(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+}
+
+// Master-worker paradigm:
+// There're usually a master (we can make it fault tolerance) and a bunch of workers.
+// Master is responsible for making global decision and assign work to individual workers.
+// Startup:
+// 1. master should start first.
+// 2. workers start with a unique worker ID, and ask/notify the master for assignment.
+//
+// Why master and what should be done on master?
+//   Only master can make global decisions. Master should store the states (initial, updated,
+// completed, etc.) of each workers and make decisions when state changes. This is important
+// when task restart happens and reset state to "initial".
+//   The framework keep tracks of physical addresses of connected workers assuming that
+// workers always talk to master first. Any NotifyWorker() failure implicates task restart.
+//
+// What about worker?
+//   Workers do the actual computation and data flow.
+//   The framework keeps track of master address(es).
+
+type MasterFrame interface {
+	// User can use this interface to simplify sending the messages to worker. By keeping
+	// track of workers' states, user can make decisions on logical worker and communicate it
+	// using proto messages.
+	NotifyWorker(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
+	GetWorkerAddr(workerID uint64) (addr string)
+}
+
+type WorkerFrame interface {
+	// It usually send states, etc. information to master in order to get further decision.
+	NotifyMaster(ctx context.Context, input proto.Message) (proto.Message, error)
+	// This is to help user do data transfer.
+	// The "addr" is a physical one instead of logical worker ID.
+	// Addr is usually known from the master. When maser tell a worker to talk to another
+	// worker, the place to go to should be a physical one. Any failure later should be
+	// handled by master to give a new address.
+	DataRequest(ctx context.Context, addr string, method string, input proto.Message) (proto.Message, error)
+}
