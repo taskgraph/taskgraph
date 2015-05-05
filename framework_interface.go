@@ -61,25 +61,25 @@ type BackedUpFramework interface {
 	Update(taskID uint64, log UpdateLog)
 }
 
-type bootCommon interface {
-	SetTopology(Topology)
-	Start()
-}
-
 type MasterBoot interface {
 	SetTask(MasterTask)
-	bootCommon
+	// Only master knows the global topology and makes decisions.
+	SetTopology(Topo)
+	// Blocking call to run the task until it finishes.
+	Start()
 }
 
 type WorkerBoot interface {
 	SetTask(WorkerTask)
-	bootCommon
+	Start()
 }
 
-type frameCommon interface {
+type GRPCHandlerInterceptor interface {
 	// Currently grpc doesn't support interceptor functionality. We need to rely on user
 	// to call this at handler implementation.
-	GRPCHandlerIntercept(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+	// The workflow would be
+	//   C:Notify -> S:Intercept -> S:OnNotify
+	Intercept(ctx context.Context, method string, input proto.Message) (proto.Message, error)
 }
 
 // Master-worker paradigm:
@@ -105,7 +105,8 @@ type MasterFrame interface {
 	// track of workers' states, user can make decisions on logical worker and communicate it
 	// using proto messages.
 	NotifyWorker(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
-	GetWorkerAddr(workerID uint64) (addr string)
+	GetWorkerAddr(workerID uint64) string
+	GRPCHandlerInterceptor
 }
 
 type WorkerFrame interface {
@@ -117,4 +118,5 @@ type WorkerFrame interface {
 	// worker, the place to go to should be a physical one. Any failure later should be
 	// handled by master to give a new address.
 	DataRequest(ctx context.Context, addr string, method string, input proto.Message) (proto.Message, error)
+	GRPCHandlerInterceptor
 }
