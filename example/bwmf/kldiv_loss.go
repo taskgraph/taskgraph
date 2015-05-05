@@ -64,23 +64,23 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 			// wh := l.smooth // move away from 0
 			wh := float32(0.0)
 
+			// evaluate WH_ij and accumulate w to grad vec
 			for k, wk := range *wRow {
 				wh += wk * H.Get(j*l.k+int(k))
+				gradient.Add(j*l.k+int(k), wk)
 			}
 
 			// accumulate to grad vec
 			if ve {
-				// v is non-zero
+				// v is non-zero, accumulate loss and add the v term to gradient vec
 				value += -v*float32(math.Log(float64(wh+l.smooth))) + wh
 				for k, wk := range *wRow {
-					gradient.Add(j*l.k+int(k), wk*(1.0-(v+l.smooth)/(wh+l.smooth)))
+					gradient.Add(j*l.k+int(k), -wk*(v+l.smooth)/(wh+l.smooth))
 				}
 			} else {
-				// v is zero
+				// v is zero, accumulate loss
+				// the gradient has beed updated in previous step
 				value += wh
-				for k, wk := range *wRow {
-					gradient.Add(j*l.k+int(k), wk)
-				}
 			}
 		}
 	}
