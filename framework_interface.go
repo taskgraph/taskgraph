@@ -83,7 +83,7 @@ type GRPCHandlerInterceptor interface {
 }
 
 // Master-worker paradigm:
-// There're usually a master (we can make it fault tolerance) and a bunch of workers.
+// There are usually one master (we can make it fault tolerance) and many workers.
 // Master is responsible for making global decision and assign work to individual workers.
 // Startup:
 // 1. master should start first.
@@ -93,39 +93,23 @@ type GRPCHandlerInterceptor interface {
 //   Only master can make global decisions. Master should store the states (initial, updated,
 // completed, etc.) of each workers and make decisions when state changes. This is important
 // when task restart happens and reset state to "initial".
-//   The framework keep tracks of physical addresses of connected workers assuming that
-// workers always talk to master first. Basically, the first time a worker do notify on
-// master, framework should carry the address of grpc server in hidden and set it
-// automatically.
 //
 // What about worker?
 //   Workers do the actual computation and data flow.
 //   The framework keeps track of master address(es) in etcd.
-//
-// About epoch.
-//   TaskGraph helps user synchronize epoch changes. When a task restarted and lagged off,
-//   actions (usually the first one, NotifyMaster) will get a framework-specified error.
-//   User can use EnterEpoch() callback to manage lifecycle. Epoch changes and synchronization
-//   are handled by framework.
 
 type MasterFrame interface {
 	// User can use this interface to simplify sending the messages to worker. By keeping
 	// track of workers' states, user can make decisions on logical worker and communicate it
 	// using proto messages.
 	NotifyWorker(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
-	GetWorkerAddr(workerID uint64) string
-	IncEpoch(ctx context.Context)
 	GRPCHandlerInterceptor
 }
 
 type WorkerFrame interface {
 	// It usually send states, etc. information to master in order to get further decision.
 	NotifyMaster(ctx context.Context, input proto.Message) (proto.Message, error)
-	// This is to help user do data transfer.
-	// The "addr" is a physical one instead of logical worker ID.
-	// Addr is usually known from the master. When maser tell a worker to talk to another
-	// worker, the place to go to should be a physical one. Any failure later should be
-	// handled by master to give a new address.
-	DataRequest(ctx context.Context, addr string, method string, input proto.Message) (proto.Message, error)
+	// Worker-worker data flow
+	DataRequest(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
 	GRPCHandlerInterceptor
 }
