@@ -50,14 +50,33 @@ type Backupable interface {
 	Update(log UpdateLog)
 }
 
+type GRPCHelper interface {
+	CreateOutputMessage(methodName string) proto.Message
+	CreateServer() *grpc.Server
+}
+
+// Master task is assumed to be fault tolerant.
+
 type MasterTask interface {
+	Init(framework MasterFrame)
+	Exit()
+
+	EnterEpoch(ctx context.Context, epoch uint64)
+
 	// Corresponds to NotifyMaster
 	OnNotify(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
+	GRPCHelper
 }
 
 type WorkerTask interface {
+	Init(framework WorkerFrame, workerID uint64)
+	Exit()
+
+	EnterEpoch(ctx context.Context, epoch uint64)
+
 	// Corresponds to NotifyWorker
 	OnNotify(ctx context.Context, method string, input proto.Message) (proto.Message, error)
 	// Corresponds to DataRequest
 	ServeData(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+	GRPCHelper
 }

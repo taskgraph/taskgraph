@@ -108,6 +108,7 @@ type MasterFrame interface {
 	// using proto messages.
 	NotifyWorker(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
 	GetWorkerAddr(workerID uint64) string
+	IncEpoch(ctx context.Context)
 	GRPCHandlerInterceptor
 }
 
