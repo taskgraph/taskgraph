@@ -13,14 +13,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"net"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
 )
-
-type MapreduceBootstrap interface {
-	Start(map[string]interface{})
-}
 
 type MapreduceBootstrapController struct {
 	Config map[string]interface{}
@@ -33,6 +30,7 @@ func NewMapreduceBootstrapController() MapreduceBootstrapController {
 
 const defaultBufferSize = 4096
 var controllerStarted chan bool
+var ntask uint64
 
 func max(a uint64, b uint64) uint64 {
 	if a > b {
@@ -56,7 +54,7 @@ func (mpc *MapreduceBootstrapController) runBootstrap() {
 	bootstrap := framework.NewBootStrap(mpc.Config["AppName"].(string), mpc.Config.EtcdURLs.([]string), createListener(), ll)
 	taskBuilder := &MapreduceTaskBuilder{Config: mpc.Config}
 	bootstrap.SetTaskBuilder(taskBuilder)
-	bootstrap.SetTopology(NewMapReduceTopology(mpc.Config["MapperNum"].(uint64), mpc.Config["ShuffleNum"].(uint64), mpc.Config.["ReducerNum"].(uint64)))
+	bootstrap.SetTopology(NewMapReduceTopology(mpc.Config["MapperNum"].(uint64), mpc.Config["ShuffleNum"].(uint64), mpc.Config.["ReducerNum"].(uint64), NTask))
 	bootstrap.Start()
 }
 
@@ -104,7 +102,7 @@ func (mpc *MapreduceBootstrapController) Start(config taskgraph.MapreduceConfig)
 	
 	// calculate the maximum number of node coexist during all epochs
 	// plus one represents that thers is a reservation serving for master node
-	ntask := max(config["MapperNum"]+config["ShuffleNum"], config["ShuffleNum"]+config["ReducerNum"]) + 1
+	ntask = max(config["MapperNum"]+config["ShuffleNum"], config["ShuffleNum"]+config["ReducerNum"]) + 1
 	controllerStarted = make(chan bool, 1)
 
 	// Issue : could controller create a free work?
@@ -120,7 +118,7 @@ func (mpc *MapreduceBootstrapController) Start(config taskgraph.MapreduceConfig)
 
 	mpc.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
-	for i := (uint64)(0); i < ntask + mpc.config["FreeNode"].(uint64); i++ {
+	for i := uint64(0); i < ntask + mpc.config["FreeNode"].(uint64); i++ {
 		go mpc.runBootstrap()
 	}
 
