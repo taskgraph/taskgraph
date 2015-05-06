@@ -101,6 +101,12 @@ type GRPCHandlerInterceptor interface {
 // What about worker?
 //   Workers do the actual computation and data flow.
 //   The framework keeps track of master address(es) in etcd.
+//
+// About epoch.
+//   TaskGraph helps user synchronize epoch changes. When a task restarted and lagged off,
+//   actions (usually the first one, NotifyMaster) will get a framework-specified error.
+//   User can use EnterEpoch() callback to manage lifecycle. Epoch changes and synchronization
+//   are handled by framework.
 
 type MasterFrame interface {
 	// User can use this interface to simplify sending the messages to worker. By keeping
