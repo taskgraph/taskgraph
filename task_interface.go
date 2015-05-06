@@ -55,10 +55,15 @@ type GRPCHelper interface {
 	CreateServer() *grpc.Server
 }
 
+type JobConfig struct {
+	WorkerNumber uint64
+}
+
 // Master task is assumed to be fault tolerant.
 
 type MasterTask interface {
-	Run(framework MasterFrame)
+	Setup(framework MasterFrame, jobConfig JobConfig)
+	Run()
 
 	// Corresponds to NotifyMaster
 	OnNotify(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
@@ -66,7 +71,8 @@ type MasterTask interface {
 }
 
 type WorkerTask interface {
-	Run(framework WorkerFrame, workerID uint64)
+	Setup(framework WorkerFrame, workerID uint64)
+	Run()
 
 	// Corresponds to NotifyWorker
 	OnNotify(ctx context.Context, method string, input proto.Message) (proto.Message, error)

@@ -63,8 +63,6 @@ type BackedUpFramework interface {
 
 type MasterBoot interface {
 	SetTask(MasterTask)
-	// Only master knows the global topology and makes decisions.
-	SetTopology(Topo)
 	// Blocking call to run the task until it finishes.
 	Start()
 }
