@@ -8,50 +8,26 @@ import (
 	fs "github.com/taskgraph/taskgraph/filesystem"
 )
 
-func LoadSparseShard(client fs.Client, path string) (*pb.SparseMatrixShard, error) {
-	shard := &pb.SparseMatrixShard{}
-	lErr := loadMessage(client, path, shard)
-	if lErr != nil {
-		return nil, lErr
-	}
-	return shard, nil
-}
+func LoadMatrixShard(client fs.Client, path string) (*pb.MatrixShard, error) {
+	shard := &pb.MatrixShard{}
 
-func LoadDenseShard(client fs.Client, path string) (*pb.DenseMatrixShard, error) {
-	shard := &pb.DenseMatrixShard{}
-	lErr := loadMessage(client, path, shard)
-	if lErr != nil {
-		return nil, lErr
-	}
-	return shard, nil
-}
-
-func SaveSparseShard(client fs.Client, shard *pb.SparseMatrixShard, path string) error {
-	return saveMessage(client, shard, path)
-}
-
-func SaveDenseShard(client fs.Client, shard *pb.DenseMatrixShard, path string) error {
-	return saveMessage(client, shard, path)
-}
-
-func loadMessage(client fs.Client, path string, message proto.Message) error {
 	reader, cErr := client.OpenReadCloser(path)
 	if cErr != nil {
-		return cErr
+		return nil, cErr
 	}
 	buf, rdErr := ioutil.ReadAll(reader)
 	if rdErr != nil {
-		return rdErr
+		return nil, rdErr
 	}
-	deErr := fromByte(buf, message)
-	if deErr != nil {
-		return deErr
+	rdErr = fromByte(buf, shard)
+	if rdErr != nil {
+		return nil, rdErr
 	}
-	return nil
+	return shard, nil
 }
 
-func saveMessage(client fs.Client, msg proto.Message, path string) error {
-	buf, seErr := toByte(msg)
+func SaveMatrixShard(client fs.Client, shard *pb.MatrixShard, path string) error {
+	buf, seErr := toByte(shard)
 	if seErr != nil {
 		return seErr
 	}

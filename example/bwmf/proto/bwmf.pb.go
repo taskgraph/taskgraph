@@ -11,8 +11,7 @@ It is generated from these files:
 It has these top-level messages:
 	Request
 	Response
-	DenseMatrixShard
-	SparseMatrixShard
+	MatrixShard
 */
 package proto
 
@@ -38,68 +37,46 @@ func (m *Request) String() string { return proto1.CompactTextString(m) }
 func (*Request) ProtoMessage()    {}
 
 type Response struct {
-	BlockId uint64            `protobuf:"varint,1,opt,name=blockId" json:"blockId,omitempty"`
-	Shard   *DenseMatrixShard `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	BlockId uint64       `protobuf:"varint,1,opt,name=blockId" json:"blockId,omitempty"`
+	Shard   *MatrixShard `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
 }
 
 func (m *Response) Reset()         { *m = Response{} }
 func (m *Response) String() string { return proto1.CompactTextString(m) }
 func (*Response) ProtoMessage()    {}
 
-func (m *Response) GetShard() *DenseMatrixShard {
+func (m *Response) GetShard() *MatrixShard {
 	if m != nil {
 		return m.Shard
 	}
 	return nil
 }
 
-type DenseMatrixShard struct {
-	Row []*DenseMatrixShard_DenseRow `protobuf:"bytes,1,rep,name=row" json:"row,omitempty"`
+type MatrixShard struct {
+	Row []*MatrixShard_RowData `protobuf:"bytes,1,rep,name=row" json:"row,omitempty"`
 }
 
-func (m *DenseMatrixShard) Reset()         { *m = DenseMatrixShard{} }
-func (m *DenseMatrixShard) String() string { return proto1.CompactTextString(m) }
-func (*DenseMatrixShard) ProtoMessage()    {}
+func (m *MatrixShard) Reset()         { *m = MatrixShard{} }
+func (m *MatrixShard) String() string { return proto1.CompactTextString(m) }
+func (*MatrixShard) ProtoMessage()    {}
 
-func (m *DenseMatrixShard) GetRow() []*DenseMatrixShard_DenseRow {
+func (m *MatrixShard) GetRow() []*MatrixShard_RowData {
 	if m != nil {
 		return m.Row
 	}
 	return nil
 }
 
-type DenseMatrixShard_DenseRow struct {
-	At []float32 `protobuf:"fixed32,1,rep,name=at" json:"at,omitempty"`
+type MatrixShard_RowData struct {
+	RowId int32             `protobuf:"varint,1,opt,name=rowId" json:"rowId,omitempty"`
+	At    map[int32]float32 `protobuf:"bytes,2,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
 }
 
-func (m *DenseMatrixShard_DenseRow) Reset()         { *m = DenseMatrixShard_DenseRow{} }
-func (m *DenseMatrixShard_DenseRow) String() string { return proto1.CompactTextString(m) }
-func (*DenseMatrixShard_DenseRow) ProtoMessage()    {}
+func (m *MatrixShard_RowData) Reset()         { *m = MatrixShard_RowData{} }
+func (m *MatrixShard_RowData) String() string { return proto1.CompactTextString(m) }
+func (*MatrixShard_RowData) ProtoMessage()    {}
 
-type SparseMatrixShard struct {
-	Row []*SparseMatrixShard_SparseRow `protobuf:"bytes,1,rep,name=row" json:"row,omitempty"`
-}
-
-func (m *SparseMatrixShard) Reset()         { *m = SparseMatrixShard{} }
-func (m *SparseMatrixShard) String() string { return proto1.CompactTextString(m) }
-func (*SparseMatrixShard) ProtoMessage()    {}
-
-func (m *SparseMatrixShard) GetRow() []*SparseMatrixShard_SparseRow {
-	if m != nil {
-		return m.Row
-	}
-	return nil
-}
-
-type SparseMatrixShard_SparseRow struct {
-	At map[int32]float32 `protobuf:"bytes,1,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-}
-
-func (m *SparseMatrixShard_SparseRow) Reset()         { *m = SparseMatrixShard_SparseRow{} }
-func (m *SparseMatrixShard_SparseRow) String() string { return proto1.CompactTextString(m) }
-func (*SparseMatrixShard_SparseRow) ProtoMessage()    {}
-
-func (m *SparseMatrixShard_SparseRow) GetAt() map[int32]float32 {
+func (m *MatrixShard_RowData) GetAt() map[int32]float32 {
 	if m != nil {
 		return m.At
 	}
