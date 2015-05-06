@@ -25,10 +25,3 @@ type Topology interface {
 	// This returns the neighbors of given link for this node at this epoch.
 	GetNeighbors(linkType string, epoch uint64) []uint64
 }
-
-type Topo interface {
-	// We might change the global view when epoch changes
-	SetEpoch(epoch uint64)
-	Groups() []string
-	Neighbors(group string) (workerIDs []uint64)
-}
