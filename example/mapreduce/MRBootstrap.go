@@ -41,6 +41,36 @@ const defaultBufferSize = 4096
 var controllerStarted chan bool
 var ntask uint64
 
+func (mpc *MRBootstrap) Start() error {
+
+	mpc.Config = config
+
+	mpc.checkConfiguration()
+
+	// calculate the maximum number of node coexist during all epochs
+	// plus one represents that thers is a reservation serving for master node
+	ntask = max(config["MapperNum"]+config["ShuffleNum"], config["ShuffleNum"]+config["ReducerNum"]) + 1
+	controllerStarted = make(chan bool, 1)
+
+	// Issue : could controller create a free work?
+	// I've not fingure out current framework how to create free work
+	// at my previous code, I directly add some path (Like FreeworkDir) the layout
+	// and add some value to this path
+	go mpc.runController(ntask)
+
+	// wait controller initialization finished
+	<-controllerStarted
+
+	mpc.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
+
+	for i := uint64(0); i < ntask+mpc.config["FreeNode"].(uint64); i++ {
+		go mpc.runBootstrap()
+	}
+
+	return nil
+
+}
+
 // runController allocate a new controller to start initial configuration
 func (mpc *MapreduceBootstrapController) runController(ntask uint64) {
 	controller := controller.New(convert(mpc.Config["AppName"].(string)), etcd.NewClient(mpc.Config.EtcdURLs.([]string)), uint64(ntask), []string{"Prefix", "Suffix", "Master", "Slave"})
@@ -101,36 +131,6 @@ func (mpc *MRBootstrap) checkConfiguration() {
 	if mpc.checkConfigurationExist("FreeNode") {
 		mpc.config["FreeNode"] = 3
 	}
-}
-
-func (mpc *MRBootstrap) Start() error {
-
-	mpc.Config = config
-
-	mpc.checkConfiguration()
-
-	// calculate the maximum number of node coexist during all epochs
-	// plus one represents that thers is a reservation serving for master node
-	ntask = max(config["MapperNum"]+config["ShuffleNum"], config["ShuffleNum"]+config["ReducerNum"]) + 1
-	controllerStarted = make(chan bool, 1)
-
-	// Issue : could controller create a free work?
-	// I've not fingure out current framework how to create free work
-	// at my previous code, I directly add some path (Like FreeworkDir) the layout
-	// and add some value to this path
-	go mpc.runController(ntask)
-
-	// wait controller initialization finished
-	<-controllerStarted
-
-	mpc.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
-
-	for i := uint64(0); i < ntask+mpc.config["FreeNode"].(uint64); i++ {
-		go mpc.runBootstrap()
-	}
-
-	return nil
-
 }
 
 func createListener() net.Listener {
