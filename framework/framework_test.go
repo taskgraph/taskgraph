@@ -297,7 +297,7 @@ func (t *testableTask) CreateServer() *grpc.Server {
 func createListener(t *testing.T) net.Listener {
 	l, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("net.Listen(\"tcp4\", \"\") failed: %v", err)
+		t.Fatalf("create listener failed: %v", err)
 	}
 	return l
 }
