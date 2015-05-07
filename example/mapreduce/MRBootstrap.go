@@ -21,15 +21,15 @@ import (
 	"github.com/taskgraph/taskgraph/framework"
 )
 
-type MapreduceBootstrapController struct {
+type MRBootstrap struct {
 	Config      map[string]interface{}
 	logger      *log.Logger
 	taskBuilder taskgraph.TaskBuilder
 	topology    taskgraph.Topology
 }
 
-func NewMapreduceBootstrapController(taskBuilder taskgraph.TaskBuilder, topology taskgraph.Topology, userConfig map[string]interface{}) MapreduceBootstrapController {
-	return MapreduceBootstrapController{
+func NewMRBootstrap(taskBuilder taskgraph.TaskBuilder, topology taskgraph.Topology, userConfig map[string]interface{}) NewMRBootstrap {
+	return &NewMRBootstrap{
 		taskBuilder: taskBuilder,
 		topology:    topology,
 		Config:      userConfig,
@@ -40,13 +40,6 @@ const defaultBufferSize = 4096
 
 var controllerStarted chan bool
 var ntask uint64
-
-func max(a uint64, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // runController allocate a new controller to start initial configuration
 func (mpc *MapreduceBootstrapController) runController(ntask uint64) {
@@ -68,14 +61,12 @@ func (mpc *MapreduceBootstrapController) runBootstrap() {
 
 // check whether the key exists in config or not,
 // true represents it does not exist, false opposites
-func (mpc *MapreduceBootstrapController) checkConfigurationExist(key string) bool {
-	_, exist := config[key]
+func (mpc *MRBootstrap) checkConfigurationExist(key string) bool {
+	_, exist := mpc.Config[key]
 	return !exist
 }
 
-func (mpc *MapreduceBootstrapController) Start() error {
-
-	mpc.Config = config
+func (mpc *MRBootstrap) checkConfiguration() {
 	// check the least mapreduce framework configuration
 	if mpc.checkConfigurationExist("AppName") {
 		return fmt.Errorf("Miss the configuration of Application Name")
@@ -110,6 +101,13 @@ func (mpc *MapreduceBootstrapController) Start() error {
 	if mpc.checkConfigurationExist("FreeNode") {
 		mpc.config["FreeNode"] = 3
 	}
+}
+
+func (mpc *MRBootstrap) Start() error {
+
+	mpc.Config = config
+
+	mpc.checkConfiguration()
 
 	// calculate the maximum number of node coexist during all epochs
 	// plus one represents that thers is a reservation serving for master node
@@ -124,8 +122,6 @@ func (mpc *MapreduceBootstrapController) Start() error {
 
 	// wait controller initialization finished
 	<-controllerStarted
-
-	// mpc.setFreeWork()
 
 	mpc.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile)
 
@@ -143,4 +139,11 @@ func createListener() net.Listener {
 		log.Fatalf("net.Listen(\"tcp4\", \"\") failed: %v", err)
 	}
 	return l
+}
+
+func max(a uint64, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
 }
