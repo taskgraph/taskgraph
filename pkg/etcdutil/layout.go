@@ -18,6 +18,8 @@ import (
 //   /{app}/nodes/{nodeID}/ttl -> keep alive timeout
 //   /{app}/FreeTasks/{taskID}
 
+// /{job}/master/{replicaID}
+
 const (
 	TasksDir   = "tasks"
 	NodesDir   = "nodes"
@@ -67,4 +69,8 @@ func MetaPath(linkType, appName string, taskID uint64) string {
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
 		linkType)
+}
+
+func MasterPath(job string) string {
+	return path.Join("/", job, "master/0")
 }
