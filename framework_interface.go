@@ -61,14 +61,8 @@ type BackedUpFramework interface {
 	Update(taskID uint64, log UpdateLog)
 }
 
-type MasterBoot interface {
-	SetTask(MasterTask)
+type Bootup interface {
 	// Blocking call to run the task until it finishes.
-	Start()
-}
-
-type WorkerBoot interface {
-	SetTask(WorkerTask)
 	Start()
 }
 
