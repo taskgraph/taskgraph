@@ -1,4 +1,4 @@
-package framework
+package master
 
 import (
 	"log"
@@ -19,7 +19,7 @@ type master struct {
 	stopChan   chan struct{}
 }
 
-func NewMasterBoot(job string, etcdURL []string, ln net.Listener, logger *log.Logger, task taskgraph.MasterTask, workerNum uint64) taskgraph.Bootup {
+func NewBootstrap(job string, etcdURL []string, ln net.Listener, logger *log.Logger, task taskgraph.MasterTask, workerNum uint64) taskgraph.Bootup {
 	return &master{
 		job:       job,
 		etcdURL:   etcdURL,
