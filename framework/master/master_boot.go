@@ -1,4 +1,4 @@
-package framework
+package master
 
 import (
 	"github.com/coreos/go-etcd/etcd"
@@ -6,7 +6,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Master is guaranteed the first to run. It mainly does the following:
+// Master is guaranteed to be the first to run. It mainly does the following:
 // - initialize internal structures.
 // - set up etcd. Register master address. Set up layout.
 // - start server. This is the user defined grpc server.

@@ -1,4 +1,4 @@
-package framework
+package master
 
 import (
 	"github.com/golang/protobuf/proto"

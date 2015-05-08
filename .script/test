@@ -52,6 +52,8 @@ fi
 # testing
 go test -v ./controller
 go test -v ./framework
+go test -v ./framework/master
+go test -v ./framework/worker
 go test -v ./integration
 go test -v ./op
 go test -v ./filesystem
