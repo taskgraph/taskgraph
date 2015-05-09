@@ -11,7 +11,7 @@ import (
 // - set up etcd. Register master address. Set up layout.
 // - start server. This is the user defined grpc server.
 // - start event handling. Select and handle events, e.g. sending and receiving messages,
-//   finishing job, etc. are events.
+//   finishing job, etc.
 // - run user task.
 
 func (m *master) Start() {
