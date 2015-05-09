@@ -19,6 +19,7 @@ import (
 //   /{app}/FreeTasks/{taskID}
 
 // /{job}/master/{replicaID}
+// /{job}/worker/{workerID}
 
 const (
 	TasksDir   = "tasks"
@@ -73,4 +74,7 @@ func MetaPath(linkType, appName string, taskID uint64) string {
 
 func MasterPath(job string) string {
 	return path.Join("/", job, "master/0")
+}
+func WorkerPath(job string, id uint64) string {
+	return path.Join("/", job, strconv.FormatUint(id, 10))
 }

@@ -100,7 +100,7 @@ type MasterFrame interface {
 
 type WorkerFrame interface {
 	// It usually send states, etc. information to master in order to get further decision.
-	NotifyMaster(ctx context.Context, input proto.Message) (proto.Message, error)
+	NotifyMaster(ctx context.Context, method string, input proto.Message) (proto.Message, error)
 	// Worker-worker data flow
 	DataRequest(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
 	GRPCHandlerInterceptor
