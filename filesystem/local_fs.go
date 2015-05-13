@@ -49,6 +49,11 @@ func (c *localFSClient) Remove(name string) error {
 	return os.Remove(name)
 }
 
+func (c *localFSClient) Recover() error {
+	// we do not need to recover a local fs client.
+	return nil
+}
+
 func existCommon(err error) (bool, error) {
 	if err == nil {
 		return true, nil

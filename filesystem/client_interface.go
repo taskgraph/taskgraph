@@ -15,4 +15,6 @@ type Client interface {
 	Glob(pattern string) (matches []string, err error)
 	// Remove specific file in filesystem
 	Remove(name string) error
+	// For distributed filesystem, recover from failures such as connection closed.
+	Recover() error
 }

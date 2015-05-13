@@ -73,12 +73,29 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 }
 
 func (c *HdfsClient) Exists(name string) (bool, error) {
-	_, err := c.client.Stat(name)
-	return existCommon(err)
+	var (
+		err error
+		ret bool
+	)
+	for retry := 0; retry < 3; retry++ {
+		_, err = c.client.Stat(name)
+		ret, err = existCommon(err)
+		if err == nil {
+			return ret, err
+		}
+		log.Printf("Recovering HDFS client with namenode %s for user %s. ret: %v", c.hdfsConfig.namenodeAddr, c.hdfsConfig.user, c.Recover())
+	}
+	return false, err
 }
 
 func (c *HdfsClient) Rename(oldpath, newpath string) error {
 	return c.client.Rename(oldpath, newpath)
+}
+
+func (c *HdfsClient) Recover() error {
+	var err error
+	c.client, err = hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	return err
 }
 
 // only supports '*', '?'
@@ -166,12 +183,21 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 		return 0, fmt.Errorf("Write: NewRequest failed: %v", err)
 	}
 	// no redirect
-	resp, err := tr.RoundTrip(req)
-	if err != nil {
-		return 0, fmt.Errorf("Write: RoundTrip failed: %v", err)
+
+	var resp *http.Response
+	var loc string
+	for retry := 0; retry < 3 && (err != nil || loc == ""); retry++ {
+		resp, err := tr.RoundTrip(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		loc = resp.Header.Get("Location")
 	}
-	defer resp.Body.Close()
-	loc := resp.Header.Get("Location")
+
+	if loc == "" {
+		return 0, fmt.Errorf("Write: Failed retrieving datanode location.")
+	}
 
 	u, err := url.ParseRequestURI(loc)
 	if err != nil {
@@ -179,6 +205,9 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	}
 	// POST request to datanode.
 	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
+	for retry := 0; retry < 3 && err != nil; retry++ {
+		resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
+	}
 	if err != nil {
 		return 0, fmt.Errorf("Write: POST to datanode (%s) failed: %v", u.String(), err)
 	}
