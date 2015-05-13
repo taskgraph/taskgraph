@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/colinmarc/hdfs"
 )
@@ -83,6 +84,7 @@ func (c *HdfsClient) Exists(name string) (bool, error) {
 		if err == nil {
 			return ret, err
 		}
+		time.Sleep(1 * time.Second)
 		log.Printf("Recovering HDFS client with namenode %s for user %s. ret: %v", c.hdfsConfig.namenodeAddr, c.hdfsConfig.user, c.Recover())
 	}
 	return false, err
@@ -187,6 +189,7 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	var resp *http.Response
 	var loc string
 	for retry := 0; retry < 3 && (err != nil || loc == ""); retry++ {
+		time.Sleep(300 * time.Millisecond)
 		resp, err := tr.RoundTrip(req)
 		if err != nil {
 			continue
@@ -206,6 +209,7 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	// POST request to datanode.
 	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
 	for retry := 0; retry < 3 && err != nil; retry++ {
+		time.Sleep(1 * time.Second)
 		resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
 	}
 	if err != nil {
