@@ -10,9 +10,6 @@ import (
 
 func LoadMatrixShard(client fs.Client, path string) (*pb.MatrixShard, error) {
 	shard := &pb.MatrixShard{}
-
-	// Force reconnecting. This is fixing the issue that the client was created long time ago and the conn might have broken.
-	client.Recover()
 	reader, cErr := client.OpenReadCloser(path)
 	if cErr != nil {
 		return nil, cErr
