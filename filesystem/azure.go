@@ -193,11 +193,6 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 	}, nil
 }
 
-// TODO failure-recovery.
-func (c *AzureClient) Recover() error {
-	return nil
-}
-
 func (f *AzureFile) Write(b []byte) (int, error) {
 	cnt, blob, err := convertToAzurePath(f.path)
 	if err != nil {

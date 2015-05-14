@@ -28,17 +28,15 @@ type hdfsConfig struct {
 }
 
 type HdfsClient struct {
-	client *hdfs.Client
 	hdfsConfig
 }
 
 func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
-	client, err := hdfs.NewForUser(namenodeAddr, user)
+	_, err := hdfs.NewForUser(namenodeAddr, user)
 	if err != nil {
 		return nil, err
 	}
 	return &HdfsClient{
-		client: client,
 		hdfsConfig: hdfsConfig{
 			namenodeAddr: namenodeAddr,
 			webHdfsAddr:  webHdfsAddr,
@@ -48,11 +46,19 @@ func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
 }
 
 func (c *HdfsClient) Remove(name string) error {
-	return c.client.Remove(name)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return err
+	}
+	return client.Remove(name)
 }
 
 func (c *HdfsClient) OpenReadCloser(name string) (io.ReadCloser, error) {
-	return c.client.Open(name)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return nil, err
+	}
+	return client.Open(name)
 }
 
 func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
@@ -61,7 +67,11 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 		return nil, err
 	}
 	if !exist {
-		err := c.client.CreateEmptyFile(name)
+		client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+		if err != nil {
+			return nil, err
+		}
+		err = client.CreateEmptyFile(name)
 		if err != nil {
 			return nil, err
 		}
@@ -74,30 +84,20 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 }
 
 func (c *HdfsClient) Exists(name string) (bool, error) {
-	var (
-		err error
-		ret bool
-	)
-	for retry := 0; retry < 3; retry++ {
-		_, err = c.client.Stat(name)
-		ret, err = existCommon(err)
-		if err == nil {
-			return ret, err
-		}
-		time.Sleep(1 * time.Second)
-		log.Printf("Recovering HDFS client with namenode %s for user %s. ret: %v", c.hdfsConfig.namenodeAddr, c.hdfsConfig.user, c.Recover())
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return false, err
 	}
-	return false, err
+	_, err = client.Stat(name)
+	return existCommon(err)
 }
 
 func (c *HdfsClient) Rename(oldpath, newpath string) error {
-	return c.client.Rename(oldpath, newpath)
-}
-
-func (c *HdfsClient) Recover() error {
-	var err error
-	c.client, err = hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
-	return err
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return err
+	}
+	return client.Rename(oldpath, newpath)
 }
 
 // only supports '*', '?'
@@ -125,10 +125,15 @@ func (c *HdfsClient) Glob(pattern string) (matches []string, err error) {
 }
 
 func (c *HdfsClient) glob(dir string, names []string) (m []string, err error) {
+
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return nil, err
+	}
 	name := names[0]
 	var dirs []string
 	if hasMeta(name) {
-		fileInfos, err := c.client.ReadDir(dir)
+		fileInfos, err := client.ReadDir(dir)
 		if err != nil {
 			return nil, err
 		}
