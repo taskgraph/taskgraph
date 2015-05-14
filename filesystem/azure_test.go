@@ -121,17 +121,13 @@ func TestAzureClientExistBlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// defer cli.blobClient.DeleteContainer(containerName)
+	defer cli.blobClient.DeleteContainer(containerName)
 	err = cli.blobClient.CreateBlockBlob(containerName, blobName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Exist!"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// defer cli.blobClient.DeleteBlob(containerName, blobName)
+	defer cli.blobClient.DeleteBlob(containerName, blobName)
 	ok, err := cli.Exists(containerName + "/" + blobName + ".foo")
 	if err != nil {
 		t.Fatal(err)
@@ -160,10 +156,6 @@ func TestAzureClientRemoveBlob(t *testing.T) {
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
 	err = cli.blobClient.CreateBlockBlob(containerName, blobName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Remove!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,28 +208,19 @@ func TestAzureClientGlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cli.blobClient.PutBlock(containerName, "1", baseBlockID, []byte("Glob!"))
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
 	err = cli.blobClient.CreateBlockBlob(containerName, "1.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cli.blobClient.PutBlock(containerName, "1.txt", baseBlockID, []byte("Glob!"))
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
 	err = cli.blobClient.CreateBlockBlob(containerName, "2.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cli.blobClient.PutBlock(containerName, "2.txt", baseBlockID, []byte("Glob!"))
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
 	globPath := containerName + "/*.txt"
 	names, err := cli.Glob(globPath)
@@ -267,10 +250,6 @@ func TestAzureClientRenameBlob(t *testing.T) {
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
 	err = cli.blobClient.CreateBlockBlob(containerName, blobName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,14 +290,6 @@ func TestAzureClientRenameContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = cli.blobClient.CreateBlockBlob(srcContainerName, blobName+"02")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = cli.blobClient.PutBlock(srcContainerName, blobName+"01", baseBlockID, []byte("Rename!"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = cli.blobClient.PutBlock(srcContainerName, blobName+"02", baseBlockID, []byte("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
