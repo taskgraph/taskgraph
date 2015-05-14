@@ -3,19 +3,21 @@ package filesystem
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
 var (
 	containerName, blobName, TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion string
 	useHttps                                                                                                    bool
 )
+
+var baseBlockID = base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", 0)))
 
 // Example :
 // TestAzureAccountName : yourAccountName
@@ -53,6 +55,8 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 	data := []byte("some data")
 	_, err = writeCloser.Write(data)
+	_, err = writeCloser.Write(data)
+	data = []byte("some datasome data")
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -115,12 +119,12 @@ func TestAzureClientExistBlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteContainer(containerName)
-	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Exist!"))
+	// defer cli.blobClient.DeleteContainer(containerName)
+	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Exist!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	// defer cli.blobClient.DeleteBlob(containerName, blobName)
 	ok, err := cli.Exists(containerName + "/" + blobName + ".foo")
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +137,7 @@ func TestAzureClientExistBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !ok {
-		t.Errorf("Existing blob returned as non-existing: %s/%s", containerName, blobName)
+		t.Errorf("!Existing blob returned as non-existing: %s/%s", containerName, blobName)
 	}
 }
 
@@ -148,7 +152,7 @@ func TestAzureClientRemoveBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
-	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Remove!"))
+	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Remove!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,19 +202,19 @@ func TestAzureClientGlob(t *testing.T) {
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
 
-	err = cli.blobClient.PutBlockBlob(containerName, "1", strings.NewReader("Glob!"))
+	err = cli.blobClient.PutBlock(containerName, "1", baseBlockID, []byte("Glob!"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
 
-	err = cli.blobClient.PutBlockBlob(containerName, "1.txt", strings.NewReader("Glob!"))
+	err = cli.blobClient.PutBlock(containerName, "1.txt", baseBlockID, []byte("Glob!"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteBlob(containerName, blobName)
 
-	err = cli.blobClient.PutBlockBlob(containerName, "2.txt", strings.NewReader("Glob!"))
+	err = cli.blobClient.PutBlock(containerName, "2.txt", baseBlockID, []byte("Glob!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +246,7 @@ func TestAzureClientRenameBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
-	err = cli.blobClient.PutBlockBlob(containerName, blobName, strings.NewReader("Rename!"))
+	err = cli.blobClient.PutBlock(containerName, blobName, baseBlockID, []byte("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,11 +282,11 @@ func TestAzureClientRenameContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cli.blobClient.DeleteContainer(srcContainerName)
-	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"01", strings.NewReader("Rename!"))
+	err = cli.blobClient.PutBlock(srcContainerName, blobName+"01", baseBlockID, []byte("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cli.blobClient.PutBlockBlob(srcContainerName, blobName+"02", strings.NewReader("Rename!"))
+	err = cli.blobClient.PutBlock(srcContainerName, blobName+"02", baseBlockID, []byte("Rename!"))
 	if err != nil {
 		t.Fatal(err)
 	}
