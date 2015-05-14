@@ -8,6 +8,8 @@ go get -u github.com/colinmarc/hdfs
 go get -u golang.org/x/net/context
 go get -u google.golang.org/grpc
 go get -u github.com/golang/protobuf/proto
-go get -u github.com/Azure/azure-sdk-for-go
+go get -u golang.org/x/tools/cmd/vet
+go get -u github.com/golang/lint/golint
+go get -u github.com/Azure/azure-sdk-for-go/storage
 
 
