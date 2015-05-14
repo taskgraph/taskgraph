@@ -20,11 +20,11 @@ import (
 	"path"
 	"strings"
 
-	"github.com/MSOpenTech/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
 type AzureClient struct {
-	client     *storage.StorageClient
+	client     *storage.Client
 	blobClient *storage.BlobStorageClient
 }
 
@@ -91,8 +91,8 @@ func (c *AzureClient) Exists(name string) (bool, error) {
 // when finished, delete the source blob.
 // http://stackoverflow.com/questions/3734672/azure-storage-blob-rename
 func (c *AzureClient) moveBlob(dstContainerName, dstBlobName, srcContainerName, srcBlobName string, isContainerRename bool) error {
-	dstBlobUrl := c.blobClient.GetBlobUrl(dstContainerName, dstBlobName)
-	srcBlobUrl := c.blobClient.GetBlobUrl(srcContainerName, srcBlobName)
+	dstBlobUrl := c.blobClient.GetBlobURL(dstContainerName, dstBlobName)
+	srcBlobUrl := c.blobClient.GetBlobURL(srcContainerName, srcBlobName)
 	if dstBlobUrl != srcBlobUrl {
 		err := c.blobClient.CopyBlob(dstContainerName, dstBlobName, srcBlobUrl)
 		if err != nil {
