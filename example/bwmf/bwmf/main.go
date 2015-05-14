@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -74,9 +75,14 @@ func main() {
 }
 
 func createListener() net.Listener {
-	l, err := net.Listen("tcp4", "127.0.0.1:0")
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("os.Hostname(\"tcp4\", \"\") failed: %v", err)
+	}
+	l, err := net.Listen("tcp4", hostname+":0")
 	if err != nil {
 		log.Fatalf("net.Listen(\"tcp4\", \"\") failed: %v", err)
 	}
+	log.Printf("Service listens to %s.", l.Addr().String())
 	return l
 }
