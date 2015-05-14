@@ -19,8 +19,7 @@ func main() {
 
 	etcdUrlList := flag.String("etcd_urls", "", "ETCD server lists, sep by a comma.")
 	jobName := flag.String("job_name", "bwmf", "Job name in etcd path.")
-	jobType := flag.String("job_type", "c", "Job type, either 'c', 't' or 'd'")
-	pbResPath := flag.String("pb_shard_path", "./", "Path to output pb buf. For 'd' job only.")
+	jobType := flag.String("job_type", "c", "Job type, either 'c' for controller or 't' for task.")
 	numTasks := flag.Int("num_tasks", 1, "Num of tasks.")
 	numIters := flag.Int("num_iters", 10, "Num of iters for matrix factorization.")
 	latentDim := flag.Int("latent_dim", 100, "Dimensions of latent factors.")
@@ -28,8 +27,8 @@ func main() {
 
 	flag.Parse()
 
-	if *jobType != "c" && *jobType != "t" && *jobType != "d" {
-		log.Fatalf("Invalid job type: %s. Please set it as one of c/t/d.", *jobType)
+	if *jobName == "" {
+		log.Fatal("Job name is required.")
 	}
 
 	crd, oErr := filesystem.NewLocalFSClient().OpenReadCloser(*taskConfigFile)
@@ -41,15 +40,6 @@ func main() {
 		log.Fatalf("Failed reading task config. %s", rdErr)
 	}
 	log.Printf("conf data: %s", confData)
-	if *jobType == "d" {
-		log.Println("Trying to convert the mat to protobuf and save it to ", *pbResPath)
-		ConvertMatrixTxtToPb(confData, *pbResPath)
-		return
-	}
-
-	if *jobName == "" {
-		log.Fatal("Job name is required.")
-	}
 
 	if *etcdUrlList == "" {
 		log.Fatal("Please specify the etcd server urls.")
@@ -79,7 +69,7 @@ func main() {
 		controller.WaitForJobDone()
 		controller.Stop()
 	default:
-		log.Fatal("Please choose a type: (c) controller, (t) task")
+		log.Fatal("Please choose a type via '-jobtype': (c) controller, (t) task")
 	}
 }
 
