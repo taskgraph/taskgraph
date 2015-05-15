@@ -97,13 +97,15 @@ type dimensions struct {
 func (t *bwmfTask) initData() {
 	var rsErr, csErr error
 
-	t.rowShard, rsErr = LoadMatrixShard(t.fsClient, t.config.IOConf.IDPath+"."+strconv.Itoa(int(t.taskID)))
+	rowShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.IDPath, t.taskID)
+	columnShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ITPath, t.taskID)
+	t.rowShard, rsErr = LoadMatrixShard(t.fsClient, rowShardPath)
 	if rsErr != nil {
-		t.logger.Panicf("Failed load rowShard. %s", rsErr)
+		t.logger.Panicf("Failed load rowShard from %s with error %s", rsErr)
 	}
-	t.columnShard, csErr = LoadMatrixShard(t.fsClient, t.config.IOConf.ITPath+"."+strconv.Itoa(int(t.taskID)))
+	t.columnShard, csErr = LoadMatrixShard(t.fsClient, columnShardPath)
 	if csErr != nil {
-		t.logger.Panicf("Failed load columnShard. %s", csErr)
+		t.logger.Panicf("Failed load columnShard from %s with error %s", csErr)
 	}
 
 	t.dims = &dimensions{
@@ -279,11 +281,13 @@ func (t *bwmfTask) Exit() {
 }
 
 func (t *bwmfTask) finish() {
-	err := SaveMatrixShard(t.fsClient, t.tShard, t.config.IOConf.OTPath+"."+strconv.Itoa(int(t.taskID)))
+	columnShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ODPath, t.taskID)
+	rowShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ODPath, t.taskID)
+	err := SaveMatrixShard(t.fsClient, t.tShard, columnShardPath)
 	if err != nil {
 		t.logger.Printf("Save tShard for task %d failed with error: %v", t.taskID, err)
 	}
-	err = SaveMatrixShard(t.fsClient, t.dShard, t.config.IOConf.ODPath+"."+strconv.Itoa(int(t.taskID)))
+	err = SaveMatrixShard(t.fsClient, t.dShard, rowShardPath)
 	if err != nil {
 		t.logger.Printf("Save dShard for task %d failed with error: %v", t.taskID, err)
 	}
