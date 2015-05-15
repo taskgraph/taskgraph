@@ -58,10 +58,8 @@ type GRPCHelper interface {
 // Master task is assumed to be fault tolerant.
 
 type MasterTask interface {
-	Init(framework MasterFrame)
-	Exit()
-
-	EnterEpoch(ctx context.Context, epoch uint64)
+	Setup(framework MasterFrame)
+	Run(ctx context.Context)
 
 	// Corresponds to NotifyMaster
 	OnNotify(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
@@ -69,14 +67,12 @@ type MasterTask interface {
 }
 
 type WorkerTask interface {
-	Init(framework WorkerFrame, workerID uint64)
-	Exit()
-
-	EnterEpoch(ctx context.Context, epoch uint64)
+	Setup(framework WorkerFrame, workerID uint64)
+	Run(ctx context.Context)
 
 	// Corresponds to NotifyWorker
 	OnNotify(ctx context.Context, method string, input proto.Message) (proto.Message, error)
 	// Corresponds to DataRequest
-	ServeData(ctx context.Context, method string, input proto.Message) (proto.Message, error)
+	ServeData(ctx context.Context, workerID uint64, method string, input proto.Message) (proto.Message, error)
 	GRPCHelper
 }
