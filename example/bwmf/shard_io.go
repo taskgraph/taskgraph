@@ -10,7 +10,6 @@ import (
 
 func LoadMatrixShard(client fs.Client, path string) (*pb.MatrixShard, error) {
 	shard := &pb.MatrixShard{}
-
 	reader, cErr := client.OpenReadCloser(path)
 	if cErr != nil {
 		return nil, cErr

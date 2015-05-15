@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/colinmarc/hdfs"
 )
@@ -27,17 +28,15 @@ type hdfsConfig struct {
 }
 
 type HdfsClient struct {
-	client *hdfs.Client
 	hdfsConfig
 }
 
 func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
-	client, err := hdfs.NewForUser(namenodeAddr, user)
+	_, err := hdfs.NewForUser(namenodeAddr, user)
 	if err != nil {
 		return nil, err
 	}
 	return &HdfsClient{
-		client: client,
 		hdfsConfig: hdfsConfig{
 			namenodeAddr: namenodeAddr,
 			webHdfsAddr:  webHdfsAddr,
@@ -47,11 +46,19 @@ func NewHdfsClient(namenodeAddr, webHdfsAddr, user string) (Client, error) {
 }
 
 func (c *HdfsClient) Remove(name string) error {
-	return c.client.Remove(name)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return err
+	}
+	return client.Remove(name)
 }
 
 func (c *HdfsClient) OpenReadCloser(name string) (io.ReadCloser, error) {
-	return c.client.Open(name)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return nil, err
+	}
+	return client.Open(name)
 }
 
 func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
@@ -60,7 +67,11 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 		return nil, err
 	}
 	if !exist {
-		err := c.client.CreateEmptyFile(name)
+		client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+		if err != nil {
+			return nil, err
+		}
+		err = client.CreateEmptyFile(name)
 		if err != nil {
 			return nil, err
 		}
@@ -73,12 +84,20 @@ func (c *HdfsClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 }
 
 func (c *HdfsClient) Exists(name string) (bool, error) {
-	_, err := c.client.Stat(name)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return false, err
+	}
+	_, err = client.Stat(name)
 	return existCommon(err)
 }
 
 func (c *HdfsClient) Rename(oldpath, newpath string) error {
-	return c.client.Rename(oldpath, newpath)
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return err
+	}
+	return client.Rename(oldpath, newpath)
 }
 
 // only supports '*', '?'
@@ -106,10 +125,15 @@ func (c *HdfsClient) Glob(pattern string) (matches []string, err error) {
 }
 
 func (c *HdfsClient) glob(dir string, names []string) (m []string, err error) {
+
+	client, err := hdfs.NewForUser(c.hdfsConfig.namenodeAddr, c.hdfsConfig.user)
+	if err != nil {
+		return nil, err
+	}
 	name := names[0]
 	var dirs []string
 	if hasMeta(name) {
-		fileInfos, err := c.client.ReadDir(dir)
+		fileInfos, err := client.ReadDir(dir)
 		if err != nil {
 			return nil, err
 		}
@@ -166,12 +190,22 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 		return 0, fmt.Errorf("Write: NewRequest failed: %v", err)
 	}
 	// no redirect
-	resp, err := tr.RoundTrip(req)
-	if err != nil {
-		return 0, fmt.Errorf("Write: RoundTrip failed: %v", err)
+
+	var resp *http.Response
+	var loc string
+	for retry := 0; retry < 3 && (err != nil || loc == ""); retry++ {
+		time.Sleep(300 * time.Millisecond)
+		resp, err := tr.RoundTrip(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		loc = resp.Header.Get("Location")
 	}
-	defer resp.Body.Close()
-	loc := resp.Header.Get("Location")
+
+	if loc == "" {
+		return 0, fmt.Errorf("Write: Failed retrieving datanode location.")
+	}
 
 	u, err := url.ParseRequestURI(loc)
 	if err != nil {
@@ -179,6 +213,10 @@ func (f *HdfsFile) Write(b []byte) (int, error) {
 	}
 	// POST request to datanode.
 	resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
+	for retry := 0; retry < 3 && err != nil; retry++ {
+		time.Sleep(1 * time.Second)
+		resp, err = http.Post(u.String(), "application/octet-stream", bytes.NewBuffer(b))
+	}
 	if err != nil {
 		return 0, fmt.Errorf("Write: POST to datanode (%s) failed: %v", u.String(), err)
 	}
