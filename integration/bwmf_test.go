@@ -26,14 +26,24 @@ func TestBWMF(t *testing.T) {
 
 	tb := &bwmf.BWMFTaskBuilder{
 		NumOfTasks: numOfTasks,
-		NumIters:   4,
-		ConfBytes: []byte(`{"OptConf": {"Sigma":0.01,"Alpha":1,"Beta":0.1,"GradTol":1e-06, "FixedCnt": 200000},
-				    "IOConf":  {"Fs":"local",
+		ConfBytes: []byte(`{
+			        "OptConf": {
+						"Sigma":0.01,
+						"Alpha":1,
+						"Beta":0.1,
+						"GradTol":1e-06,
+						"FixedCnt": 200000,
+					    "NumIters":4,
+					    "DimLatent":2
+					},
+					"IOConf":  {
+						"Fs":"local",
 						"IDPath":"../.tmp/row_shard.dat",
 						"ITPath":"../.tmp/column_shard.dat",
 						"ODPath":"../.tmp/dShard.dat",
-						"OTPath":"../.tmp/tShard.dat"}}`),
-		LatentDim: 2,
+						"OTPath":"../.tmp/tShard.dat"
+					}
+				}`),
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
 		go drive(t, job, etcdURLs, tb, topo.NewFullTopology(numOfTasks))
@@ -50,10 +60,10 @@ func generateTestData(t *testing.T) {
 	}
 
 	fsclient := filesystem.NewLocalFSClient()
-	wr0, wr0Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat.0")
-	wr1, wr1Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat.1")
-	wc0, wc0Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat.0")
-	wc1, wc1Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat.1")
+	wr0, wr0Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat-000000")
+	wr1, wr1Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat-000001")
+	wc0, wc0Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat-000000")
+	wc1, wc1Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat-000001")
 
 	if wr0Err != nil || wr1Err != nil || wc0Err != nil || wc1Err != nil {
 		t.Errorf("Failed generating test data files: %s;%s;%s;%s.", wr0Err, wr1Err, wc0Err, wc1Err)

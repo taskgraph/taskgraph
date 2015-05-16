@@ -10,9 +10,7 @@ import (
 
 type BWMFTaskBuilder struct {
 	NumOfTasks uint64
-	NumIters   uint64
 	ConfBytes  []byte
-	LatentDim  int
 }
 
 func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
@@ -53,9 +51,7 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 
 	return &bwmfTask{
 		numOfTasks: tb.NumOfTasks,
-		numIters:   tb.NumIters,
 		config:     config,
-		latentDim:  tb.LatentDim,
 		fsClient:   client,
 	}
 }

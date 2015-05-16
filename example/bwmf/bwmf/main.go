@@ -22,8 +22,6 @@ func main() {
 	jobName := flag.String("job_name", "bwmf", "Job name in etcd path.")
 	jobType := flag.String("job_type", "c", "Job type, either 'c' for controller or 't' for task.")
 	numTasks := flag.Int("num_tasks", 1, "Num of tasks.")
-	numIters := flag.Int("num_iters", 10, "Num of iters for matrix factorization.")
-	latentDim := flag.Int("latent_dim", 100, "Dimensions of latent factors.")
 	taskConfigFile := flag.String("task_config", "", "Path to task config json file.")
 
 	flag.Parse()
@@ -55,9 +53,7 @@ func main() {
 		bootstrap := framework.NewBootStrap(*jobName, etcdUrls, createListener(), nil)
 		taskBuilder := &bwmf.BWMFTaskBuilder{
 			NumOfTasks: uint64(*numTasks),
-			NumIters:   uint64(*numIters),
 			ConfBytes:  confData,
-			LatentDim:  *latentDim,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
 		bootstrap.SetTopology(topo)
