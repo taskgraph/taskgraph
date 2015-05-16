@@ -11,6 +11,10 @@ type optconfig struct {
 
 	GradTol  float32
 	FixedCnt int
+
+	// num of iters for the alternating optimization
+	NumIters  uint64
+	DimLatent int
 }
 
 // xFs can be "local", ""

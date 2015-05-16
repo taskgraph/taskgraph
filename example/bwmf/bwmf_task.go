@@ -43,7 +43,6 @@ type bwmfTask struct {
 	taskID     uint64
 	logger     *log.Logger
 	numOfTasks uint64
-	numIters   uint64
 	curIter    uint64
 
 	rowShard    *pb.MatrixShard
@@ -54,9 +53,8 @@ type bwmfTask struct {
 	peerShards  map[uint64]*pb.MatrixShard
 	peerUpdated map[uint64]bool
 
-	dims      *dimensions
-	config    *Config
-	latentDim int
+	dims   *dimensions
+	config *Config
 
 	fsClient filesystem.Client
 
@@ -111,7 +109,7 @@ func (t *bwmfTask) initData() {
 	t.dims = &dimensions{
 		m: len(t.rowShard.Row),
 		n: len(t.columnShard.Row),
-		k: t.latentDim,
+		k: t.config.OptConf.DimLatent,
 		M: -1,
 		N: -1,
 	}
@@ -281,7 +279,7 @@ func (t *bwmfTask) Exit() {
 }
 
 func (t *bwmfTask) finish() {
-	columnShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ODPath, t.taskID)
+	columnShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.OTPath, t.taskID)
 	rowShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ODPath, t.taskID)
 	err := SaveMatrixShard(t.fsClient, t.tShard, columnShardPath)
 	if err != nil {
@@ -468,7 +466,7 @@ func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
 	t.peerUpdated[fromID] = true
 	if len(t.peerUpdated) == int(t.numOfTasks) {
 		t.logger.Printf("All tasks update done, epoch %d", t.epoch)
-		if t.epoch < 2*t.numIters {
+		if t.epoch < 2*t.config.OptConf.NumIters {
 			t.framework.IncEpoch(ctx)
 		} else {
 			t.framework.ShutdownJob()
