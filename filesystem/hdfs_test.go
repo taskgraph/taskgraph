@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/colinmarc/hdfs"
 )
 
 var (
@@ -23,7 +25,7 @@ func init() {
 //    to clean up files or dirs manually.
 
 func TestHdfsClientWrite(t *testing.T) {
-	client := setupHdfsTest(t)
+	client, c := setupHdfsTest(t)
 	writeCloser, err := client.OpenWriteCloser("/tmp/testing")
 	if err != nil {
 		t.Fatalf("OpenWriteCloser failed: %v", err)
@@ -48,14 +50,12 @@ func TestHdfsClientWrite(t *testing.T) {
 		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
 	}
 
-	c := client.(*HdfsClient).client
 	c.Remove("/tmp/testing")
 }
 
 func TestHdfsClientGlob(t *testing.T) {
-	client := setupHdfsTest(t)
+	client, c := setupHdfsTest(t)
 
-	c := client.(*HdfsClient).client
 	c.Mkdir("/tmp/testing", 0644)
 	c.CreateEmptyFile("/tmp/testing/1")
 	c.CreateEmptyFile("/tmp/testing/1.txt")
@@ -79,9 +79,8 @@ func TestHdfsClientGlob(t *testing.T) {
 }
 
 func TestHdfsClientRename(t *testing.T) {
-	client := setupHdfsTest(t)
+	client, c := setupHdfsTest(t)
 
-	c := client.(*HdfsClient).client
 	c.CreateEmptyFile("/tmp/testing")
 
 	client.Rename("/tmp/testing", "/tmp/tesing-renamed")
@@ -92,7 +91,7 @@ func TestHdfsClientRename(t *testing.T) {
 	c.Remove("/tmp/renamed")
 }
 
-func setupHdfsTest(t *testing.T) Client {
+func setupHdfsTest(t *testing.T) (Client, *hdfs.Client) {
 	if namenodeAddr == "" || webhdfsAddr == "" || hdfsUser == "" {
 		t.Skip("HDFS config not specified.")
 	}
@@ -101,5 +100,10 @@ func setupHdfsTest(t *testing.T) Client {
 		t.Fatalf("NewHdfsClient(%s, %s) failed: %v",
 			namenodeAddr, webhdfsAddr, err)
 	}
-	return client
+	hClient, err := hdfs.NewForUser(namenodeAddr, hdfsUser)
+	if err != nil {
+		t.Fatalf("hdfs.NewForUser(%s, %s) failed: %v",
+			namenodeAddr, webhdfsAddr, err)
+	}
+	return client, hClient
 }
