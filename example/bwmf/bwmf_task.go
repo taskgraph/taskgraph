@@ -99,11 +99,11 @@ func (t *bwmfTask) initData() {
 	columnShardPath := fmt.Sprintf("%s-%06d", t.config.IOConf.ITPath, t.taskID)
 	t.rowShard, rsErr = LoadMatrixShard(t.fsClient, rowShardPath)
 	if rsErr != nil {
-		t.logger.Panicf("Failed load rowShard from %s with error %s", rsErr)
+		t.logger.Panicf("Failed load rowShard from %s with error %s", rowShardPath, rsErr)
 	}
 	t.columnShard, csErr = LoadMatrixShard(t.fsClient, columnShardPath)
 	if csErr != nil {
-		t.logger.Panicf("Failed load columnShard from %s with error %s", csErr)
+		t.logger.Panicf("Failed load columnShard from %s with error %s", columnShardPath, csErr)
 	}
 
 	t.dims = &dimensions{
