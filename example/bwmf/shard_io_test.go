@@ -11,20 +11,14 @@ import (
 func TestShardIO(t *testing.T) {
 	client := filesystem.NewLocalFSClient()
 	path := "./.testShardIO.text.dat"
+	m, n := uint32(2), uint32(3)
 
 	oldShard := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{
-			&pb.MatrixShard_RowData{At: make(map[int32]float32)},
-			&pb.MatrixShard_RowData{At: make(map[int32]float32)},
-		},
+		IsSparse: false,
+		M: m,
+		N: n,
+		Val: []float32 {0.70, 1.00, 0.90, 0.70, 0.80, 0.90},
 	}
-
-	oldShard.Row[0].At[0] = 0.70
-	oldShard.Row[0].At[1] = 1.00
-	oldShard.Row[0].At[2] = 0.90
-	oldShard.Row[1].At[1] = 0.70
-	oldShard.Row[1].At[2] = 0.80
-	oldShard.Row[1].At[3] = 0.90
 
 	client.Remove(path)
 	sErr := SaveMatrixShard(client, oldShard, path)
@@ -46,19 +40,14 @@ func TestShardIO(t *testing.T) {
 	fmt.Println("Original matrix shard is: ", oldShard)
 	fmt.Println("Loaded matrix shard is: ", newShard)
 
-	if len(newShard.GetRow()) != len(oldShard.GetRow()) {
-		t.Errorf("num of rows wrong. Expected %d, actual %d", len(oldShard.GetRow()), len(newShard.GetRow()))
+	if len(newShard.Val) != len(oldShard.Val) {
+		t.Errorf("num of values wrong. Expected %d, actual %d", len(oldShard.Val), len(newShard.Val))
 	}
 
-	for i := 0; i < 2; i++ {
-		for k, v := range oldShard.Row[i].At {
-			if newShard.Row[i].At[k] != v {
-				t.Errorf("M[%d][%d] incorrect. Mismatched old %f, new %f", i, k, v, newShard.Row[i].At[k])
-			}
-		}
-		for k, v := range newShard.Row[i].At {
-			if oldShard.Row[i].At[k] != v {
-				t.Errorf("M[%d][%d] incorrect. Mismatched old %f, new %f", i, k, v, oldShard.Row[i].At[k])
+	for i := uint32(0); i < m; i++ {
+		for j := uint32(0); j < n; j++ {
+			if newShard.Val[i*n+j] != oldShard.Val[i*n+j] {
+				t.Errorf("M[%d][%d] incorrect. Mismatched old %f, new %f", i, j, oldShard.Val[i*n+j], newShard.Val[i*n+j])
 			}
 		}
 	}

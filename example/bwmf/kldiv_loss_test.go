@@ -61,9 +61,12 @@ func newKLDivLoss() *KLDivLoss {
 	// | 0.5 | 0.5 |
 	// |-----|-----|
 	v := &pb.MatrixShard{
+		IsSparse: true,
 		M: 2,
 		N: 3,
-		Val: []float32 {0.0, 1.0, 0.5, 1.0, 0.0, 0.5},
+		Val: []float32 {1.0, 1.0, 0.5, 0.5},
+		Ir: []uint32 {1, 0, 0, 1},
+		Jc: []uint32 {0, 1, 2, 4},
 	}
 
 	// w is composed by two shards:

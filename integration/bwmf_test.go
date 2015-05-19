@@ -1,11 +1,9 @@
 package integration
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/bwmf"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
@@ -54,24 +52,15 @@ func TestBWMF(t *testing.T) {
 }
 
 func generateTestData(t *testing.T) {
-	r1, c1, r2, c2, err := getBufs()
-	if err != nil {
-		t.Errorf("Failed preparing marshalled matrix shards: %s", err)
-	}
-
-	fsclient := filesystem.NewLocalFSClient()
-	wr0, wr0Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat-000000")
-	wr1, wr1Err := fsclient.OpenWriteCloser("../.tmp/row_shard.dat-000001")
-	wc0, wc0Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat-000000")
-	wc1, wc1Err := fsclient.OpenWriteCloser("../.tmp/column_shard.dat-000001")
-
+	r0, c0, r1, c1 := getShards()
+	fs := filesystem.NewLocalFSClient()
+	wr0Err := bwmf.SaveMatrixShard(fs, r0, "../.tmp/row_shard.dat-000000")
+	wr1Err := bwmf.SaveMatrixShard(fs, r1, "../.tmp/row_shard.dat-000001")
+	wc0Err := bwmf.SaveMatrixShard(fs, c0, "../.tmp/column_shard.dat-000000")
+	wc1Err := bwmf.SaveMatrixShard(fs, c1, "../.tmp/column_shard.dat-000001")
 	if wr0Err != nil || wr1Err != nil || wc0Err != nil || wc1Err != nil {
 		t.Errorf("Failed generating test data files: %s;%s;%s;%s.", wr0Err, wr1Err, wc0Err, wc1Err)
 	}
-	wr0.Write(r1)
-	wr1.Write(r2)
-	wc0.Write(c1)
-	wc1.Write(c2)
 }
 
 //// Generating artificial test data
@@ -96,72 +85,46 @@ func generateTestData(t *testing.T) {
 //  | 0.70 | 1.00 | 0.90 | 0.00 |
 //  -----------------------------
 //
-func getBufs() (row1, column1, row2, column2 []byte, err error) {
+func getShards() (row0, column0, row1, column1 *pb.MatrixShard) {
+	// shard0: row 0,1 of A
+	rowShard0 := &pb.MatrixShard{
+		IsSparse: true,
+		M: 2,
+		N: 4,
+		Val: []float32 {0.42, 0.30, 0.30, 0.34, 0.10, 0.70, 1.00},
+		Ir: []uint32 {0, 1, 0, 0, 1, 0, 1},
+		Jc: []uint32 {0, 2, 3, 5, 7},
+	}
 
-	// shard1: row 0,1 of A
+	// shard0: column 0,1 of A
+	columnShard0 := &pb.MatrixShard{
+		IsSparse: true,
+		M: 2,
+		N: 3,
+		Val: []float32 {0.42, 0.30, 0.30, 0.70, 1.00},
+		Ir: []uint32 {0, 1, 0, 0, 1},
+		Jc: []uint32 {0, 2, 3, 5},
+	}
+
+	// shard1: row 1 of A
 	rowShard1 := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{&pb.MatrixShard_RowData{}, &pb.MatrixShard_RowData{}},
+		IsSparse: true,
+		M: 1,
+		N: 4,
+		Val: []float32 {0.70, 1.00, 0.90},
+		Ir: []uint32 {0, 0, 0},
+		Jc: []uint32 {0, 1, 2, 3, 3},
 	}
-	rowShard1.Row[0].At = make(map[int32]float32)
-	rowShard1.Row[1].At = make(map[int32]float32)
 
-	rowShard1.Row[0].At[0] = 0.42
-	rowShard1.Row[0].At[1] = 0.30
-	rowShard1.Row[0].At[2] = 0.34
-	rowShard1.Row[0].At[3] = 0.70
-
-	rowShard1.Row[1].At[0] = 0.30
-	rowShard1.Row[1].At[2] = 0.10
-	rowShard1.Row[1].At[3] = 1.00
-
-	bufRow1, r1Err := proto.Marshal(rowShard1)
-
-	// shard1: column 0,1 of A
+	// shard1: column 2,3 of A
 	columnShard1 := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{&pb.MatrixShard_RowData{}, &pb.MatrixShard_RowData{}},
+		IsSparse: true,
+		M: 2,
+		N: 3,
+		Val: []float32 {0.34, 0.70, 0.10, 1.00, 0.90},
+		Ir: []uint32 {0, 1, 0, 1, 0},
+		Jc: []uint32 {0, 2, 4, 5},
 	}
-	columnShard1.Row[0].At = make(map[int32]float32)
-	columnShard1.Row[1].At = make(map[int32]float32)
 
-	columnShard1.Row[0].At[0] = 0.42
-	columnShard1.Row[0].At[1] = 0.30
-	columnShard1.Row[0].At[2] = 0.70
-
-	columnShard1.Row[1].At[0] = 0.30
-	columnShard1.Row[1].At[2] = 1.00
-
-	bufColumn1, c1Err := proto.Marshal(columnShard1)
-
-	// shard2: row 2 of A
-	rowShard2 := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{&pb.MatrixShard_RowData{}},
-	}
-	rowShard2.Row[0].At = make(map[int32]float32)
-
-	rowShard2.Row[0].At[0] = 0.70
-	rowShard2.Row[0].At[1] = 1.00
-	rowShard2.Row[0].At[2] = 0.90
-
-	bufRow2, r2Err := proto.Marshal(rowShard2)
-
-	// shard2: column 2,3 of A
-	columnShard2 := &pb.MatrixShard{
-		Row: []*pb.MatrixShard_RowData{&pb.MatrixShard_RowData{}, &pb.MatrixShard_RowData{}},
-	}
-	columnShard2.Row[0].At = make(map[int32]float32)
-	columnShard2.Row[1].At = make(map[int32]float32)
-
-	columnShard2.Row[0].At[0] = 0.34
-	columnShard2.Row[0].At[1] = 0.10
-	columnShard2.Row[0].At[2] = 0.90
-
-	columnShard2.Row[1].At[0] = 0.70
-	columnShard2.Row[1].At[1] = 1.00
-
-	bufColumn2, c2Err := proto.Marshal(columnShard2)
-
-	if r1Err != nil || c1Err != nil || r2Err != nil || c2Err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Failed generating mashalled buffer")
-	}
-	return bufRow1, bufColumn1, bufRow2, bufColumn2, nil
+	return rowShard0, columnShard0, rowShard1, columnShard1
 }

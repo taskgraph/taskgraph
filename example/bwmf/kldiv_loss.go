@@ -60,7 +60,6 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 	H_data := H.Data()
 	grad_data := gradient.Data()
 	w_data := l.W.data.Val
-	V_data := l.V.data.Val
 
 	for i := uint32(0); i < M; i++ {
 		for j := uint32(0); j < N; j++ {
@@ -69,21 +68,27 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 				wh += w_data[i*K+k] * H_data[j*K+k]
 			}
 
-			// accumulate to grad vec
-			v := V_data[j*M + i]
-			if v != 0.0 {
-				// v is non-zero
-				value += -v*float32(math.Log(float64(wh+l.smooth))) + wh
-				for k := uint32(0); k < K; k += 1 {
-					grad_data[j*K+k] += w_data[i*K+k]*(1.0-(v+l.smooth)/(wh+l.smooth))
-				}
-			} else {
-				// v is zero
-				value += wh
+			// v is zero
+			value += wh
+			for k := uint32(0); k < K; k += 1 {
+				grad_data[j*K+k] += w_data[i*K+k]
+			}
+		}
+	}
 
-				for k := uint32(0); k < K; k += 1 {
-					grad_data[j*K+k] += w_data[i*K+k]
-				}
+	for j := uint32(0); j < N; j++ {
+		for p := l.V.data.Jc[j]; p < l.V.data.Jc[j+1]; p++ {
+			i, v := l.V.data.Ir[p], l.V.data.Val[p]
+
+			wh := float32(0.0)
+			for k := uint32(0); k < K; k += 1 {
+				wh += w_data[i*K+k] * H_data[j*K+k]
+			}
+
+			// accumulate to grad vec
+			value += -v*float32(math.Log(float64(wh+l.smooth)))
+			for k := uint32(0); k < K; k += 1 {
+				grad_data[j*K+k] += -w_data[i*K+k]*(v+l.smooth)/(wh+l.smooth)
 			}
 		}
 	}
