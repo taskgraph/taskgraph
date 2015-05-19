@@ -27,7 +27,7 @@ func TestPGMinimize0(t *testing.T) {
 	proj := &Projection{lower_bound: lower, upper_bound: upper}
 	minimizer := &ProjectedGradient{projector: proj, beta: 0.1, sigma: 0.01, alpha: 1.0}
 	loss := &Rosenbrock{numOfCopies: copy, count: 0}
-	stpCount := MakeFixCountStopCriteria(1200)
+	stpCount := MakeFixCountStopCriteria(1500)
 
 	stt0 := createParam(3.0, -2.0, copy)
 
