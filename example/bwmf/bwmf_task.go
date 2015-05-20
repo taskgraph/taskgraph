@@ -136,13 +136,6 @@ func (t *bwmfTask) initData() {
 }
 
 func (t *bwmfTask) initOptUtil() {
-	// init optimization utils
-	tParamLen := t.dims.n * t.dims.k
-	dParamLen := t.dims.m * t.dims.k
-
-	t.tParam = op.NewVecParameter(int(tParamLen))
-	t.dParam = op.NewVecParameter(int(dParamLen))
-
 	if t.tShard == nil {
 		// XXX: Initialize it random and sparse.
 		t.tShard = &pb.MatrixShard {
@@ -153,10 +146,6 @@ func (t *bwmfTask) initOptUtil() {
 		for i := uint32(0); i < t.tShard.M * t.tShard.N; i++ {
 			t.tShard.Val[i] = rand.Float32()
 		}
-	}
-	// assign loaded tshard to tparam
-	for i := 0; i < int(t.tShard.M * t.tShard.N); i++ {
-		t.tParam.Set(i, t.tShard.Val[i])
 	}
 
 	if t.dShard == nil {
@@ -171,11 +160,12 @@ func (t *bwmfTask) initOptUtil() {
 			t.dShard.Val[i] = rand.Float32()
 		}
 	}
-	// assign loaded dshard to dparam
-	for i := 0; i < int(t.dShard.M * t.dShard.N); i++ {
-		t.dParam.Set(i, t.dShard.Val[i])
-	}
 
+	t.tParam = op.NewVecParameterWithData(t.tShard.Val)
+	t.dParam = op.NewVecParameterWithData(t.dShard.Val)
+
+	tParamLen := t.dims.n * t.dims.k
+	dParamLen := t.dims.m * t.dims.k
 	projLen := uint32(0)
 	if tParamLen > dParamLen {
 		projLen = tParamLen
@@ -331,7 +321,7 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 					t.dims.M += m.M
 				}
 			}
-			go t.updateShard(ctx, t.dims.M, t.dims.n, t.dims.k, t.tParam, t.tShard, t.columnShard)
+			go t.updateShard(ctx, t.dims.M, t.dims.n, t.dims.k, t.tParam, t.columnShard)
 		} else {
 			t.logger.Printf("Full T ready, task %d, epoch %d", t.taskID, t.epoch)
 			// XXX Starting an intensive computation.
@@ -341,37 +331,26 @@ func (t *bwmfTask) doDataReady(ctx context.Context, fromID uint64, method string
 					t.dims.N += m.M
 				}
 			}
-			go t.updateShard(ctx, t.dims.N, t.dims.m, t.dims.k, t.dParam, t.dShard, t.rowShard)
+			go t.updateShard(ctx, t.dims.N, t.dims.m, t.dims.k, t.dParam, t.rowShard)
 		}
 	}
 }
 
-func (t *bwmfTask) updateShard(ctx context.Context, m, n, k uint32,
-	param op.Parameter, shard *pb.MatrixShard, full *pb.MatrixShard) {
+func (t *bwmfTask) updateShard(ctx context.Context, m, n, k uint32, H op.Parameter, V *pb.MatrixShard) {
 	W := make([]*pb.MatrixShard, t.numOfTasks)
 	for i, m := range t.peerShards {
 		W[i] = m
 	}
 
-	loss := NewKLDivLoss(full, W, m, n, k, 1e-9)
-	val, optErr := t.optimizer.Minimize(loss, t.stopCriteria, param)
+	loss := NewKLDivLoss(V, W, m, n, k, 1e-9)
+	val, optErr := t.optimizer.Minimize(loss, t.stopCriteria, H)
 	if optErr != nil {
 		t.logger.Panicf("Failed minimizing over shard: %s", optErr)
 		// handle re-run
 		// XXX(baigang) just kill the framework and wait for restarting?
 	}
-
-	copyParamToShard(param, shard)
 	t.logger.Printf("Updated shard, loss is %f", val)
 	t.updateDone <- &event{ctx: ctx}
-}
-
-func copyParamToShard(param op.Parameter, shard *pb.MatrixShard) {
-	for iter := param.IndexIterator(); iter.Next(); {
-		index := iter.Index()
-		v := param.Get(index)
-		shard.Val[index] = v
-	}
 }
 
 func (t *bwmfTask) notifyMaster(ctx context.Context) {
