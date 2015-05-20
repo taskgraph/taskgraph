@@ -10,8 +10,7 @@ import (
 //   /{app}/epoch -> global value for epoch
 //   /{app}/tasks/: register tasks under this directory
 //   /{app}/tasks/{taskID}/{replicaID} -> pointer to nodes, 0 replicaID means master
-//   /{app}/tasks/{taskID}/parentMeta
-//   /{app}/tasks/{taskID}/childMeta
+//   /{app}/tasks/{taskID}/meta -> meta change notification
 //   /{app}/healthy/{taskID} -> tasks' healthy condition
 //   /{app}/nodes/: register nodes under this directory
 //   /{app}/nodes/{nodeID}/address -> scheme://host:port/{path(if http)}
@@ -64,12 +63,12 @@ func TaskMasterPath(appName string, taskID uint64) string {
 	return path.Join("/", appName, TasksDir, strconv.FormatUint(taskID, 10), TaskMaster)
 }
 
-func MetaPath(linkType, appName string, taskID uint64) string {
+func MetaPath(appName string, taskID uint64) string {
 	return path.Join("/",
 		appName,
 		TasksDir,
 		strconv.FormatUint(taskID, 10),
-		linkType)
+		"meta")
 }
 
 func MasterPath(job string) string {

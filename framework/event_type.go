@@ -7,7 +7,6 @@ import (
 
 type metaChange struct {
 	from  uint64
-	who   string
 	epoch uint64
 	meta  string
 }

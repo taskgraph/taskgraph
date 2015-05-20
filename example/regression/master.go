@@ -208,4 +208,4 @@ func (t *dummyMaster) testablyFail(method string, args ...string) bool {
 	return true
 }
 
-func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}
+func (t *dummyMaster) MetaReady(ctx context.Context, fromID uint64, meta string) {}

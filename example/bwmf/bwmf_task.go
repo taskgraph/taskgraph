@@ -32,6 +32,14 @@ Topology: the topology is different from task to task. Each task will consider i
 and all others children.
 */
 
+/*
+Keeping epochs in application level (bwmf):
+1. On start, task 0 should broadcast epoch 0 to every task.
+2. After every task finished up computation and notified task 0, task 0 increment the epoch
+   and broadcast new epoch to every task.
+3. Keep repeating step 2 until task 0 decided that the criteria is met.
+*/
+
 // bwmfTasks holds two shards of original matrices (row and column), one shard of D,
 // and one shard of T. It works differently for odd and even epoch:
 // During odd epoch, 1. it fetch all T from other slaves, and finding better value for
@@ -43,7 +51,6 @@ type bwmfTask struct {
 	taskID     uint64
 	logger     *log.Logger
 	numOfTasks uint64
-	curIter    uint64
 
 	rowShard    *pb.MatrixShard
 	columnShard *pb.MatrixShard
@@ -138,25 +145,25 @@ func (t *bwmfTask) initData() {
 func (t *bwmfTask) initOptUtil() {
 	if t.tShard == nil {
 		// XXX: Initialize it random and sparse.
-		t.tShard = &pb.MatrixShard {
-			M: t.dims.n,
-			N: t.dims.k,
-			Val: make([]float32, t.dims.n * t.dims.k),
+		t.tShard = &pb.MatrixShard{
+			M:   t.dims.n,
+			N:   t.dims.k,
+			Val: make([]float32, t.dims.n*t.dims.k),
 		}
-		for i := uint32(0); i < t.tShard.M * t.tShard.N; i++ {
+		for i := uint32(0); i < t.tShard.M*t.tShard.N; i++ {
 			t.tShard.Val[i] = rand.Float32()
 		}
 	}
 
 	if t.dShard == nil {
 		// XXX: Initial at 0.0.
-		t.dShard = &pb.MatrixShard {
-			M: t.dims.m,
-			N: t.dims.k,
-			Val: make([]float32, t.dims.m * t.dims.k),
+		t.dShard = &pb.MatrixShard{
+			M:   t.dims.m,
+			N:   t.dims.k,
+			Val: make([]float32, t.dims.m*t.dims.k),
 		}
 
-		for i := uint32(0); i < t.dShard.M * t.dShard.N; i++ {
+		for i := uint32(0); i < t.dShard.M*t.dShard.N; i++ {
 			t.dShard.Val[i] = rand.Float32()
 		}
 	}
@@ -200,6 +207,13 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.updateDone = make(chan *event, 1)
 	t.metaReady = make(chan *event, 1)
 	t.exitChan = make(chan *event)
+	go t.run()
+}
+
+func (t *bwmfTask) OnStart(ctx context.Context) {
+	if t.taskID == 0 {
+		t.framework.FlagMeta(ctx, "Workers", "0")
+	}
 	go t.run()
 }
 
@@ -393,7 +407,7 @@ func (t *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Resp
 	return resp, nil
 }
 
-func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, meta string) {
 	t.metaReady <- &event{ctx: ctx, fromID: fromID}
 }
 

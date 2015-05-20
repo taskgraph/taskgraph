@@ -29,11 +29,7 @@ func TestControllerInitEtcdLayout(t *testing.T) {
 			if _, err := etcdClient.Get(key, false, false); err != nil {
 				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
-			key = etcdutil.MetaPath("Parents", c.name, taskID)
-			if _, err := etcdClient.Get(key, false, false); err != nil {
-				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
-			}
-			key = etcdutil.MetaPath("Children", c.name, taskID)
+			key = etcdutil.MetaPath(c.name, taskID)
 			if _, err := etcdClient.Get(key, false, false); err != nil {
 				t.Errorf("task %d: etcdClient.Get %v failed: %v", i, key, err)
 			}
