@@ -23,8 +23,7 @@ type KLDivLoss struct {
 func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k uint32, smooth float32) *KLDivLoss {
 	wData := &pb.MatrixShard{M: m, N: k, Val: make([]float32, m*k)}
 	idx := 0
-	for idx = 0; idx < len(w); idx += 1 {
-		w_ := w[idx]
+	for _, w_ := range w {
 		for i := uint32(0); i < w_.M * w_.N; i+=1 {
 			wData.Val[idx] = w_.Val[i]
 			idx += 1
@@ -51,8 +50,7 @@ func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k uint32, smooth
 //  which goes parallel. One pass is for evaluating W*H and accumulate kl-divergence
 //  value and the other is for evalutating the matrix gradient of kl-div.
 //
-func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 {
-	H := param
+func (l *KLDivLoss) Evaluate(H op.Parameter, gradient op.Parameter) float32 {
 	op.Fill(gradient, 0.0)
 	value := float32(0.0)
 
@@ -76,9 +74,9 @@ func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 
 		}
 	}
 
-	for j := uint32(0); j < N; j++ {
-		for p := l.V.data.Jc[j]; p < l.V.data.Jc[j+1]; p++ {
-			i, v := l.V.data.Ir[p], l.V.data.Val[p]
+	for i := uint32(0); i < M; i++ {
+		for p := l.V.data.Jc[i]; p < l.V.data.Jc[i+1]; p++ {
+			j, v := l.V.data.Ir[p], l.V.data.Val[p]
 
 			wh := float32(0.0)
 			for k := uint32(0); k < K; k += 1 {
