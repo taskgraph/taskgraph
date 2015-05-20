@@ -14,7 +14,7 @@ type optconfig struct {
 
 	// num of iters for the alternating optimization
 	NumIters  uint64
-	DimLatent int
+	DimLatent uint32
 }
 
 // xFs can be "local", ""

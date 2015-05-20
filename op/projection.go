@@ -18,6 +18,11 @@ func (s *oneParameter) Add(index int, value float32) {
 	panic("can not add value")
 }
 
+func (s *oneParameter) Data() []float32 {
+	panic("can not get data pointer")
+	return nil
+}
+
 // This allow us to generate parameter with same width.
 func (s *oneParameter) CloneWithoutCopy() Parameter {
 	return &oneParameter{value: s.value, size: s.size}

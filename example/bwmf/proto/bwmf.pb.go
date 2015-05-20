@@ -53,35 +53,17 @@ func (m *Response) GetShard() *MatrixShard {
 }
 
 type MatrixShard struct {
-	Row []*MatrixShard_RowData `protobuf:"bytes,1,rep,name=row" json:"row,omitempty"`
+	IsSparse bool      `protobuf:"varint,1,opt,name=is_sparse" json:"is_sparse,omitempty"`
+	M        uint32    `protobuf:"varint,2,opt,name=m" json:"m,omitempty"`
+	N        uint32    `protobuf:"varint,3,opt,name=n" json:"n,omitempty"`
+	Val      []float32 `protobuf:"fixed32,4,rep,name=val" json:"val,omitempty"`
+	Ir       []uint32  `protobuf:"varint,5,rep,name=ir" json:"ir,omitempty"`
+	Jc       []uint32  `protobuf:"varint,6,rep,name=jc" json:"jc,omitempty"`
 }
 
 func (m *MatrixShard) Reset()         { *m = MatrixShard{} }
 func (m *MatrixShard) String() string { return proto1.CompactTextString(m) }
 func (*MatrixShard) ProtoMessage()    {}
-
-func (m *MatrixShard) GetRow() []*MatrixShard_RowData {
-	if m != nil {
-		return m.Row
-	}
-	return nil
-}
-
-type MatrixShard_RowData struct {
-	RowId int32             `protobuf:"varint,1,opt,name=rowId" json:"rowId,omitempty"`
-	At    map[int32]float32 `protobuf:"bytes,2,rep,name=at" json:"at,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed32,2,opt,name=value"`
-}
-
-func (m *MatrixShard_RowData) Reset()         { *m = MatrixShard_RowData{} }
-func (m *MatrixShard_RowData) String() string { return proto1.CompactTextString(m) }
-func (*MatrixShard_RowData) ProtoMessage()    {}
-
-func (m *MatrixShard_RowData) GetAt() map[int32]float32 {
-	if m != nil {
-		return m.At
-	}
-	return nil
-}
 
 func init() {
 }

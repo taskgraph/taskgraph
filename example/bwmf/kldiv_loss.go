@@ -2,7 +2,6 @@ package bwmf
 
 import (
 	"math"
-	"sort"
 
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/op"
@@ -16,23 +15,21 @@ import (
 //  So actually H is H^T, but it saves code by using identical routine when alternatively optimize over H and W.
 //
 type KLDivLoss struct {
-	V       *pb.MatrixShard
-	W       []*pb.MatrixShard
-	m, n, k int // dimensions
+	V       Matrix
+	W       Matrix
 	smooth  float32
-
-	ends []int // for binary search of blockId.
 }
 
-func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k int, smooth float32) *KLDivLoss {
-	stt := make([]int, len(w)+1)
-	ost := 0
-	for i, m := range w {
-		stt[i] = ost
-		ost += len(m.Row)
+func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k uint32, smooth float32) *KLDivLoss {
+	wData := &pb.MatrixShard{M: m, N: k, Val: make([]float32, m*k)}
+	idx := 0
+	for _, w_ := range w {
+		for i := uint32(0); i < w_.M * w_.N; i+=1 {
+			wData.Val[idx] = w_.Val[i]
+			idx += 1
+		}
 	}
-	stt[len(w)] = ost
-	return &KLDivLoss{V: v, W: w, m: m, n: n, k: k, smooth: smooth, ends: stt}
+	return &KLDivLoss{V: Matrix{data: v}, W: Matrix{data: wData}, smooth: smooth}
 }
 
 // This function evaluates the Kullback-Leibler Divergence given $\mathbf{V} the matrix to fact and $\mathbf{W}$ the fixed factor.
@@ -53,41 +50,46 @@ func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k int, smooth fl
 //  which goes parallel. One pass is for evaluating W*H and accumulate kl-divergence
 //  value and the other is for evalutating the matrix gradient of kl-div.
 //
-func (l *KLDivLoss) Evaluate(param op.Parameter, gradient op.Parameter) float32 {
-	H := param
+func (l *KLDivLoss) Evaluate(H op.Parameter, gradient op.Parameter) float32 {
 	op.Fill(gradient, 0.0)
 	value := float32(0.0)
-	for i := 0; i < l.m; i++ {
-		wRow := l.GetWRow(i)
-		for j := 0; j < l.n; j++ {
-			v, ve := l.V.GetRow()[j].At[int32(i)]
-			// wh := l.smooth // move away from 0
-			wh := float32(0.0)
 
-			// evaluate WH_ij and accumulate w to grad vec
-			for k, wk := range *wRow {
-				wh += wk * H.Get(j*l.k+int(k))
-				gradient.Add(j*l.k+int(k), wk)
+	M, N, K := l.W.M(), l.V.M(), l.W.N()
+	H_data := H.Data()
+	grad_data := gradient.Data()
+	w_data := l.W.data.Val
+
+	for i := uint32(0); i < M; i++ {
+		for j := uint32(0); j < N; j++ {
+			wh := float32(0.0)
+			for k := uint32(0); k < K; k += 1 {
+				wh += w_data[i*K+k] * H_data[j*K+k]
 			}
 
-			// accumulate to grad vec
-			if ve {
-				// v is non-zero, accumulate loss and add the v term to gradient vec
-				value += -v*float32(math.Log(float64(wh+l.smooth))) + wh
-				for k, wk := range *wRow {
-					gradient.Add(j*l.k+int(k), -wk*(v+l.smooth)/(wh+l.smooth))
-				}
-			} else {
-				// v is zero, accumulate loss
-				// the gradient has beed updated in previous step
-				value += wh
+			// v is zero
+			value += wh
+			for k := uint32(0); k < K; k += 1 {
+				grad_data[j*K+k] += w_data[i*K+k]
 			}
 		}
 	}
-	return value
-}
 
-func (l *KLDivLoss) GetWRow(row int) *map[int32]float32 {
-	b := sort.Search(len(l.ends), func(i int) bool { return l.ends[i] > row }) - 1
-	return &l.W[b].Row[row-l.ends[b]].At
+	for i := uint32(0); i < M; i++ {
+		for p := l.V.data.Jc[i]; p < l.V.data.Jc[i+1]; p++ {
+			j, v := l.V.data.Ir[p], l.V.data.Val[p]
+
+			wh := float32(0.0)
+			for k := uint32(0); k < K; k += 1 {
+				wh += w_data[i*K+k] * H_data[j*K+k]
+			}
+
+			// accumulate to grad vec
+			value += -v*float32(math.Log(float64(wh+l.smooth)))
+			for k := uint32(0); k < K; k += 1 {
+				grad_data[j*K+k] += -w_data[i*K+k]*(v+l.smooth)/(wh+l.smooth)
+			}
+		}
+	}
+
+	return value
 }

@@ -14,6 +14,7 @@ func LoadMatrixShard(client fs.Client, path string) (*pb.MatrixShard, error) {
 	if cErr != nil {
 		return nil, cErr
 	}
+
 	buf, rdErr := ioutil.ReadAll(reader)
 	if rdErr != nil {
 		return nil, rdErr

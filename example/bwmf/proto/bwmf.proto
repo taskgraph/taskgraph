@@ -18,10 +18,14 @@ message Response {
   MatrixShard shard = 2;
 }
 
+// For dense matrix, row-major storage is used.
+// For sparse matrix, we use the same storage format as MATLAB[1].
+// [1]: http://www.mathworks.com/help/matlab/matlab_external/matlab-data.html#f47606
 message MatrixShard {
-  message RowData {
-    int32 rowId = 1;
-    map<int32, float> at = 2;
-  }
-  repeated RowData row = 1;
+  bool is_sparse = 1;
+  uint32 m = 2;
+  uint32 n = 3;
+  repeated float val = 4;
+  repeated uint32 ir = 5;
+  repeated uint32 jc = 6;
 }
