@@ -2,7 +2,7 @@ package bwmf
 
 import (
 	"fmt"
-	// "math"
+	"math"
 	"testing"
 
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
@@ -25,15 +25,15 @@ func TestEvaluation(t *testing.T) {
 	fmt.Println("loss val is ", loss_val)
 	fmt.Println("gradient is ", g)
 
-	/*
-		if math.Abs(float64(loss_val)-4.6) > 5e-2 {
-			t.Errorf("Loss value incorrect: actual %f, expected 6.06543", loss_val)
-		}
+	expectedLoss := 5.999997
+	if math.Abs(float64(loss_val)-expectedLoss) > 1e-5 {
+		t.Errorf("Loss value incorrect: actual %f, expected %f", loss_val, expectedLoss)
+	}
 
-		if math.Abs(float64(g.Get(0))+1.01) > 1e-2 || math.Abs(float64(g.Get(1))+1.01) > 1e-2 {
-			t.Errorf("Gradient incorrect: actual {%f, %f}, expected { -1.01, -1.01 }", g.Get(0), g.Get(1))
-		}
-	*/
+	expectedGrad := []float32 { 1.2499998, 0.24999973, 0.24999973, 1.2499998 }
+	if euclideanDist(g.Data(), expectedGrad) > 1e-5 {
+		t.Errorf("Gradient incorrect: actual %v, expected %v", g.Data(), expectedGrad)
+	}
 
 	h.Set(0, 0.0)
 	h.Set(1, 1.0)
@@ -45,6 +45,15 @@ func TestEvaluation(t *testing.T) {
 	fmt.Println("loss val is ", loss_val)
 	fmt.Println("gradient is ", g)
 
+	expectedLoss = 3.6931434
+	if math.Abs(float64(loss_val)-expectedLoss) > 1e-5 {
+		t.Errorf("Loss value incorrect: actual %f, expected %f", loss_val, expectedLoss)
+	}
+
+	expectedGrad = []float32 { 1, 0, 0, 1 }
+	if euclideanDist(g.Data(), expectedGrad) > 1e-5 {
+		t.Errorf("Gradient incorrect: actual %v, expected %v", g.Data(), expectedGrad)
+	}
 }
 
 func newKLDivLoss() *KLDivLoss {
@@ -86,7 +95,7 @@ func newKLDivLoss() *KLDivLoss {
 		&pb.MatrixShard{
 			M: 2,
 			N: n,
-			Val: []float32 {1.0, 0, 0.0, 1.0},
+			Val: []float32 {1.0, 0.0, 0.0, 1.0},
 		},
 		&pb.MatrixShard{
 			M: 1,
@@ -96,4 +105,17 @@ func newKLDivLoss() *KLDivLoss {
 	}
 
 	return NewKLDivLoss(v, w, m, n, k, 1e-6)
+}
+
+func euclideanDist(x, y []float32) float64 {
+	if len(x) != len(y) {
+		return math.Inf(1)
+	}
+
+	val := 0.0
+
+	for i, xi := range x {
+		val += float64((xi-y[i])*(xi-y[i]))
+	}
+	return val
 }
