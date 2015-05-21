@@ -257,4 +257,4 @@ func (t *dummySlave) CreateServer() *grpc.Server {
 	return server
 }
 
-func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, meta string) {}
+func (t *dummySlave) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {}

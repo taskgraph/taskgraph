@@ -25,7 +25,7 @@ type Task interface {
 	// The meta/data notifications obey exactly-once semantics. Note that the same
 	// meta string will be notified only once even if you flag the meta more than once.
 	// TODO: one can also get this from channel.
-	MetaReady(ctx context.Context, fromID uint64, meta string)
+	MetaReady(ctx context.Context, fromID uint64, linkType, meta string)
 
 	// This is the callback when data from server is ready.
 	DataReady(ctx context.Context, fromID uint64, method string, output proto.Message)

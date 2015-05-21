@@ -108,7 +108,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.userCtx, meta.from, meta.meta)
+			f.handleMetaChange(f.userCtx, meta.from, meta.linkType, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
@@ -175,8 +175,8 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func parseMetaValue(val string) (epoch, taskID uint64, meta string, err error) {
-	values := strings.SplitN(val, "-", 3)
+func parseMetaValue(val string) (epoch, taskID uint64, linkType, meta string, err error) {
+	values := strings.SplitN(val, "-", 4)
 	// epoch is prepended to meta. When a new one starts and replaces
 	// the old one, it doesn't need to handle previous things, whose
 	// epoch is smaller than current one.
@@ -190,7 +190,8 @@ func parseMetaValue(val string) (epoch, taskID uint64, meta string, err error) {
 		err = fmt.Errorf("not an unit64 taskID prepended: %s", values[1])
 		return
 	}
-	meta = values[2]
+	linkType = values[2]
+	meta = values[3]
 	return
 }
 
@@ -206,14 +207,15 @@ func (f *framework) watchMeta() {
 		if resp.Action != "set" && resp.Action != "get" {
 			return
 		}
-		epoch, taskID, meta, err := parseMetaValue(resp.Node.Value)
+		epoch, taskID, linkType, meta, err := parseMetaValue(resp.Node.Value)
 		if err != nil {
 			f.log.Panicf("parseMetaValue failed: %v", err)
 		}
 		f.metaChan <- &metaChange{
-			from:  taskID,
-			epoch: epoch,
-			meta:  meta,
+			from:     taskID,
+			epoch:    epoch,
+			linkType: linkType,
+			meta:     meta,
 		}
 	}
 
@@ -225,7 +227,7 @@ func (f *framework) watchMeta() {
 	}
 }
 
-func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, meta string) {
+func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
 	// check if meta is handled before.
 	tm := taskMeta(taskID, meta)
 	if _, ok := f.metaNotified[tm]; ok {
@@ -233,7 +235,7 @@ func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, meta st
 	}
 	f.metaNotified[tm] = true
 
-	f.task.MetaReady(ctx, taskID, meta)
+	f.task.MetaReady(ctx, taskID, linkType, meta)
 }
 
 func taskMeta(taskID uint64, meta string) string {

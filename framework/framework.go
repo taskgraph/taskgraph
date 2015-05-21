@@ -72,7 +72,7 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		// Epoch is prepended to meta. When a new one starts and replaces
 		// the old one, it doesn't need to handle previous things, whose
 		// epoch is smaller than current one.
-		value := fmt.Sprintf("%d-%d-%s", epoch, f.taskID, meta)
+		value := fmt.Sprintf("%d-%d-%s-%s", epoch, f.taskID, linkType, meta)
 		_, err := f.etcdClient.Set(etcdutil.MetaPath(f.name, id), value, 0)
 		if err != nil {
 			f.log.Panicf("etcdClient.Set failed; key: %s, value: %s, error: %v",

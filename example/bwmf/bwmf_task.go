@@ -407,7 +407,7 @@ func (t *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Resp
 	return resp, nil
 }
 
-func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, meta string) {
+func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
 	t.metaReady <- &event{ctx: ctx, fromID: fromID}
 }
 
