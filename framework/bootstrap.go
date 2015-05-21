@@ -28,7 +28,9 @@ func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
+func (f *framework) AddLinkage(topology taskgraph.Topology) {
+	f.topology[topology.GetLinkType()] = topology
+}
 
 func (f *framework) Start() {
 	var err error
@@ -63,7 +65,9 @@ func (f *framework) Start() {
 	// Both should be initialized at this point.
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
-	f.topology.SetTaskID(f.taskID)
+	for key, _ := range f.topology {
+		f.topology[key].SetTaskID(f.taskID)
+	}
 
 	f.heartbeat()
 	f.setup()

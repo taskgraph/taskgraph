@@ -25,7 +25,7 @@ type Bootstrap interface {
 // high level features.
 type Framework interface {
 	// This allow the task implementation query its neighbors.
-	GetTopology() Topology
+	GetTopology() map[string]Topology
 
 	// Kill the framework itself.
 	// As epoch changes, some nodes isn't needed anymore

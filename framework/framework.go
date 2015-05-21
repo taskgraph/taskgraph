@@ -22,7 +22,7 @@ type framework struct {
 
 	// user defined interfaces
 	taskBuilder taskgraph.TaskBuilder
-	topology    taskgraph.Topology
+	topology    map[string]taskgraph.Topology
 
 	task          taskgraph.Task
 	taskID        uint64
