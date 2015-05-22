@@ -6,10 +6,10 @@ import (
 )
 
 type metaChange struct {
-	from  uint64
-	who   string
-	epoch uint64
-	meta  string
+	from     uint64
+	epoch    uint64
+	linkType string
+	meta     string
 }
 
 type dataRequest struct {

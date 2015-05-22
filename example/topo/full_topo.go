@@ -24,17 +24,16 @@ func (t *FullTopology) GetLinkTypes() []string {
 	return []string{"Neighbors", "Master"}
 }
 
-func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
-	res := make([]uint64, 0)
-	switch {
-	case linkType == "Neighbors":
+func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) (res []uint64) {
+	switch linkType {
+	case "Neighbors":
 		res = t.all
-	case linkType == "Master":
-		if t.taskID == 0 {
-			res = t.all
-		}
+	case "Master":
+		res = []uint64{0}
+	default:
+		panic("")
 	}
-	return res
+	return
 }
 
 // Creates a new tree topology with given fanout and number of tasks.

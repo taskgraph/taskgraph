@@ -62,8 +62,8 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 // there will be some data transferring and captured by application task.
 // Here we have implemented a helper user task to capture those data, test if
 // it's passed from framework correctly and unmodified.
-func TestFrameworkFlagMetaReady(t *testing.T) {
-	appName := "framework_test_flagmetaready"
+func TestFrameworkFlagMeta(t *testing.T) {
+	appName := "TestFrameworkFlagMeta"
 	etcdURLs := []string{"http://localhost:4001"}
 	// launch controller to setup etcd layout
 	ctl := controller.New(appName, etcd.NewClient(etcdURLs), 2, []string{"Parents", "Children"})
@@ -120,7 +120,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 	ctx := context.WithValue(context.Background(), epochKey, uint64(0))
 	for i, tt := range tests {
 		// 0: F#FlagChildMetaReady -> 1: T#ParentMetaReady
-		f0.FlagMeta(ctx, "Parents", tt.cMeta)
+		f0.FlagMeta(ctx, "Children", tt.cMeta)
 		// from child(1)'s view
 		data := <-cDataChan
 		expected := &tDataBundle{id: 0, meta: tt.cMeta}
@@ -129,7 +129,7 @@ func TestFrameworkFlagMetaReady(t *testing.T) {
 		}
 
 		// 1: F#FlagParentMetaReady -> 0: T#ChildMetaReady
-		f1.FlagMeta(ctx, "Children", tt.pMeta)
+		f1.FlagMeta(ctx, "Parents", tt.pMeta)
 		// from parent(0)'s view
 		data = <-pDataChan
 		expected = &tDataBundle{id: 1, meta: tt.pMeta}

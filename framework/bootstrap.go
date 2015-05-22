@@ -86,7 +86,7 @@ func (f *framework) run() {
 	defer f.log.Printf("framework stops running.")
 	f.setEpochStarted()
 	go f.startHTTP()
-	// this for-select is primarily used to synchronize epoch specific events.
+	// Central event handling
 	for {
 		select {
 		case nextEpoch, ok := <-f.epochWatcher:
@@ -108,7 +108,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.userCtx, meta.from, meta.who, meta.meta)
+			f.handleMetaChange(f.userCtx, meta.from, meta.linkType, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
@@ -139,18 +139,12 @@ func (f *framework) setEpochStarted() {
 	f.userCtx, f.userCtxCancel = context.WithCancel(f.userCtx)
 
 	f.task.EnterEpoch(f.userCtx, f.epoch)
-	// setup etcd watches
-	for _, linkType := range f.topology.GetLinkTypes() {
-		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
-	}
+	f.watchMeta()
 }
 
 func (f *framework) releaseEpochResource() {
 	f.userCtxCancel()
-	for _, c := range f.metaStops {
-		c <- true
-	}
-	f.metaStops = nil
+	f.metaWatchStop <- true
 }
 
 // release resources: heartbeat, epoch watch.
@@ -181,45 +175,56 @@ func (f *framework) occupyTask() error {
 	}
 }
 
-func (f *framework) watchMeta(linkType string, taskIDs []uint64) {
-	stops := make([]chan bool, len(taskIDs))
+func parseMetaValue(val string) (epoch, taskID uint64, linkType, meta string, err error) {
+	values := strings.SplitN(val, "-", 4)
+	// epoch is prepended to meta. When a new one starts and replaces
+	// the old one, it doesn't need to handle previous things, whose
+	// epoch is smaller than current one.
+	epoch, err = strconv.ParseUint(values[0], 10, 64)
+	if err != nil {
+		err = fmt.Errorf("not an unit64 epoch prepended: %s", values[0])
+		return
+	}
+	taskID, err = strconv.ParseUint(values[1], 10, 64)
+	if err != nil {
+		err = fmt.Errorf("not an unit64 taskID prepended: %s", values[1])
+		return
+	}
+	linkType = values[2]
+	meta = values[3]
+	return
+}
 
-	for i, taskID := range taskIDs {
-		stop := make(chan bool, 1)
-		stops[i] = stop
+// watch meta flag and receive any notification.
+func (f *framework) watchMeta() {
+	watchPath := etcdutil.MetaPath(f.name, f.taskID)
 
-		watchPath := etcdutil.MetaPath(linkType, f.name, taskID)
-
-		// When a node working for a task crashed, a new node will take over
-		// the task and continue what's left. It assumes that progress is stalled
-		// until the new node comes (i.e. epoch won't change).
-		responseHandler := func(resp *etcd.Response, taskID uint64) {
-			if resp.Action != "set" && resp.Action != "get" {
-				return
-			}
-			// epoch is prepended to meta. When a new one starts and replaces
-			// the old one, it doesn't need to handle previous things, whose
-			// epoch is smaller than current one.
-			values := strings.SplitN(resp.Node.Value, "-", 2)
-			ep, err := strconv.ParseUint(values[0], 10, 64)
-			if err != nil {
-				f.log.Panicf("WARN: not a unit64 prepended to meta: %s", values[0])
-			}
-			f.metaChan <- &metaChange{
-				from:  taskID,
-				who:   linkType,
-				epoch: ep,
-				meta:  values[1],
-			}
+	// The function parses the watch response of meta flag, and passes the result
+	// to central event handling.
+	responseHandler := func(resp *etcd.Response) {
+		// Note: Why "get"?
+		// We first try to get the index. If there's value in it, we also parse it.
+		if resp.Action != "set" && resp.Action != "get" {
+			return
 		}
-
-		// Need to pass in taskID to make it work. Didn't know why.
-		err := etcdutil.WatchMeta(f.etcdClient, taskID, watchPath, stop, responseHandler)
+		epoch, taskID, linkType, meta, err := parseMetaValue(resp.Node.Value)
 		if err != nil {
-			f.log.Panicf("WatchMeta failed. path: %s, err: %v", watchPath, err)
+			f.log.Panicf("parseMetaValue failed: %v", err)
+		}
+		f.metaChan <- &metaChange{
+			from:     taskID,
+			epoch:    epoch,
+			linkType: linkType,
+			meta:     meta,
 		}
 	}
-	f.metaStops = append(f.metaStops, stops...)
+
+	f.metaWatchStop = make(chan bool, 1)
+	// Need to pass in taskID to make it work. Didn't know why.
+	err := etcdutil.WatchMeta(f.etcdClient, watchPath, f.metaWatchStop, responseHandler)
+	if err != nil {
+		f.log.Panicf("WatchMeta failed. path: %s, err: %v", watchPath, err)
+	}
 }
 
 func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {

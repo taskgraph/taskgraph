@@ -38,7 +38,7 @@ type framework struct {
 	metaNotified map[string]bool
 
 	// etcd stops
-	metaStops      []chan bool
+	metaWatchStop  chan bool
 	epochWatchStop chan bool
 
 	globalStop chan struct{}
@@ -63,13 +63,21 @@ const epochKey contextKey = 1
 func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 	epoch, ok := ctx.Value(epochKey).(uint64)
 	if !ok {
-		f.log.Fatalf("Can not find epochKey in FlagMeta: %d", epoch)
+		f.log.Panicf("Can not find epochKey in FlagMeta, epoch: %d", epoch)
 	}
-	value := fmt.Sprintf("%d-%s", epoch, meta)
-	_, err := f.etcdClient.Set(etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, 0)
-	if err != nil {
-		f.log.Fatalf("etcdClient.Set failed; key: %s, value: %s, error: %v",
-			etcdutil.MetaPath(linkType, f.name, f.GetTaskID()), value, err)
+	// send the meta change notification to every task of specified link type.
+	for _, id := range f.topology.GetNeighbors(linkType, epoch) {
+		// The value is made of "epoch-fromID-metadata"
+		//
+		// Epoch is prepended to meta. When a new one starts and replaces
+		// the old one, it doesn't need to handle previous things, whose
+		// epoch is smaller than current one.
+		value := fmt.Sprintf("%d-%d-%s-%s", epoch, f.taskID, linkType, meta)
+		_, err := f.etcdClient.Set(etcdutil.MetaPath(f.name, id), value, 0)
+		if err != nil {
+			f.log.Panicf("etcdClient.Set failed; key: %s, value: %s, error: %v",
+				etcdutil.MetaPath(f.name, id), value, err)
+		}
 	}
 }
 
