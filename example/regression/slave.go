@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph"
+	"github.com/plutoshe/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -120,10 +120,10 @@ func (t *dummySlave) enterEpoch(ctx context.Context, epoch uint64) {
 	t.fromChildren = make(map[uint64]*pb.Gradient)
 	t.epoch = epoch
 
-	parent := t.framework.GetTopology().GetNeighbors("Parents", epoch)[0]
+	parent := t.framework.GetTopology()["Parents"].GetNeighbors(epoch)[0]
 	t.framework.DataRequest(ctx, parent, "/proto.Regression/GetParameter", &pb.Input{})
 
-	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
+	for _, c := range t.framework.GetTopology()["Children"].GetNeighbors(t.epoch) {
 		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
 	}
 }
@@ -177,7 +177,7 @@ func (t *dummySlave) gradientReady(ctx context.Context) {
 	}
 }
 func (t *dummySlave) checkGradReady(ctx context.Context) {
-	children := t.framework.GetTopology().GetNeighbors("Children", t.epoch)
+	children := t.framework.GetTopology()["Children"].GetNeighbors(t.epoch)
 	if t.param != nil && len(t.fromChildren) == len(children) {
 		t.gradient = new(pb.Gradient)
 		t.gradient.Value = t.param.Value * int32(t.taskID)
