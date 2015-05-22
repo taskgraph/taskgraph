@@ -7,11 +7,11 @@ import (
 	"sync"
 	"testing"
 
+	"../example/topo"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/topo"
 
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"

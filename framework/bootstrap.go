@@ -145,8 +145,8 @@ func (f *framework) setEpochStarted() {
 
 	f.task.EnterEpoch(f.userCtx, f.epoch)
 	// setup etcd watches
-	for _, linkType := range f.topology.GetLinkTypes() {
-		f.watchMeta(linkType, f.topology.GetNeighbors(linkType, f.epoch))
+	for linkType, _ := range f.topology {
+		f.watchMeta(linkType, f.topology[linkType].GetNeighbors(f.epoch))
 	}
 }
 
