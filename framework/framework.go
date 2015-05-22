@@ -88,7 +88,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *framework) GetTopology() map[string]taskgraph.Topology { return f.topology }
 
 func (f *framework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that

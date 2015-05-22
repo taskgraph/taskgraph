@@ -28,8 +28,9 @@ func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) AddLinkage(topology taskgraph.Topology) {
-	f.topology[topology.GetLinkType()] = topology
+//The user add their topology link to the original topology by this function
+func (f *framework) AddLinkage(linkType string, topology taskgraph.Topology) {
+	f.topology[linkType] = topology
 }
 
 func (f *framework) Start() {
