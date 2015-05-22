@@ -20,7 +20,7 @@ func (t *FullTopologyOfMaster) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *FullTopologyOfMaster) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *FullTopologyOfMaster) GetNeighbors(epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	if t.taskID == 0 {
 		res = t.all

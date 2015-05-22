@@ -22,7 +22,7 @@ func (t *TreeTopologyOfChildren) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *TreeTopologyOfChildren) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *TreeTopologyOfChildren) GetNeighbors(epoch uint64) []uint64 {
 	return t.children
 }
 
