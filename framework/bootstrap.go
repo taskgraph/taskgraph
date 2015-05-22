@@ -30,6 +30,9 @@ func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 
 //The user add their topology link to the original topology by this function
 func (f *framework) AddLinkage(linkType string, topology taskgraph.Topology) {
+	if f.topology == nil {
+		f.topology = make(map[string]taskgraph.Topology)
+	}
 	f.topology[linkType] = topology
 }
 
