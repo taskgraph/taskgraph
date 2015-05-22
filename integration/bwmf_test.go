@@ -44,7 +44,16 @@ func TestBWMF(t *testing.T) {
 				}`),
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcdURLs, tb, topo.NewFullTopology(numOfTasks))
+		go drive(
+			t, 
+			job, 
+			etcdURLs, 
+			tb, 
+			map[string]int{
+    			"master" : topo.NewFullTopologyOfMaster(numOfTasks))
+				"neighbor" : topo.NewFullTopologyOfNeighbor(numOfTasks)
+			}
+		)
 	}
 
 	ctl.WaitForJobDone()
