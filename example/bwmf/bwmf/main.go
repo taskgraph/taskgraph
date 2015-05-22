@@ -57,8 +57,8 @@ func main() {
 			ConfBytes:  confData,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.AddLinkage("parent", topoParent)
-		bootstrap.AddLinkage("children", topoChildren)
+		bootstrap.AddLinkage("Parents", topoParent)
+		bootstrap.AddLinkage("Children", topoChildren)
 		log.Println("Starting task..")
 		bootstrap.Start()
 	case "c":
