@@ -6,8 +6,8 @@ import (
 	"math"
 	"net"
 
+	"../../taskgraph"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -22,7 +22,7 @@ type framework struct {
 
 	// user defined interfaces
 	taskBuilder taskgraph.TaskBuilder
-	topology    taskgraph.Topology
+	topology    map[string]taskgraph.Topology
 
 	task          taskgraph.Task
 	taskID        uint64
@@ -88,7 +88,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *framework) GetTopology() map[string]taskgraph.Topology { return f.topology }
 
 func (f *framework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that
