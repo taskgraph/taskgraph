@@ -4,9 +4,9 @@ import (
 	"net"
 	"testing"
 
-	"../../taskgraph"
-	"../example/topo"
-	"../framework"
+	"github.com/plutoshe/taskgraph"
+	"github.com/plutoshe/taskgraph/example/topo"
+	"github.com/plutoshe/taskgraph/framework"
 )
 
 func createListener(t *testing.T) net.Listener {

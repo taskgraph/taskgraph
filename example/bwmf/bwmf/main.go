@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"../../../controller"
-	"../../topo"
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/plutoshe/taskgraph/controller"
+	"github.com/plutoshe/taskgraph/topo"
 	"github.com/taskgraph/taskgraph/example/bwmf"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/framework"

@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"../../taskgraph"
-	"../example/topo"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/protobuf/proto"
+	"github.com/plutoshe/taskgraph"
+	"github.com/plutoshe/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/controller"
 
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"

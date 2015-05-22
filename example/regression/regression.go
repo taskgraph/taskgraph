@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"../../../taskgraph"
+	"github.com/plutoshe/taskgraph"
 )
 
 /*

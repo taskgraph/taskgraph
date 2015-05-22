@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"../../../taskgraph"
 	"github.com/golang/protobuf/proto"
+	"github.com/plutoshe/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"

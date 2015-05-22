@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"../../../taskgraph"
+	"github.com/plutoshe/taskgraph"
 	"github.com/taskgraph/taskgraph/filesystem"
 )
 
