@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/plutoshe/taskgraph"
+	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"
@@ -138,25 +138,25 @@ func (t *bwmfTask) initData() {
 func (t *bwmfTask) initOptUtil() {
 	if t.tShard == nil {
 		// XXX: Initialize it random and sparse.
-		t.tShard = &pb.MatrixShard{
-			M:   t.dims.n,
-			N:   t.dims.k,
-			Val: make([]float32, t.dims.n*t.dims.k),
+		t.tShard = &pb.MatrixShard {
+			M: t.dims.n,
+			N: t.dims.k,
+			Val: make([]float32, t.dims.n * t.dims.k),
 		}
-		for i := uint32(0); i < t.tShard.M*t.tShard.N; i++ {
+		for i := uint32(0); i < t.tShard.M * t.tShard.N; i++ {
 			t.tShard.Val[i] = rand.Float32()
 		}
 	}
 
 	if t.dShard == nil {
 		// XXX: Initial at 0.0.
-		t.dShard = &pb.MatrixShard{
-			M:   t.dims.m,
-			N:   t.dims.k,
-			Val: make([]float32, t.dims.m*t.dims.k),
+		t.dShard = &pb.MatrixShard {
+			M: t.dims.m,
+			N: t.dims.k,
+			Val: make([]float32, t.dims.m * t.dims.k),
 		}
 
-		for i := uint32(0); i < t.dShard.M*t.dShard.N; i++ {
+		for i := uint32(0); i < t.dShard.M * t.dShard.N; i++ {
 			t.dShard.Val[i] = rand.Float32()
 		}
 	}
@@ -294,7 +294,7 @@ func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *bwmfTask) fetchShards(ctx context.Context, method string) {
-	peers := t.framework.GetTopology()["Neighbors"].GetNeighbors(t.epoch)
+	peers := t.framework.GetTopology().GetNeighbors("Neighbors", t.epoch)
 	for _, peer := range peers {
 		t.framework.DataRequest(ctx, peer, method, &pb.Request{})
 	}

@@ -9,6 +9,5 @@ go get -u golang.org/x/net/context
 go get -u google.golang.org/grpc
 go get -u github.com/golang/protobuf/proto
 go get -u github.com/Azure/azure-sdk-for-go/storage
-go get -u github.com/plutoshe/taskgraph
 
 
