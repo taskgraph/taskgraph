@@ -3,9 +3,9 @@ package integration
 import (
 	"testing"
 
+	"../controller"
+	"../example/regression"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/regression"
 )
 
 func TestRegressionFramework(t *testing.T) {

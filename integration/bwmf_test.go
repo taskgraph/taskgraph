@@ -3,12 +3,12 @@ package integration
 import (
 	"testing"
 
+	"../../taskgraph"
+	"../example/bwmf"
+	"../example/topo"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/bwmf"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
-	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/filesystem"
 )
 

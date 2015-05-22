@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"../../taskgraph"
-	"github.com/taskgraph/taskgraph/example/topo"
-	"github.com/taskgraph/taskgraph/framework"
+	"../example/topo"
+	"../framework"
 )
 
 func createListener(t *testing.T) net.Listener {
@@ -20,14 +20,14 @@ func createListener(t *testing.T) net.Listener {
 // This is used to show how to drive the network.
 func driveWithTreeTopo(t *testing.T, jobName string, etcds []string, ntask uint64, taskBuilder taskgraph.TaskBuilder) {
 	drive(
-		t, 
-		jobName, 
-		etcds, 
-		taskBuilder, 
-		map[string]int{
-			"parent" : topo.NewTreeTopologyOfParent(numOfTasks))
-			"children" : topo.NewTreeTopologyOfNeighbor(numOfTasks)
-		}
+		t,
+		jobName,
+		etcds,
+		taskBuilder,
+		map[string]taskgraph.Topology{
+			"Parents":  topo.NewTreeTopologyOfParent(2, ntask),
+			"Children": topo.NewTreeTopologyOfChildren(2, ntask),
+		},
 	)
 }
 

@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
+	"../../../taskgraph"
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

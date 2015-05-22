@@ -7,8 +7,8 @@ import (
 	"os"
 	"strconv"
 
+	"../../../taskgraph"
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -103,7 +103,7 @@ func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
 
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
-	for _, c := range t.framework.GetTopology()["Children"].GetNeighborst.epoch) {
+	for _, c := range t.framework.GetTopology()["Children"].GetNeighbors(epoch) {
 		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
 	}
 }

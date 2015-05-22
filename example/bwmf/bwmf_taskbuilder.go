@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/taskgraph/taskgraph"
+	"../../../taskgraph"
 	"github.com/taskgraph/taskgraph/filesystem"
 )
 

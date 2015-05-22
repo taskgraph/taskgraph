@@ -4,9 +4,9 @@ import (
 	"log"
 	"testing"
 
+	"../controller"
+	"../example/regression"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/regression"
 )
 
 // TestMasterSetEpochFailure checks if a master task failed at SetEpoch,
