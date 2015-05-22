@@ -8,7 +8,7 @@ type TreeTopologyOfChildren struct {
 	children           []uint64
 }
 
-func (t *TreeTopology) SetTaskID(taskID uint64) {
+func (t *TreeTopologyOfChildren) SetTaskID(taskID uint64) {
 	t.taskID = taskID
 	// Not the most efficient way to create parents and children, but
 	// since this is not on critical path, we are ok.
@@ -22,14 +22,14 @@ func (t *TreeTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *TreeTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *TreeTopologyOfChildren) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	return t.children
 }
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
-func NewTreeTopologyOfChildren(fanout, nTasks uint64) *TreeTopology {
-	m := &TreeTopology{
+func NewTreeTopologyOfChildren(fanout, nTasks uint64) *TreeTopologyOfChildren {
+	m := &TreeTopologyOfChildren{
 		fanout:     fanout,
 		numOfTasks: nTasks,
 	}

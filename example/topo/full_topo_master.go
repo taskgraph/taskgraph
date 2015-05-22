@@ -12,7 +12,7 @@ type FullTopologyOfMaster struct {
 
 // TODO, do we really need to expose this? Ideally after proper construction of StarTopology
 // we should not need to set this again.
-func (t *FullTopology) SetTaskID(taskID uint64) {
+func (t *FullTopologyOfMaster) SetTaskID(taskID uint64) {
 	t.all = make([]uint64, 0, t.numOfTasks)
 	t.taskID = taskID
 	for index := uint64(0); index < t.numOfTasks; index++ {
@@ -20,7 +20,7 @@ func (t *FullTopology) SetTaskID(taskID uint64) {
 	}
 }
 
-func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
+func (t *FullTopologyOfMaster) GetNeighbors(linkType string, epoch uint64) []uint64 {
 	res := make([]uint64, 0)
 	if t.taskID == 0 {
 		res = t.all
@@ -30,8 +30,8 @@ func (t *FullTopology) GetNeighbors(linkType string, epoch uint64) []uint64 {
 
 // Creates a new tree topology with given fanout and number of tasks.
 // This will be called during the task graph configuration.
-func NewFullTopologyOfMaster(nTasks uint64) *FullTopology {
-	return &FullTopology{
+func NewFullTopologyOfMaster(nTasks uint64) *FullTopologyOfMaster {
+	return &FullTopologyOfMaster{
 		numOfTasks: nTasks,
 	}
 }

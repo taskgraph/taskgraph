@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"../example/topo"
+	"../../../controller"
+	"../../topo"
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/bwmf"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/framework"
