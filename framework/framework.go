@@ -22,7 +22,11 @@ type framework struct {
 
 	// user defined interfaces
 	taskBuilder taskgraph.TaskBuilder
-	topology    map[string]taskgraph.Topology
+	// user topology defines as a set of linkType topology,
+	// the key of map respresents the link type in our topology, like "Master", "Parents",
+	// for every key, the map contianer store the linkType topology as interface decleared
+	// and serves as decribing the linking by returning the corresponding taskID set
+	topology map[string]taskgraph.Topology
 
 	task          taskgraph.Task
 	taskID        uint64

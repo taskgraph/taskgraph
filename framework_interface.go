@@ -14,6 +14,8 @@ type Bootstrap interface {
 	SetTaskBuilder(taskBuilder TaskBuilder)
 
 	// This allow the application to specify how tasks are connection at each epoch
+
+	// This allow user add their own link type of Topology into framework topology
 	AddLinkage(linkType string, topology Topology)
 
 	// After all the configure is done, driver need to call start so that all

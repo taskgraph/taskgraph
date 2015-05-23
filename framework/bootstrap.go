@@ -69,6 +69,8 @@ func (f *framework) Start() {
 	// Both should be initialized at this point.
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
+
+	// SetTaskID to every linkType topology in our map topology container
 	for key, _ := range f.topology {
 		f.topology[key].SetTaskID(f.taskID)
 	}

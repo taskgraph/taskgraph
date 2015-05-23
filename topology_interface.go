@@ -3,7 +3,8 @@ The topology is a data structure implemented by application, and
 used by framework implementation to setup/manage the event according to
 a set of topology defined here.
 
-Each Topology describe a specific link in overall topology.
+Each Topology describe a specific linkType in overall topology.
+After SetTaskID(), GetNeighbors() return the result of this relationship of this taskID
 For instance, a topology describe a master link, it will instruct
 the framework the master link of node in each epoch.
 
