@@ -1,12 +1,45 @@
 package bwmf
 
 import (
+	"fmt"
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	fs "github.com/taskgraph/taskgraph/filesystem"
 )
+
+func GetFsClient(config *Config) (fs.Client, error) {
+	var client fs.Client
+	var cltErr error
+	switch config.IOConf.Fs {
+	case "local":
+		client = fs.NewLocalFSClient()
+	case "hdfs":
+		client, cltErr = fs.NewHdfsClient(
+			config.IOConf.HdfsConf.NamenodeAddr,
+			config.IOConf.HdfsConf.WebHdfsAddr,
+			config.IOConf.HdfsConf.User,
+		)
+		if cltErr != nil {
+			return nil, fmt.Errorf("Failed creating hdfs client %s", cltErr)
+		}
+	case "azure":
+		client, cltErr = fs.NewAzureClient(
+			config.IOConf.AzureConf.AccountName,
+			config.IOConf.AzureConf.AccountKey,
+			config.IOConf.AzureConf.BlogServiceBaseUrl,
+			config.IOConf.AzureConf.ApiVersion,
+			config.IOConf.AzureConf.UseHttps,
+		)
+		if cltErr != nil {
+			return nil, fmt.Errorf("Failed creating azure client %s", cltErr)
+		}
+	default:
+		return nil, fmt.Errorf("Unknow fs: %s", config.IOConf.Fs)
+	}
+	return client, nil
+}
 
 func LoadMatrixShard(client fs.Client, path string) (*pb.MatrixShard, error) {
 	shard := &pb.MatrixShard{}
