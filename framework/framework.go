@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
+	"github.com/plutoshe/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -22,7 +22,11 @@ type framework struct {
 
 	// user defined interfaces
 	taskBuilder taskgraph.TaskBuilder
-	topology    taskgraph.Topology
+	// user topology defines as a set of linkType topology,
+	// the key of map respresents the link type in our topology, like "Master", "Parents",
+	// for every key, the map contianer store the linkType topology as interface decleared
+	// and serves as decribing the linking by returning the corresponding taskID set
+	topology map[string]taskgraph.Topology
 
 	task          taskgraph.Task
 	taskID        uint64
@@ -88,7 +92,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *framework) GetTopology() map[string]taskgraph.Topology { return f.topology }
 
 func (f *framework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that

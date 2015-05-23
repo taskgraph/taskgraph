@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/taskgraph/taskgraph"
+	"github.com/plutoshe/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -103,7 +103,7 @@ func (t *dummyMaster) enterEpoch(ctx context.Context, epoch uint64) {
 
 	t.epoch = epoch
 	t.param.Value = int32(t.epoch)
-	for _, c := range t.framework.GetTopology().GetNeighbors("Children", t.epoch) {
+	for _, c := range t.framework.GetTopology()["Children"].GetNeighbors(epoch) {
 		t.framework.DataRequest(ctx, c, "/proto.Regression/GetGradient", &pb.Input{})
 	}
 }
@@ -158,7 +158,7 @@ func (t *dummyMaster) ChildDataReady(ctx context.Context, childID uint64, output
 	// This is a weak form of checking. We can also check the task ids.
 	// But this really means that we get all the events from children, we
 	// should go into the next epoch now.
-	if len(t.fromChildren) == len(t.framework.GetTopology().GetNeighbors("Children", t.epoch)) {
+	if len(t.fromChildren) == len(t.framework.GetTopology()["Children"].GetNeighbors(t.epoch)) {
 		t.gradient = new(pb.Gradient)
 		for _, g := range t.fromChildren {
 			t.gradient.Value += g.Value

@@ -6,9 +6,9 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
+	"github.com/plutoshe/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/regression"
-	"github.com/taskgraph/taskgraph/example/topo"
+	"github.com/plutoshe/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 
@@ -38,7 +38,9 @@ func main() {
 			MasterConfig:       map[string]string{"writefile": "result.txt"},
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(topo.NewTreeTopology(2, ntask))
+
+		bootstrap.AddLinkage("Parents" : topo.NewTreeTopologyOfParent(2, ntask))
+		bootstrap.AddLinkage("Children" : topo.NewTreeTopologyOfChildren(2, ntask))
 		bootstrap.Start()
 	default:
 		log.Fatal("Please choose a type: (c) controller, (t) task")
