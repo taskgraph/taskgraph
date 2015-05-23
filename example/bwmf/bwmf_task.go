@@ -115,8 +115,6 @@ func (t *bwmfTask) initData() {
 		m: t.rowShard.M,
 		n: t.columnShard.M,
 		k: t.config.OptConf.DimLatent,
-		M: 0,
-		N: 0,
 	}
 
 	if t.config.IOConf.InitDPath != "" {
