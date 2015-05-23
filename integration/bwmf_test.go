@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/plutoshe/taskgraph"
+	"github.com/plutoshe/taskgraph/example/bwmf"
+	"github.com/plutoshe/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/bwmf"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
-	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/filesystem"
 )
 
@@ -44,7 +45,16 @@ func TestBWMF(t *testing.T) {
 				}`),
 	}
 	for i := uint64(0); i < numOfTasks; i++ {
-		go drive(t, job, etcdURLs, tb, topo.NewFullTopology(numOfTasks))
+		go drive(
+			t,
+			job,
+			etcdURLs,
+			tb,
+			map[string]taskgraph.Topology{
+				"Master":    topo.NewFullTopologyOfMaster(numOfTasks),
+				"Neighbors": topo.NewFullTopologyOfNeighbor(numOfTasks),
+			},
+		)
 	}
 
 	ctl.WaitForJobDone()

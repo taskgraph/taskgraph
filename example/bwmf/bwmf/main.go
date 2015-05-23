@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
+	"github.com/plutoshe/taskgraph/controller"
+	"github.com/plutoshe/taskgraph/example/topo"
+	"github.com/plutoshe/taskgraph/framework"
 	"github.com/taskgraph/taskgraph/example/bwmf"
-	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/filesystem"
-	"github.com/taskgraph/taskgraph/framework"
 )
 
 func main() {
@@ -46,7 +46,8 @@ func main() {
 	etcdUrls := strings.Split(*etcdUrlList, ",")
 	log.Println("etcd urls: ", etcdUrls)
 
-	topo := topo.NewFullTopology(uint64(*numTasks))
+	topoMaster := topo.NewFullTopologyOfMaster(uint64(*numTasks))
+	topoNeighbors := topo.NewFullTopologyOfNeighbor(uint64(*numTasks))
 
 	switch *jobType {
 	case "t":
@@ -56,7 +57,8 @@ func main() {
 			ConfBytes:  confData,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(topo)
+		bootstrap.AddLinkage("Master", topoMaster)
+		bootstrap.AddLinkage("Neighbors", topoNeighbors)
 		log.Println("Starting task..")
 		bootstrap.Start()
 	case "c":

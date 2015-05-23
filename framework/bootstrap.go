@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph"
+	"github.com/plutoshe/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )
@@ -28,7 +28,13 @@ func (f *framework) SetTaskBuilder(taskBuilder taskgraph.TaskBuilder) {
 	f.taskBuilder = taskBuilder
 }
 
-func (f *framework) SetTopology(topology taskgraph.Topology) { f.topology = topology }
+//The user add their topology link to the original topology by this function
+func (f *framework) AddLinkage(linkType string, topology taskgraph.Topology) {
+	if f.topology == nil {
+		f.topology = make(map[string]taskgraph.Topology)
+	}
+	f.topology[linkType] = topology
+}
 
 func (f *framework) Start() {
 	var err error
@@ -63,7 +69,11 @@ func (f *framework) Start() {
 	// Both should be initialized at this point.
 	// Get the task implementation and topology for this node (indentified by taskID)
 	f.task = f.taskBuilder.GetTask(f.taskID)
-	f.topology.SetTaskID(f.taskID)
+
+	// SetTaskID to every linkType topology in our map topology container
+	for key, _ := range f.topology {
+		f.topology[key].SetTaskID(f.taskID)
+	}
 
 	f.heartbeat()
 	f.setup()
@@ -139,6 +149,8 @@ func (f *framework) setEpochStarted() {
 	f.userCtx, f.userCtxCancel = context.WithCancel(f.userCtx)
 
 	f.task.EnterEpoch(f.userCtx, f.epoch)
+
+	// setup etcd watches
 	f.watchMeta()
 }
 

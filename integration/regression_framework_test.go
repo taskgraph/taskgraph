@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/regression"
+	"github.com/plutoshe/taskgraph/controller"
+	"github.com/plutoshe/taskgraph/example/regression"
 )
 
 func TestRegressionFramework(t *testing.T) {

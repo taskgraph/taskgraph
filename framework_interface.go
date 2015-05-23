@@ -14,7 +14,9 @@ type Bootstrap interface {
 	SetTaskBuilder(taskBuilder TaskBuilder)
 
 	// This allow the application to specify how tasks are connection at each epoch
-	SetTopology(topology Topology)
+
+	// This allow user add their own link type of Topology into framework topology
+	AddLinkage(linkType string, topology Topology)
 
 	// After all the configure is done, driver need to call start so that all
 	// nodes will get into the event loop to run the application.
@@ -25,7 +27,7 @@ type Bootstrap interface {
 // high level features.
 type Framework interface {
 	// This allow the task implementation query its neighbors.
-	GetTopology() Topology
+	GetTopology() map[string]Topology
 
 	// Kill the framework itself.
 	// As epoch changes, some nodes isn't needed anymore
