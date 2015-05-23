@@ -70,7 +70,7 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		f.log.Panicf("Can not find epochKey in FlagMeta, epoch: %d", epoch)
 	}
 	// send the meta change notification to every task of specified link type.
-	for _, id := range f.topology.GetNeighbors(linkType, epoch) {
+	for _, id := range f.topology[linkType].GetNeighbors(epoch) {
 		// The value is made of "epoch-fromID-metadata"
 		//
 		// Epoch is prepended to meta. When a new one starts and replaces
