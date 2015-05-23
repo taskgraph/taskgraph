@@ -215,17 +215,10 @@ func (t *bwmfTask) OnStart(ctx context.Context) {
 	go t.run()
 }
 
-func (t *bwmfTask) getDShard() *pb.Response {
+func (t *bwmfTask) getShard(shard *pb.MatrixShard) *pb.Response {
 	return &pb.Response{
 		BlockId: t.taskID,
-		Shard:   t.dShard,
-	}
-}
-
-func (t *bwmfTask) getTShard() *pb.Response {
-	return &pb.Response{
-		BlockId: t.taskID,
-		Shard:   t.tShard,
+		Shard:   shard,
 	}
 }
 
@@ -242,7 +235,7 @@ func (t *bwmfTask) run() {
 				break
 			}
 			// We only return the data shard of previous epoch. So it always exists.
-			req.retT <- t.getTShard()
+			req.retT <- t.getShard(t.tShard)
 		case req := <-t.getD:
 			t.logger.Printf("trying to serve D shard, task %d, epoch %d", t.taskID, t.epoch)
 			err := t.framework.CheckGRPCContext(req.ctx)
@@ -250,7 +243,7 @@ func (t *bwmfTask) run() {
 				close(req.retD)
 				break
 			}
-			req.retD <- t.getDShard()
+			req.retD <- t.getShard(t.dShard)
 		case dataReady := <-t.dataReady:
 			t.doDataReady(dataReady.ctx, dataReady.fromID, dataReady.method, dataReady.output)
 		case done := <-t.updateDone:
