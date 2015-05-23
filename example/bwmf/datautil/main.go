@@ -129,40 +129,8 @@ func matPbToTxt(shard *pb.MatrixShard) error {
 	return nil
 }
 
-func getFsClient(config *bwmf.Config) (fs.Client, error) {
-	var client fs.Client
-	var cltErr error
-	switch config.IOConf.Fs {
-	case "local":
-		client = fs.NewLocalFSClient()
-	case "hdfs":
-		client, cltErr = fs.NewHdfsClient(
-			config.IOConf.HdfsConf.NamenodeAddr,
-			config.IOConf.HdfsConf.WebHdfsAddr,
-			config.IOConf.HdfsConf.User,
-		)
-		if cltErr != nil {
-			return nil, fmt.Errorf("Failed creating hdfs client %s", cltErr)
-		}
-	case "azure":
-		client, cltErr = fs.NewAzureClient(
-			config.IOConf.AzureConf.AccountName,
-			config.IOConf.AzureConf.AccountKey,
-			config.IOConf.AzureConf.BlogServiceBaseUrl,
-			config.IOConf.AzureConf.ApiVersion,
-			config.IOConf.AzureConf.UseHttps,
-		)
-		if cltErr != nil {
-			return nil, fmt.Errorf("Failed creating azure client %s", cltErr)
-		}
-	default:
-		return nil, fmt.Errorf("Unknow fs: %s", config.IOConf.Fs)
-	}
-	return client, nil
-}
-
 func saveResult(shard *pb.MatrixShard, config *bwmf.Config, path string) error {
-	client, err := getFsClient(config)
+	client, err := GetFsClient(config)
 	if err != nil {
 		return fmt.Errorf("Failed getting filesystem.Client: %s", err)
 	}
@@ -170,7 +138,7 @@ func saveResult(shard *pb.MatrixShard, config *bwmf.Config, path string) error {
 }
 
 func loadPbBuffer(config *bwmf.Config, path string) (*pb.MatrixShard, error) {
-	client, err := getFsClient(config)
+	client, err := GetFsClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed getting filesystem.Client: %s", err)
 	}

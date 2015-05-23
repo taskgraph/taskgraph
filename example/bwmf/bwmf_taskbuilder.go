@@ -2,10 +2,8 @@ package bwmf
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/filesystem"
 )
 
 type BWMFTaskBuilder struct {
@@ -20,33 +18,9 @@ func (tb BWMFTaskBuilder) GetTask(taskID uint64) taskgraph.Task {
 		panic(unmarshErr)
 	}
 
-	var client filesystem.Client
-	var cltErr error
-	switch config.IOConf.Fs {
-	case "local":
-		client = filesystem.NewLocalFSClient()
-	case "hdfs":
-		client, cltErr = filesystem.NewHdfsClient(
-			config.IOConf.HdfsConf.NamenodeAddr,
-			config.IOConf.HdfsConf.WebHdfsAddr,
-			config.IOConf.HdfsConf.User,
-		)
-		if cltErr != nil {
-			panic(cltErr)
-		}
-	case "azure":
-		client, cltErr = filesystem.NewAzureClient(
-			config.IOConf.AzureConf.AccountName,
-			config.IOConf.AzureConf.AccountKey,
-			config.IOConf.AzureConf.BlogServiceBaseUrl,
-			config.IOConf.AzureConf.ApiVersion,
-			config.IOConf.AzureConf.UseHttps,
-		)
-		if cltErr != nil {
-			panic(cltErr)
-		}
-	default:
-		panic(fmt.Errorf("Unknow fs: %s", config.IOConf.Fs))
+	client, err := GetFsClient(config)
+	if err != nil {
+		panic(err)
 	}
 
 	return &bwmfTask{
