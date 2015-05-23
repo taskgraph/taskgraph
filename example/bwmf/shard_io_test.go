@@ -51,4 +51,6 @@ func TestShardIO(t *testing.T) {
 			}
 		}
 	}
+
+	client.Remove(path)
 }
