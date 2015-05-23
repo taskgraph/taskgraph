@@ -10,6 +10,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/plutoshe/taskgraph/controller"
+
 	"github.com/plutoshe/taskgraph/example/topo"
 	"github.com/plutoshe/taskgraph/framework"
 	"github.com/taskgraph/taskgraph/example/bwmf"
