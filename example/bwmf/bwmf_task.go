@@ -66,8 +66,6 @@ type bwmfTask struct {
 	fsClient filesystem.Client
 
 	// optimization toolkits
-	dLoss        *KLDivLoss
-	tLoss        *KLDivLoss
 	dParam       op.Parameter
 	tParam       op.Parameter
 	optimizer    *op.ProjectedGradient
