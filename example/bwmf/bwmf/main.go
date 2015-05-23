@@ -63,7 +63,7 @@ func main() {
 		log.Println("Starting task..")
 		bootstrap.Start()
 	case "c":
-		controller := controller.New(*jobName, etcd.NewClient(etcdUrls), uint64(*numTasks), topo.GetLinkTypes())
+		controller := controller.New(*jobName, etcd.NewClient(etcdUrls), uint64(*numTasks), []string{"Master", "Neighbors"})
 		controller.Start()
 		log.Println("Controller started.")
 		controller.WaitForJobDone()
