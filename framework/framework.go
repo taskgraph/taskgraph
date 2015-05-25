@@ -34,7 +34,7 @@ type framework struct {
 
 	// A meta is a signal for specific epoch some task has some data.
 	// However, our fault tolerance mechanism will start another task if it failed
-	// and flag the same meta again. Therefore, we keep track of  notified meta.
+	// and flag the same meta again. Therefore, we keep track of notified meta.
 	metaNotified map[string]bool
 
 	// etcd stops

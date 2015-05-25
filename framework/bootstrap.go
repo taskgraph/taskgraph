@@ -108,7 +108,7 @@ func (f *framework) run() {
 			// the epoch that was meant for this event. This context will be passed
 			// to user event handler functions and used to ask framework to do work later
 			// with previous information.
-			f.handleMetaChange(f.userCtx, meta.from, meta.linkType, meta.meta)
+			go f.handleMetaChange(f.userCtx, meta.from, meta.linkType, meta.meta)
 		case req := <-f.dataReqtoSendChan:
 			if req.epoch != f.epoch {
 				f.log.Printf("abort data request, to %d, epoch %d, method %s", req.taskID, req.epoch, req.method)
@@ -228,16 +228,5 @@ func (f *framework) watchMeta() {
 }
 
 func (f *framework) handleMetaChange(ctx context.Context, taskID uint64, linkType, meta string) {
-	// check if meta is handled before.
-	tm := taskMeta(taskID, meta)
-	if _, ok := f.metaNotified[tm]; ok {
-		return
-	}
-	f.metaNotified[tm] = true
-
 	f.task.MetaReady(ctx, taskID, linkType, meta)
-}
-
-func taskMeta(taskID uint64, meta string) string {
-	return fmt.Sprintf("%s-%s", strconv.FormatUint(taskID, 10), meta)
 }

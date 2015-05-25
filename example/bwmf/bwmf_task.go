@@ -77,7 +77,7 @@ type bwmfTask struct {
 	getD        chan *event
 	dataReady   chan *event
 	updateDone  chan *event
-	metaReady   chan *event
+	workerDone  chan *event
 	exitChan    chan *event
 }
 
@@ -201,15 +201,8 @@ func (t *bwmfTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.getD = make(chan *event, 1)
 	t.dataReady = make(chan *event, t.numOfTasks)
 	t.updateDone = make(chan *event, 1)
-	t.metaReady = make(chan *event, 1)
+	t.workerDone = make(chan *event, 1)
 	t.exitChan = make(chan *event)
-	go t.run()
-}
-
-func (t *bwmfTask) OnStart(ctx context.Context) {
-	if t.taskID == 0 {
-		t.framework.FlagMeta(ctx, "Workers", "0")
-	}
 	go t.run()
 }
 
@@ -246,7 +239,7 @@ func (t *bwmfTask) run() {
 			t.doDataReady(dataReady.ctx, dataReady.fromID, dataReady.method, dataReady.output)
 		case done := <-t.updateDone:
 			t.notifyMaster(done.ctx)
-		case notify := <-t.metaReady:
+		case notify := <-t.workerDone:
 			t.notifyUpdate(notify.ctx, notify.fromID)
 		case <-t.exitChan:
 			return
@@ -275,7 +268,11 @@ func (t *bwmfTask) finish() {
 }
 
 func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
-	t.epochChange <- &event{ctx: ctx, epoch: epoch}
+	// TODO: This should be done in Init(). I will fix this once framework is also refactored.
+	// NOTE: I'm assuming that task 0 won't die.
+	if t.taskID == 0 {
+		t.framework.FlagMeta(ctx, "Neighbors", "0")
+	}
 }
 
 func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
@@ -397,7 +394,25 @@ func (t *bwmfTask) GetDShard(ctx context.Context, request *pb.Request) (*pb.Resp
 }
 
 func (t *bwmfTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
-	t.metaReady <- &event{ctx: ctx, fromID: fromID}
+	t.logger.Printf("MetaReady, task %d, from: %d, linkType: %s, meta: %s", t.taskID, fromID, linkType, meta)
+	switch linkType {
+	case "Master":
+		go t.receiveUpdateDone(ctx, fromID)
+	case "Neighbors":
+		epoch, err := strconv.ParseUint(meta, 10, 64)
+		if err != nil {
+			t.logger.Panicf("Cannot parse epoch from meta: %s", meta)
+		}
+		go t.receiveEpochChange(ctx, epoch)
+	}
+}
+
+func (t *bwmfTask) receiveUpdateDone(ctx context.Context, fromID uint64) {
+	t.workerDone <- &event{ctx: ctx, fromID: fromID}
+}
+
+func (t *bwmfTask) receiveEpochChange(ctx context.Context, epoch uint64) {
+	t.epochChange <- &event{ctx: ctx, epoch: epoch}
 }
 
 func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
@@ -406,7 +421,7 @@ func (t *bwmfTask) notifyUpdate(ctx context.Context, fromID uint64) {
 	if len(t.peerUpdated) == int(t.numOfTasks) {
 		t.logger.Printf("All tasks update done, epoch %d", t.epoch)
 		if t.epoch < 2*t.config.OptConf.NumIters {
-			t.framework.IncEpoch(ctx)
+			t.framework.FlagMeta(ctx, "Neighbors", strconv.FormatUint(t.epoch+1, 10))
 		} else {
 			t.framework.ShutdownJob()
 		}
