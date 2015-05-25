@@ -15,9 +15,9 @@ func TestShardIO(t *testing.T) {
 
 	oldShard := &pb.MatrixShard{
 		IsSparse: false,
-		M: m,
-		N: n,
-		Val: []float32 {0.70, 1.00, 0.90, 0.70, 0.80, 0.90},
+		M:        m,
+		N:        n,
+		Val:      []float32{0.70, 1.00, 0.90, 0.70, 0.80, 0.90},
 	}
 
 	client.Remove(path)

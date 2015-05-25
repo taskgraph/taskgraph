@@ -15,16 +15,16 @@ import (
 //  So actually H is H^T, but it saves code by using identical routine when alternatively optimize over H and W.
 //
 type KLDivLoss struct {
-	V       Matrix
-	W       Matrix
-	smooth  float32
+	V      Matrix
+	W      Matrix
+	smooth float32
 }
 
 func NewKLDivLoss(v *pb.MatrixShard, w []*pb.MatrixShard, m, n, k uint32, smooth float32) *KLDivLoss {
 	wData := &pb.MatrixShard{M: m, N: k, Val: make([]float32, m*k)}
 	idx := 0
 	for _, w_ := range w {
-		for i := uint32(0); i < w_.M * w_.N; i+=1 {
+		for i := uint32(0); i < w_.M*w_.N; i += 1 {
 			wData.Val[idx] = w_.Val[i]
 			idx += 1
 		}
@@ -84,9 +84,9 @@ func (l *KLDivLoss) Evaluate(H op.Parameter, gradient op.Parameter) float32 {
 			}
 
 			// accumulate to grad vec
-			value += -v*float32(math.Log(float64(wh+l.smooth)))
+			value += -v * float32(math.Log(float64(wh+l.smooth)))
 			for k := uint32(0); k < K; k += 1 {
-				grad_data[j*K+k] += -w_data[i*K+k]*(v+l.smooth)/(wh+l.smooth)
+				grad_data[j*K+k] += -w_data[i*K+k] * (v + l.smooth) / (wh + l.smooth)
 			}
 		}
 	}

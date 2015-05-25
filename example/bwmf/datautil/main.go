@@ -19,6 +19,7 @@ func main() {
 	pbFilePath := flag.String("file_path", "", "Path to save the persisted matrix data.")
 	configFile := flag.String("task_config", "", "Path to task config json file.")
 	convertType := flag.String("convert", "txt2pb", "txt2pb(default): Convert stdin txt representation of the matrix into a pb file; pb2txt: convert a pb file a txt and output via Stdout.")
+	dimN := flag.Int("n", 100, "Num of columns of the matrix. Required when convert=txt2pb.")
 
 	flag.Parse()
 
@@ -30,7 +31,7 @@ func main() {
 	switch *convertType {
 	case "txt2pb":
 		// reading mat from stdin
-		shard, err := txtToMatPb()
+		shard, err := txtToMatPb(*dimN)
 		if err != nil {
 			log.Fatalf("Failed converting txt data to mat pb. Error %s.", err)
 		}
@@ -72,24 +73,25 @@ func loadConfig(path string) (*bwmf.Config, error) {
 	return config, nil
 }
 
-func txtToMatPb() (*pb.MatrixShard, error) {
-	// Each line represents an elem, formated as "rowID columnID count".
-	// The `rowID`s are guaranteed to be sorted and grouped (as in reducer tasks of a Hadoop job).
+// NOTE(baigang): Each line represents an elem, formated as "rowID columnID count".
+// The `rowID`s are ASSUMED to be sorted and grouped (as in reducer tasks of a Hadoop job).
+func txtToMatPb(n int) (*pb.MatrixShard, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)
 
-	shard := &pb.MatrixShard{Row: make([]*pb.MatrixShard_RowData, 0)}
-	var rowData *pb.MatrixShard_RowData
+	val := make([]float32, 0)
+	ir := make([]uint32, 0)
+	jc := make([]uint32, 0)
+	ir = append(ir, 0)
+	var (
+		rowId    int
+		columnId uint32
+		value    float32
+	)
 	curRow := -1
 	for scanner.Scan() {
 		line := scanner.Text()
-		var (
-			rowId    int
-			columnId int32
-			count    float32
-		)
-
-		n, err := fmt.Sscanf(line, "%d%d%f", &rowId, &columnId, &count)
+		n, err := fmt.Sscanf(line, "%d%d%f", &rowId, &columnId, &value)
 		if err != nil || n != 3 {
 			log.Printf("Failed parse line %s with error %s.", line, err)
 			continue
@@ -97,40 +99,47 @@ func txtToMatPb() (*pb.MatrixShard, error) {
 		if curRow != rowId {
 			// a new row
 			if curRow != -1 {
-				shard.Row = append(shard.Row, rowData)
+				ir = append(ir, uint32(len(val)))
 			}
 			curRow = rowId
-			rowData = &pb.MatrixShard_RowData{
-				RowId: int32(curRow),
-				At:    make(map[int32]float32),
-			}
 		}
-		rowData.At[columnId] = count
+		val = append(val, value)
+		jc = append(jc, columnId)
 	}
 	err := scanner.Err()
 	if err != nil {
 		return nil, err
 	}
 	if curRow != -1 {
-		shard.Row = append(shard.Row, rowData)
+		ir = append(ir, uint32(len(val)))
 	}
-	log.Println("num of rows: ", len(shard.Row))
-	return shard, nil
+	log.Println("num of rows: ", len(ir)-1)
+	log.Println("num of elems: ", len(val))
+
+	return &pb.MatrixShard{
+		IsSparse: false,
+		M:        uint32(len(ir) - 1),
+		N:        uint32(n),
+		Val:      val,
+		Ir:       ir,
+		Jc:       jc,
+	}, nil
 }
 
 func matPbToTxt(shard *pb.MatrixShard) error {
-	for _, row := range shard.Row {
-		fmt.Printf("%d\t", row.RowId)
-		for col, val := range row.At {
-			fmt.Printf("%d %f ", col, val)
+	if len(shard.Val) != len(shard.Jc) || len(shard.Ir) != int(shard.M+1) {
+		return fmt.Errorf("MatrixShard data corrupted. Len val: %d, len Jc: %d, len Ia: %d, shard M: %d", len(shard.Val), len(shard.Jc), len(shard.Ir), shard.M)
+	}
+	for rowId := uint32(0); rowId < shard.M; rowId++ {
+		for j := shard.Ir[rowId]; j < shard.Ir[rowId+1]; j++ {
+			fmt.Printf("%d\t%d\t%f\n", rowId, shard.Jc[j], shard.Val[j])
 		}
-		fmt.Printf("\n")
 	}
 	return nil
 }
 
 func saveResult(shard *pb.MatrixShard, config *bwmf.Config, path string) error {
-	client, err := GetFsClient(config)
+	client, err := bwmf.GetFsClient(config)
 	if err != nil {
 		return fmt.Errorf("Failed getting filesystem.Client: %s", err)
 	}
@@ -138,7 +147,7 @@ func saveResult(shard *pb.MatrixShard, config *bwmf.Config, path string) error {
 }
 
 func loadPbBuffer(config *bwmf.Config, path string) (*pb.MatrixShard, error) {
-	client, err := GetFsClient(config)
+	client, err := bwmf.GetFsClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed getting filesystem.Client: %s", err)
 	}
