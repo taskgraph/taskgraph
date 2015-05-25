@@ -39,7 +39,8 @@ func TestRequestDataEpochMismatch(t *testing.T) {
 	fw.SetTaskBuilder(&testableTaskBuilder{
 		setupLatch: &wg,
 	})
-	fw.SetTopology(topo.NewTreeTopology(1, 1))
+	fw.AddLinkage("Parents", topo.NewTreeTopologyOfParent(1, 1))
+	fw.AddLinkage("Children", topo.NewTreeTopologyOfChildren(1, 1))
 	wg.Add(1)
 	go fw.Start()
 	wg.Wait()
@@ -95,9 +96,11 @@ func TestFrameworkFlagMeta(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(topo.NewTreeTopology(2, 2))
+	f0.AddLinkage("Parents", topo.NewTreeTopologyOfParent(2, 2))
+	f0.AddLinkage("Children", topo.NewTreeTopologyOfChildren(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(topo.NewTreeTopology(2, 2))
+	f1.AddLinkage("Parents", topo.NewTreeTopologyOfParent(2, 2))
+	f1.AddLinkage("Children", topo.NewTreeTopologyOfChildren(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()
@@ -171,9 +174,11 @@ func TestFrameworkDataRequest(t *testing.T) {
 		setupLatch: &wg,
 	}
 	f0.SetTaskBuilder(taskBuilder)
-	f0.SetTopology(topo.NewTreeTopology(2, 2))
+	f0.AddLinkage("Parents", topo.NewTreeTopologyOfParent(2, 2))
+	f0.AddLinkage("Children", topo.NewTreeTopologyOfChildren(2, 2))
 	f1.SetTaskBuilder(taskBuilder)
-	f1.SetTopology(topo.NewTreeTopology(2, 2))
+	f1.AddLinkage("Parents", topo.NewTreeTopologyOfParent(2, 2))
+	f1.AddLinkage("Children", topo.NewTreeTopologyOfChildren(2, 2))
 
 	taskBuilder.setupLatch.Add(2)
 	go f0.Start()

@@ -22,7 +22,11 @@ type framework struct {
 
 	// user defined interfaces
 	taskBuilder taskgraph.TaskBuilder
-	topology    taskgraph.Topology
+	// user topology defines as a set of linkType topology,
+	// the key of map respresents the link type in our topology, like "Master", "Parents",
+	// for every key, the map contianer store the linkType topology as interface decleared
+	// and serves as decribing the linking by returning the corresponding taskID set
+	topology map[string]taskgraph.Topology
 
 	task          taskgraph.Task
 	taskID        uint64
@@ -66,7 +70,7 @@ func (f *framework) FlagMeta(ctx context.Context, linkType, meta string) {
 		f.log.Panicf("Can not find epochKey in FlagMeta, epoch: %d", epoch)
 	}
 	// send the meta change notification to every task of specified link type.
-	for _, id := range f.topology.GetNeighbors(linkType, epoch) {
+	for _, id := range f.topology[linkType].GetNeighbors(epoch) {
 		// The value is made of "epoch-fromID-metadata"
 		//
 		// Epoch is prepended to meta. When a new one starts and replaces
@@ -96,7 +100,7 @@ func (f *framework) IncEpoch(ctx context.Context) {
 	}
 }
 
-func (f *framework) GetTopology() taskgraph.Topology { return f.topology }
+func (f *framework) GetTopology() map[string]taskgraph.Topology { return f.topology }
 
 func (f *framework) Kill() {
 	// framework select loop will quit and end like getting a exit epoch, except that

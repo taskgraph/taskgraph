@@ -297,7 +297,7 @@ func (t *bwmfTask) doEnterEpoch(ctx context.Context, epoch uint64) {
 }
 
 func (t *bwmfTask) fetchShards(ctx context.Context, method string) {
-	peers := t.framework.GetTopology().GetNeighbors("Neighbors", t.epoch)
+	peers := t.framework.GetTopology()["Neighbors"].GetNeighbors(t.epoch)
 	for _, peer := range peers {
 		t.framework.DataRequest(ctx, peer, method, &pb.Request{})
 	}

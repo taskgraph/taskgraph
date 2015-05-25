@@ -10,6 +10,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/taskgraph/taskgraph/controller"
+
 	"github.com/taskgraph/taskgraph/example/bwmf"
 	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/filesystem"
@@ -46,7 +47,8 @@ func main() {
 	etcdUrls := strings.Split(*etcdUrlList, ",")
 	log.Println("etcd urls: ", etcdUrls)
 
-	topo := topo.NewFullTopology(uint64(*numTasks))
+	topoMaster := topo.NewFullTopologyOfMaster(uint64(*numTasks))
+	topoNeighbors := topo.NewFullTopologyOfNeighbor(uint64(*numTasks))
 
 	switch *jobType {
 	case "t":
@@ -56,11 +58,12 @@ func main() {
 			ConfBytes:  confData,
 		}
 		bootstrap.SetTaskBuilder(taskBuilder)
-		bootstrap.SetTopology(topo)
+		bootstrap.AddLinkage("Master", topoMaster)
+		bootstrap.AddLinkage("Neighbors", topoNeighbors)
 		log.Println("Starting task..")
 		bootstrap.Start()
 	case "c":
-		controller := controller.New(*jobName, etcd.NewClient(etcdUrls), uint64(*numTasks), topo.GetLinkTypes())
+		controller := controller.New(*jobName, etcd.NewClient(etcdUrls), uint64(*numTasks), []string{"Master", "Neighbors"})
 		controller.Start()
 		log.Println("Controller started.")
 		controller.WaitForJobDone()
