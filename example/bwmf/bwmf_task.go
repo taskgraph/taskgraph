@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/plutoshe/taskgraph"
+	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/bwmf/proto"
 	"github.com/taskgraph/taskgraph/filesystem"
 	"github.com/taskgraph/taskgraph/op"

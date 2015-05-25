@@ -3,7 +3,7 @@ package bwmf
 import (
 	"encoding/json"
 
-	"github.com/plutoshe/taskgraph"
+	"github.com/taskgraph/taskgraph"
 )
 
 type BWMFTaskBuilder struct {

@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/plutoshe/taskgraph"
+	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
 	"golang.org/x/net/context"
 )

@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/plutoshe/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/controller"
 
-	"github.com/plutoshe/taskgraph/example/topo"
-	"github.com/plutoshe/taskgraph/framework"
 	"github.com/taskgraph/taskgraph/example/bwmf"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/filesystem"
+	"github.com/taskgraph/taskgraph/framework"
 )
 
 func main() {

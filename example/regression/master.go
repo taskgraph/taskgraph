@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/plutoshe/taskgraph"
+	"github.com/taskgraph/taskgraph"
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

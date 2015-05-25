@@ -6,9 +6,9 @@ import (
 	"net"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/plutoshe/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/controller"
 	"github.com/taskgraph/taskgraph/example/regression"
-	"github.com/plutoshe/taskgraph/example/topo"
+	"github.com/taskgraph/taskgraph/example/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 

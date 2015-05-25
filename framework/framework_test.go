@@ -9,9 +9,9 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/protobuf/proto"
-	"github.com/plutoshe/taskgraph"
-	"github.com/plutoshe/taskgraph/example/topo"
+	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
+	"github.com/taskgraph/taskgraph/example/topo"
 
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
