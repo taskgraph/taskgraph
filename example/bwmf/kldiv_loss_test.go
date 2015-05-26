@@ -30,7 +30,7 @@ func TestEvaluation(t *testing.T) {
 		t.Errorf("Loss value incorrect: actual %f, expected %f", loss_val, expectedLoss)
 	}
 
-	expectedGrad := []float32 { 1.2499998, 0.24999973, 0.24999973, 1.2499998 }
+	expectedGrad := []float32{1.2499998, 0.24999973, 0.24999973, 1.2499998}
 	if euclideanDist(g.Data(), expectedGrad) > 1e-5 {
 		t.Errorf("Gradient incorrect: actual %v, expected %v", g.Data(), expectedGrad)
 	}
@@ -50,7 +50,7 @@ func TestEvaluation(t *testing.T) {
 		t.Errorf("Loss value incorrect: actual %f, expected %f", loss_val, expectedLoss)
 	}
 
-	expectedGrad = []float32 { 1, 0, 0, 1 }
+	expectedGrad = []float32{1, 0, 0, 1}
 	if euclideanDist(g.Data(), expectedGrad) > 1e-5 {
 		t.Errorf("Gradient incorrect: actual %v, expected %v", g.Data(), expectedGrad)
 	}
@@ -71,11 +71,11 @@ func newKLDivLoss() *KLDivLoss {
 	// |-----|-----|
 	v := &pb.MatrixShard{
 		IsSparse: true,
-		M: 2,
-		N: 3,
-		Val: []float32 {1.0, 1.0, 0.5, 0.5},
-		Ir: []uint32 {1, 0, 0, 1},
-		Jc: []uint32 {0, 1, 2, 4},
+		M:        2,
+		N:        3,
+		Val:      []float32{1.0, 1.0, 0.5, 0.5},
+		Ir:       []uint32{1, 0, 0, 1},
+		Jc:       []uint32{0, 1, 2, 4},
 	}
 
 	// w is composed by two shards:
@@ -93,14 +93,14 @@ func newKLDivLoss() *KLDivLoss {
 	//
 	w := []*pb.MatrixShard{
 		&pb.MatrixShard{
-			M: 2,
-			N: n,
-			Val: []float32 {1.0, 0.0, 0.0, 1.0},
+			M:   2,
+			N:   n,
+			Val: []float32{1.0, 0.0, 0.0, 1.0},
 		},
 		&pb.MatrixShard{
-			M: 1,
-			N: n,
-			Val: []float32 {0.5, 0.5},
+			M:   1,
+			N:   n,
+			Val: []float32{0.5, 0.5},
 		},
 	}
 
@@ -115,7 +115,7 @@ func euclideanDist(x, y []float32) float64 {
 	val := 0.0
 
 	for i, xi := range x {
-		val += float64((xi-y[i])*(xi-y[i]))
+		val += float64((xi - y[i]) * (xi - y[i]))
 	}
 	return val
 }
