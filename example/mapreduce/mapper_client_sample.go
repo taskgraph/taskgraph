@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 
-	pb "./mapper_proto"
+	pb "./proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )

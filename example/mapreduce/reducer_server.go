@@ -7,7 +7,7 @@ import (
 	"net"
 	"strconv"
 
-	pb "./reducer_proto"
+	pb "./proto"
 	"google.golang.org/grpc"
 )
 

@@ -3,46 +3,31 @@ package mapreduce
 import (
 	"bufio"
 	"encoding/json"
-	"hash/fnv"
 	"io"
 	"log"
 	"math"
 	"os"
-	"path"
 	"regexp"
 	"strconv"
 
-	"../../taskgraph"
-	"../filesystem"
-	"./pkg/etcdutil"
 	pb "./proto"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/protobuf/proto"
+	"github.com/taskgraph/pkg/etcdutil"
+	"github.com/taskgraph/taskgraph"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 const nonExistWork = math.MaxUint64
 
-type mapreduceTask struct {
-	framework         taskgraph.Framework
-	taskType          string
-	epoch             uint64
-	logger            *log.Logger
-	taskID            uint64
-	workID            uint64
-	mapperNumCount    uint64
-	shuffleNumCount   uint64
-	reducerNumCount   uint64
-	outputWriter      *bufio.Writer
-	etcdClient        *etcd.Client
-	mapperWriteCloser []bufio.Writer
-
-	finishedTask     map[uint64]bool
-	config           map[string]interface{}
-	shuffleContainer map[string][]string
-	lenFinishedTask  uint64
-	mapperWorkNum    uint64
+type workerTask struct {
+	framework taskgraph.Framework
+	taskType  string
+	epoch     uint64
+	logger    *log.Logger
+	taskID    uint64
+	workID    uint64
 
 	//channels
 	epochChange  chan *mapreduceEvent
@@ -53,43 +38,10 @@ type mapreduceTask struct {
 	exitChan     chan struct{}
 	stopGrabTask chan bool
 
-	//work channels
-	mapperWorkChan  chan *mapreduceEvent
-	shuffleWorkChan chan *mapreduceEvent
-	reducerWorkChan chan *mapreduceEvent
-
 	//io writer
 	shuffleDepositWriter bufio.Writer
 
 	mapreduceConfig MapreduceConfig
-}
-
-type MapreduceConfig struct {
-	//defined the task num
-	MapperNum  uint64
-	ShuffleNum uint64
-	ReducerNum uint64
-
-	//filesystem
-	FilesystemClient filesystem.Client
-	//final result output path
-	OutputDir string
-	//temporary result output path
-	InterDir string
-
-	//emit function
-	MapperFunc  func(taskgraph.MapreduceTask, string)
-	ReducerFunc func(taskgraph.MapreduceTask, string, []string)
-
-	//store the work, appname, and etcdurls
-	UserDefined bool
-	WorkDir     map[string][]taskgraph.Work
-	AppName     string
-	EtcdURLs    []string
-
-	//optional, define the buffer size
-	ReaderBufferSize int
-	WriterBufferSize int
 }
 
 type shuffleEmit struct {
@@ -111,24 +63,6 @@ type mapreduceEvent struct {
 	meta     string
 }
 
-func (mp *mapreduceTask) Emit(key, val string) {
-	if mp.mapreduceConfig.ShuffleNum == 0 {
-		return
-	}
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	var KV mapperEmitKV
-	KV.Key = key
-	KV.Value = val
-	toShuffle := h.Sum32() % uint32(mp.mapreduceConfig.ReducerNum)
-	data, err := json.Marshal(KV)
-	data = append(data, '\n')
-	if err != nil {
-		mp.logger.Fatalf("json marshal error : ", err)
-	}
-	mp.mapperWriteCloser[toShuffle].Write(data)
-}
-
 func (mp *mapreduceTask) Clean(path string) {
 	err := mp.mapreduceConfig.FilesystemClient.Remove(path)
 	if err != nil {
@@ -145,20 +79,6 @@ func (mp *mapreduceTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.taskID = taskID
 	mp.framework = framework
 	mp.finishedTask = make(map[uint64]bool)
-	mp.mapreduceConfig.MapperNum = mp.config["MapperNum"].(uint64)
-	mp.mapreduceConfig.ShuffleNum = mp.config["ShuffleNum"].(uint64)
-	mp.mapreduceConfig.ReducerNum = mp.config["ReducerNum"].(uint64)
-	mp.mapreduceConfig.FilesystemClient = mp.config["FilesystemClient"].(filesystem.Client)
-	mp.mapreduceConfig.OutputDir = mp.config["OutputDir"].(string)
-	mp.mapreduceConfig.InterDir = mp.config["InterDir"].(string)
-	mp.mapreduceConfig.MapperFunc = mp.config["MapperFunc"].(func(taskgraph.MapreduceTask, string))
-	mp.mapreduceConfig.ReducerFunc = mp.config["ReducerFunc"].(func(taskgraph.MapreduceTask, string, []string))
-	mp.mapreduceConfig.WorkDir = mp.config["WorkDir"].(map[string][]taskgraph.Work)
-	mp.mapreduceConfig.AppName = mp.config["AppName"].(string)
-	mp.mapreduceConfig.EtcdURLs = mp.config["EtcdURLs"].([]string)
-	mp.mapreduceConfig.ReaderBufferSize = mp.config["ReaderBufferSize"].(int)
-	mp.mapreduceConfig.WriterBufferSize = mp.config["WriterBufferSize"].(int)
-	mp.etcdClient = etcd.NewClient(mp.mapreduceConfig.EtcdURLs)
 	//channel init
 	mp.stopGrabTask = make(chan bool, 1)
 	mp.epochChange = make(chan *mapreduceEvent, 1)
@@ -237,40 +157,6 @@ func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
 		mp.mapperNumCount = 0
 		mp.mapperWorkNum = uint64(len(mp.mapreduceConfig.WorkDir["mapper"]))
 		mp.reducerNumCount = 0
-	}
-}
-
-func (mp *mapreduceTask) grabWork(liveEpoch uint64, grabWorkType string) error {
-	mp.logger.Println("In grab work function, grab", grabWorkType)
-	for {
-		freeWork, err := etcdutil.WaitFreeNode(etcdutil.FreeWorkDirForType(mp.mapreduceConfig.AppName, grabWorkType), mp.etcdClient, mp.logger, mp.stopGrabTask)
-		if err != nil {
-			return err
-		}
-		if liveEpoch != mp.epoch {
-			return nil
-		}
-		mp.logger.Printf("standby grabbed free %s work %d", mp.taskType, freeWork)
-		workIDStr := strconv.FormatUint(freeWork, 10)
-		taskIDStr := strconv.FormatUint(mp.taskID, 10)
-		ok, err := etcdutil.TryOccupyNode(
-			etcdutil.FreeWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, workIDStr),
-			etcdutil.OccupyWorkPathForType(mp.mapreduceConfig.AppName, grabWorkType, workIDStr),
-			etcdutil.TaskMasterWork(mp.mapreduceConfig.AppName, taskIDStr),
-			0,
-			mp.etcdClient,
-			path.Join(mp.taskType, strconv.FormatUint(freeWork, 10)),
-		)
-		mp.logger.Println(etcdutil.TaskMasterWork(mp.mapreduceConfig.AppName, taskIDStr))
-		mp.logger.Println(path.Join(mp.taskType, strconv.FormatUint(freeWork, 10)))
-		if err != nil {
-			return err
-		}
-		if ok {
-			mp.workID = freeWork
-			return nil
-		}
-		mp.logger.Printf("standby tried work %d failed. Wait free work again.", freeWork)
 	}
 }
 
@@ -527,6 +413,7 @@ func (mp *mapreduceTask) CreateServer() *grpc.Server {
 func (mp *mapreduceTask) CreateOutputMessage(method string) proto.Message { return nil }
 
 func (mp *mapreduceTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+	t.dataReady <- &event{ctx: ctx, fromID: fromID, method: method, output: output}
 }
 
 func (m *mapreduceTask) MetaReady(ctx context.Context, fromID uint64, LinkType, meta string) {

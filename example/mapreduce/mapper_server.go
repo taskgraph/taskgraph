@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	pb "./mapper_proto"
+	pb "./proto"
 	"google.golang.org/grpc"
 )
 
