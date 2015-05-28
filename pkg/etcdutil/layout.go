@@ -31,7 +31,7 @@ const (
 	NodeAddr                 = "address"
 	NodeTTL                  = "ttl"
 	Healthy                  = "healthy"
-	MapreduceWorkerStatusDir = "workStatus"
+	MapreduceNodeStatusDir   = "nodeStatus"
 )
 
 func EpochPath(appName string) string {
@@ -80,10 +80,10 @@ func WorkerPath(job string, id uint64) string {
 }
 
 // etcd API for mapreduce based on old framework API
-func MapreduceWorkerStatusDir(appName string, id uint64) string {
+func MapreduceNodeStatusDir(appName string, id uint64) string {
 	return path.Join("/", appName, MapreduceWorkerStatusDir, strconv.FormatUint(id, 10))
 }
 
-func MapreduceWorkerStatusPath(appName string, id uint64, attr) string {
+func MapreduceNodeStatusPath(appName string, id uint64, attr) string {
 	return path.Join(MapreduceWorkerStatusDir(appName, id), attr)
 }

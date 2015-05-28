@@ -71,8 +71,6 @@ func (*masterTask) DataReady(ctx context.Context, fromID uint64, method string, 
 }
 
 func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
-	// TODO: This should be done in Init(). I will fix this once framework is also refactored.
-	// NOTE: I'm assuming that task 0 won't die.
 	if t.taskID == 0 {
 		t.framework.FlagMeta(ctx, "Neighbors", "0")
 	}
@@ -81,8 +79,6 @@ func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
 func (t *bwmfTask) CreateOutputMessage(method string) proto.Message {
 	switch method {
 	case "/proto.Master/GetWork":
-		return new(pb.WorkConfigResponse)
-	case "/proto.Master/GetTShard":
 		return new(pb.WorkConfigResponse)
 	}
 	panic("")

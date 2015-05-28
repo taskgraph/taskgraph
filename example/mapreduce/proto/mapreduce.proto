@@ -32,7 +32,7 @@ message ReducerResponse {
 }
 
 service Master {
-  rpc GetWork(WorkRequest) returns (stream WorkConfigResponse) {}
+  rpc GetWork(WorkRequest) returns (WorkConfigResponse) {}
 }
 
 message WorkRequest {
@@ -40,7 +40,7 @@ message WorkRequest {
 }
 
 message WorkConfigResponse {
-  string key = 1;
-  string value = 2;
+  repeated string key = 1;
+  repeated string value = 2;
 }
 
