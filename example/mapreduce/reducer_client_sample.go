@@ -6,30 +6,28 @@ import (
 	"io"
 	"log"
 
-	pb "./mapper_proto"
+	pb "./reducer_proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
 const (
-	address     = "localhost"
-	defaultName = "world"
+	address = "localhost"
 )
 
 var (
 	port = flag.Int("port", 10000, "The server port")
-	c    pb.MapperClient
+	c    pb.ReducerClient
 )
 
-func testEmit(key string, value string, stop bool) {
-	stream, err := c.GetEmitResult(context.Background(), &pb.MapperRequest{Key: key, Value: value})
+func testCollect(key string, value []string, stop bool) {
+	r, err := c.GetCollectResult(context.Background(), &pb.ReducerRequest{Key: key, Value: value})
 	if err != nil {
 		log.Fatalf("could not greet: %v", err)
 	}
 	if !stop {
-		fmt.Println("in Emit steps")
 		for {
-			feature, err := stream.Recv()
+			feature, err := r.Recv()
 			if err == io.EOF {
 				break
 			}
@@ -50,13 +48,14 @@ func main() {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c = pb.NewMapperClient(conn)
+	c = pb.NewReducerClient(conn)
 
 	// Contact the server and print out its response.
 	fmt.Println("link server ", (address + fmt.Sprintf(":%d", *port)))
 
-	testEmit("a b c d e f g", "", false)
-	testEmit("a a c dsdf e f gww", "", false)
-	testEmit("Stop", "Stop", true)
+	testCollect("key1", []string{"1", "10", "100", "19"}, false)
+	testCollect("key2", []string{"11", "30", "9000", "19"}, false)
+	testCollect("key3", []string{"100"}, false)
+	testCollect("Stop", []string{}, true)
 
 }

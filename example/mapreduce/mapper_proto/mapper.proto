@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package proto;
 
-// block-wise matrix data service
 service Mapper {
   rpc GetEmitResult(MapperRequest) returns (stream MapperResponse) {}
 }
