@@ -77,8 +77,8 @@ func (m *WorkRequest) String() string { return proto1.CompactTextString(m) }
 func (*WorkRequest) ProtoMessage()    {}
 
 type WorkConfigResponse struct {
-	Key   string `protobuf:"bytes,1,opt,name=key" json:"key,omitempty"`
-	Value string `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Key   []string `protobuf:"bytes,1,rep,name=key" json:"key,omitempty"`
+	Value []string `protobuf:"bytes,2,rep,name=value" json:"value,omitempty"`
 }
 
 func (m *WorkConfigResponse) Reset()         { *m = WorkConfigResponse{} }
@@ -271,7 +271,7 @@ var _Reducer_serviceDesc = grpc.ServiceDesc{
 // Client API for Master service
 
 type MasterClient interface {
-	GetWork(ctx context.Context, in *WorkRequest, opts ...grpc.CallOption) (Master_GetWorkClient, error)
+	GetWork(ctx context.Context, in *WorkRequest, opts ...grpc.CallOption) (*WorkConfigResponse, error)
 }
 
 type masterClient struct {
@@ -282,78 +282,45 @@ func NewMasterClient(cc *grpc.ClientConn) MasterClient {
 	return &masterClient{cc}
 }
 
-func (c *masterClient) GetWork(ctx context.Context, in *WorkRequest, opts ...grpc.CallOption) (Master_GetWorkClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Master_serviceDesc.Streams[0], c.cc, "/proto.Master/GetWork", opts...)
+func (c *masterClient) GetWork(ctx context.Context, in *WorkRequest, opts ...grpc.CallOption) (*WorkConfigResponse, error) {
+	out := new(WorkConfigResponse)
+	err := grpc.Invoke(ctx, "/proto.Master/GetWork", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &masterGetWorkClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Master_GetWorkClient interface {
-	Recv() (*WorkConfigResponse, error)
-	grpc.ClientStream
-}
-
-type masterGetWorkClient struct {
-	grpc.ClientStream
-}
-
-func (x *masterGetWorkClient) Recv() (*WorkConfigResponse, error) {
-	m := new(WorkConfigResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // Server API for Master service
 
 type MasterServer interface {
-	GetWork(*WorkRequest, Master_GetWorkServer) error
+	GetWork(context.Context, *WorkRequest) (*WorkConfigResponse, error)
 }
 
 func RegisterMasterServer(s *grpc.Server, srv MasterServer) {
 	s.RegisterService(&_Master_serviceDesc, srv)
 }
 
-func _Master_GetWork_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WorkRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _Master_GetWork_Handler(srv interface{}, ctx context.Context, buf []byte) (interface{}, error) {
+	in := new(WorkRequest)
+	if err := proto1.Unmarshal(buf, in); err != nil {
+		return nil, err
 	}
-	return srv.(MasterServer).GetWork(m, &masterGetWorkServer{stream})
-}
-
-type Master_GetWorkServer interface {
-	Send(*WorkConfigResponse) error
-	grpc.ServerStream
-}
-
-type masterGetWorkServer struct {
-	grpc.ServerStream
-}
-
-func (x *masterGetWorkServer) Send(m *WorkConfigResponse) error {
-	return x.ServerStream.SendMsg(m)
+	out, err := srv.(MasterServer).GetWork(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 var _Master_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "proto.Master",
 	HandlerType: (*MasterServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "GetWork",
-			Handler:       _Master_GetWork_Handler,
-			ServerStreams: true,
+			MethodName: "GetWork",
+			Handler:    _Master_GetWork_Handler,
 		},
 	},
+	Streams: []grpc.StreamDesc{},
 }

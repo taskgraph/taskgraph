@@ -7,11 +7,9 @@ import (
 	"log"
 	"math"
 	"os"
-	"regexp"
 	"strconv"
 
 	pb "./proto"
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/pkg/etcdutil"
 	"github.com/taskgraph/taskgraph"
@@ -85,10 +83,6 @@ func (mp *mapreduceTask) Init(taskID uint64, framework taskgraph.Framework) {
 	mp.dataReady = make(chan *mapreduceEvent, 1)
 	mp.metaReady = make(chan *mapreduceEvent, 1)
 	mp.exitChan = make(chan struct{})
-	mp.notifyChan = make(chan *mapreduceEvent, 1)
-	mp.mapperWorkChan = make(chan *mapreduceEvent, 1)
-	mp.shuffleWorkChan = make(chan *mapreduceEvent, 1)
-	mp.reducerWorkChan = make(chan *mapreduceEvent, 1)
 	go mp.run()
 }
 
@@ -101,102 +95,21 @@ func (mp *mapreduceTask) run() {
 		case notify := <-mp.notifyChan:
 			mp.framework.FlagMeta(notify.ctx, notify.linkType, notify.meta)
 
-		case metaReady := <-mp.metaReady:
-			go mp.processMessage(metaReady.ctx, metaReady.fromID, metaReady.linkType, metaReady.meta)
-
 		case <-mp.exitChan:
 			return
 
-		case work := <-mp.mapperWorkChan:
-			go mp.fileRead(work.ctx, mp.mapreduceConfig.WorkDir["mapper"][mp.workID])
-
-		case work := <-mp.shuffleWorkChan:
-			go mp.transferShuffleData(work.ctx)
-
-		case work := <-mp.reducerWorkChan:
-			go mp.reducerProcess(work.ctx)
+		case dataReady := <-dataReady:
+			go mp.processWork(dataReady.ctx, dataReady.fromID, dataReady.method, dataReady.output)
 		}
-	}
-}
-
-func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, linkType string, meta string) {
-	switch mp.taskType {
-	case "master":
-		matchMapper, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
-		matchReducer, _ := regexp.MatchString("^ReducerWorkFinished[0-9]+$", meta)
-		switch {
-		case matchMapper:
-			mp.mapperNumCount++
-			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.mapperNumCount, mp.mapperWorkNum, meta)
-			if mp.mapperWorkNum <= mp.mapperNumCount {
-				mp.framework.IncEpoch(ctx)
-			}
-		case matchReducer:
-			mp.reducerNumCount++
-			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.reducerNumCount, mp.mapreduceConfig.ReducerNum, meta)
-			if mp.mapreduceConfig.ReducerNum <= mp.reducerNumCount {
-				mp.framework.ShutdownJob()
-			}
-		}
-
 	}
 }
 
 // By type of task, decide eclusive progress to run
 func (mp *mapreduceTask) initializeTaskEnv(ctx context.Context) {
-	switch mp.taskType {
-	case "mapper":
-		mp.processWork(ctx, mp.mapperWorkChan)
-	case "shuffle":
-		if mp.epoch == 1 {
-			mp.processWork(ctx, mp.shuffleWorkChan)
-		}
-	case "reducer":
-		mp.processWork(ctx, mp.reducerWorkChan)
-	case "master":
-		mp.mapperNumCount = 0
-		mp.mapperWorkNum = uint64(len(mp.mapreduceConfig.WorkDir["mapper"]))
-		mp.reducerNumCount = 0
-	}
 }
 
 func (mp *mapreduceTask) processWork(ctx context.Context, workChan chan *mapreduceEvent) {
-	// At the beginning, the task must be idle, thus it grab a free work at defined path
-	mp.logger.Println("In process work function, process", mp.taskType)
-	mp.workID = nonExistWork
-	err := mp.grabWork(mp.epoch, mp.taskType)
-	mp.logger.Println("Already get work", mp.workID)
-	if err != nil {
-		mp.logger.Fatalf("MapReduce : Mapper task grab work Error, ", err)
-	}
-	if mp.workID != nonExistWork {
-		workChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch}
-	}
 
-	// Then the task watch its work status.
-	// Once it is being released, the task continue to grab a free work to process
-	receiver := make(chan *etcd.Response, 1)
-	stop := make(chan bool, 1)
-	go mp.etcdClient.Watch(etcdutil.TaskMasterWork(mp.mapreduceConfig.AppName, strconv.FormatUint(mp.taskID, 10)), 0, false, receiver, stop)
-	var num uint64 = 0
-	for resp := range receiver {
-		if resp.Action != "delete" {
-			continue
-		}
-		num++
-		mp.logger.Printf("Mapreduce : %s task process No.%d work", mp.taskType, num)
-		mp.workID = nonExistWork
-		err := mp.grabWork(mp.epoch, mp.taskType)
-		if err != nil {
-			mp.logger.Fatalf("MapReduce : Mapper task grab work Error, ", err)
-		}
-		if mp.workID != nonExistWork {
-			workChan <- &mapreduceEvent{ctx: ctx, epoch: mp.epoch}
-		} else {
-			close(stop)
-			return
-		}
-	}
 }
 
 // Read given file, process it through mapper function by user setting
@@ -381,21 +294,19 @@ func (mp *mapreduceTask) processShuffleKV(str []byte) {
 	}
 }
 
-// At present, epoch is not a required parameter for mapper
-// but it may be useful in the future
-func (mp *mapreduceTask) EnterEpoch(ctx context.Context, epoch uint64) {
+func (mp *workerTask) EnterEpoch(ctx context.Context, epoch uint64) {
 	mp.epochChange <- &mapreduceEvent{ctx: ctx, epoch: epoch}
 }
 
-func (mp *mapreduceTask) doEnterEpoch(ctx context.Context, epoch uint64) {
-	close(mp.stopGrabTask)
-	mp.stopGrabTask = make(chan bool, 1)
-	mp.epoch = epoch
-	mp.taskType = mp.getNodeTaskType()
-	mp.logger.Printf("doEnterEpoch, %s task %d, epoch %d", mp.taskType, mp.taskID, epoch)
-	mp.logger.Println(mp.taskType, " task is running on this node")
-	go mp.initializeTaskEnv(ctx)
+func (mp *workerTask) grabWork(ctx context.Context, method string) {
+	master := t.framework.GetTopology()["Master"].GetNeighbors(mp.epoch)
+	for _, node := range master {
+		t.framework.DataRequest(ctx, node, method, &pb.Request{taskID: mp.taskID})
+	}
+}
 
+func (mp *mapreduceTask) doEnterEpoch(ctx context.Context, epoch uint64) {
+	grabWork(ctx, "/proto.Master/GetWork")
 }
 
 func (mp *mapreduceTask) Exit() {

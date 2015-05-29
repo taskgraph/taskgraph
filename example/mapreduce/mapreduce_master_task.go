@@ -27,11 +27,21 @@ type masterTask struct {
 	epochChange  chan *mapreduceEvent
 	dataReady    chan *mapreduceEvent
 	metaReady    chan *mapreduceEvent
+	getWork		chan int
 	finishedChan chan *mapreduceEvent
-	notifyChan   chan *mapreduceEvent
+	notifyChanArr   []chan bool
 	exitChan     chan struct{}
 
 	mapreduceConfig MapreduceConfig
+}
+
+type mapreduceEvent {
+	ctx context.Context
+	fromID uint64
+	linkType string
+	method string
+	meta string
+	output proto.Message
 }
 
 func (t *masterTask) Init(taskID uint64, framework taskgraph.Framework) {
@@ -43,6 +53,11 @@ func (t *masterTask) Init(taskID uint64, framework taskgraph.Framework) {
 	t.getWork = make(chan *event, t.numOfTasks)
 	t.dataReady = make(chan *event, t.numOfTasks)
 	t.metaReady = make(chan *event, t.numOfTasks)
+	t.notifyChanArr = make([]chan *event, t.numOfTasks)
+	for i := range t.notifyChanArr {
+		t.notifyChanArr[i] = make(bool, 1)
+
+	}
 	t.workerDone = make(chan *event, 1)
 	t.exitChan = make(chan *event)
 	go t.run()
@@ -51,8 +66,10 @@ func (t *masterTask) Init(taskID uint64, framework taskgraph.Framework) {
 func (t *masterTask) run() {
 	for {
 		select {
-		case grabWork := <-t.getWork:
-			assignWork(grabWork)
+		case requestWorker := <-t.getWork:
+			t.assignWork(requestWorker)
+		case metaReady := <-t.metaReady:
+			go t.processMessage(metaReady.ctx, metaReady.fromID, metaReady.linkType, metaReady.meta)
 		case <-t.exitChan:
 			return
 
@@ -60,20 +77,59 @@ func (t *masterTask) run() {
 	}
 }
 
+func (t *masterTask) GetWork(in *WorkRequest) (*WorkConfigResponse, error) {
+	t.getWork<-in.taskID
+}
+
+func (t *masterTask) assignWork() {
+
+}
+
+
+func (mp *mapreduceTask) processMessage(ctx context.Context, fromID uint64, linkType string, meta string) {
+	switch mp.taskType {
+	case "master":
+		matchMapper, _ := regexp.MatchString("^MapperWorkFinished[0-9]+$", meta)
+		matchReducer, _ := regexp.MatchString("^ReducerWorkFinished[0-9]+$", meta)
+		switch {
+		case matchMapper:
+			mp.mapperNumCount++
+			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.mapperNumCount, mp.mapperWorkNum, meta)
+			if mp.mapperWorkNum <= mp.mapperNumCount {
+				mp.framework.IncEpoch(ctx)
+			}
+		case matchReducer:
+			mp.reducerNumCount++
+			mp.logger.Printf("==== finished %d works, total %d works, receive meta %s====", mp.reducerNumCount, mp.mapreduceConfig.ReducerNum, meta)
+			if mp.mapreduceConfig.ReducerNum <= mp.reducerNumCount {
+				mp.framework.ShutdownJob()
+			}
+		}
+
+	}
+}
+
+
+
 func (*masterTask) Exit() {
 	close(t.exitChan)
 }
 
-func (*masterTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+func (t *masterTask) MetaReady(ctx context.Context, fromID uint64, linkType, meta string) {
+	t.metaReady <- &mapreduceEvent{ctx: ctx, fromID: fromID, linkType: LinkType, meta: meta}
 }
 
 func (*masterTask) DataReady(ctx context.Context, fromID uint64, method string, output proto.Message) {
+
 }
 
-func (t *bwmfTask) EnterEpoch(ctx context.Context, epoch uint64) {
-	if t.taskID == 0 {
-		t.framework.FlagMeta(ctx, "Neighbors", "0")
-	}
+func (t *masterTask) initializeEnv() {
+	t.workNum = // get workNum through etcd
+	t.currentWork = // get current Work through etcd
+}
+
+func (t *masterTask) EnterEpoch(ctx context.Context, epoch uint64) {
+	t.initializeEnv()
 }
 
 func (t *bwmfTask) CreateOutputMessage(method string) proto.Message {
