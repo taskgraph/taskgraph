@@ -26,8 +26,3 @@ _testmain.go
 
 # go tool generated
 cover.out
-
-# go built executables
-example/bwmf/bwmf/bwmf
-example/bwmf/datautil/datautil
-
