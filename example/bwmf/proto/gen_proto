@@ -1,4 +1,0 @@
-#!/bin/bash -x -e
-
-protoc --plugin=$GOPATH/bin/protoc-gen-go --go_out=plugins=grpc:. bwmf.proto
-
