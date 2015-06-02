@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/taskgraph/taskgraph"
-	"github.com/taskgraph/taskgraph/example/topo"
+	"github.com/taskgraph/taskgraph/topo"
 	"github.com/taskgraph/taskgraph/framework"
 )
 

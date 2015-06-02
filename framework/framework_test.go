@@ -11,7 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/taskgraph/taskgraph"
 	"github.com/taskgraph/taskgraph/controller"
-	"github.com/taskgraph/taskgraph/example/topo"
+	"github.com/taskgraph/taskgraph/topo"
 
 	pb "github.com/taskgraph/taskgraph/example/regression/proto"
 	"github.com/taskgraph/taskgraph/pkg/etcdutil"
