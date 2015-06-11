@@ -36,15 +36,27 @@ type AzureFile struct {
 
 // convertToAzurePath function
 // convertToAzurePath splits the given name into two parts
-// The first part represents the container's name, and the length of it shoulb be 32 due to Azure restriction
+// The first part represents the container's name
 // The second part represents the blob's name
+// These names should follow the Azure naming rules(https://msdn.microsoft.com/en-us/library/azure/dd135715.aspx)
 // It will return any error while converting
 func convertToAzurePath(name string) (string, string, error) {
 	afterSplit := strings.Split(name, "/")
 	blobName := ""
+	// check the container name
+	containerLength := len(afterSplit[0])
+	if containerLength < 3 || containerLength > 63 {
+		return "", "", fmt.Errorf("Azure Storage Client : the container name length should be 3~63")
+	}
+
 	if len(afterSplit) > 1 {
 		blobName = name[len(afterSplit[0])+1:]
+		blobLength := len(blobName)
+		if blobLength < 1 || blobLength > 1024 {
+			return "", "", fmt.Errorf("Azure Storage Client : the blob name length should be 1~1024")
+		}
 	}
+
 	return afterSplit[0], blobName, nil
 }
 
@@ -54,10 +66,7 @@ func (c *AzureClient) Remove(name string) error {
 	afterSplit := strings.Split(name, "/")
 	if len(afterSplit) == 1 {
 		_, err := c.blobClient.DeleteContainerIfExists(name)
-		if err != nil {
-			return err
-		}
-		return nil
+		return err
 	}
 	containerName, blobName, err := convertToAzurePath(name)
 	if err != nil {
