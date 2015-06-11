@@ -39,7 +39,7 @@ func init() {
 
 func TestAzureClientWriteAndReadCloser(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	containerName, err := randString(10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 func TestAzureClientExistContainer(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	containerName, err := randString(10)
 	if err != nil {
 		t.Fatal(err)
 	}

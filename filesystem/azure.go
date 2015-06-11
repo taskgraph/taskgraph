@@ -36,14 +36,11 @@ type AzureFile struct {
 
 // convertToAzurePath function
 // convertToAzurePath splits the given name into two parts
-// The first part represents the container's name, and the length of it shoulb be 32 due to Azure restriction
+// The first part represents the container's name,
 // The second part represents the blob's name
 // It will return any error while converting
 func convertToAzurePath(name string) (string, string, error) {
 	afterSplit := strings.Split(name, "/")
-	if len(afterSplit[0]) != 32 {
-		return "", "", fmt.Errorf("azureClient : the length of container should be 32")
-	}
 	blobName := ""
 	if len(afterSplit) > 1 {
 		blobName = name[len(afterSplit[0])+1:]
