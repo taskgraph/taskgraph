@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -47,6 +48,15 @@ func convertToAzurePath(name string) (string, string, error) {
 	containerLength := len(afterSplit[0])
 	if containerLength < 3 || containerLength > 63 {
 		return "", "", fmt.Errorf("Azure Storage Client : the container name length should be 3~63")
+	}
+
+	match, err := regexp.MatchString("^([a-z0-9]+-?)*$", afterSplit[0])
+	if err != nil {
+		return "", "", err
+	}
+
+	if !match {
+		return "", "", fmt.Errorf("Azure Storage Client : the azure naming isn't correct")
 	}
 
 	if len(afterSplit) > 1 {
