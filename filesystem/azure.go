@@ -25,13 +25,13 @@ import (
 
 type AzureClient struct {
 	client     *storage.Client
-	blobClient *storage.BlobStorageClient
+	blobClient storage.BlobStorageClient
 }
 
 type AzureFile struct {
 	path   string
 	logger *log.Logger
-	client *storage.BlobStorageClient
+	client storage.BlobStorageClient
 }
 
 // convertToAzurePath function
