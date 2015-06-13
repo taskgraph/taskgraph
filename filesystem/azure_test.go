@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -37,9 +38,65 @@ func init() {
 	blobName = "textforexamination"
 }
 
+func TestAzureContainerNaming(t *testing.T) {
+	cli := setupAzureTest(t)
+	containerName, err := randString(10)
+	_, err = cli.Exists(containerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	containerName = "a-2-44-2-3r"
+	_, err = cli.Exists(containerName)
+	if err != nil && strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+		t.Fatal("Match container name cannot pass the testing, %s", containerName)
+	}
+
+	containerName = "22aaaaadddfefe"
+	_, err = cli.Exists(containerName)
+	if err != nil && strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+		t.Fatal("Match container name cannot pass the testing, %s", containerName)
+	}
+
+	containerName = "a2-bba-2-4222-3-43dddr-"
+	_, err = cli.Exists(containerName)
+	if err != nil && strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+		t.Fatal("Match container name cannot pass the testing, %s", containerName)
+	}
+
+	containerName = "A-a-23dddr-"
+	_, err = cli.Exists(containerName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+			t.Fatal("Non-match container name pass the testing %s", containerName)
+		}
+	} else {
+		t.Fatal("Non-match container name pass the testing, %s", containerName)
+	}
+
+	containerName = "-a-23dddr-"
+	_, err = cli.Exists(containerName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+			t.Fatal("Non-match container name pass the testing, %s", containerName)
+		}
+	} else {
+		t.Fatal("Non-match container name pass the testing, %s", containerName)
+	}
+
+	containerName = "2a--23dddr"
+	_, err = cli.Exists(containerName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "Azure Storage Client : the azure naming isn't correct") {
+			t.Fatal("Non-match container name pass the testing %s", containerName)
+		}
+	} else {
+		t.Fatal("Non-match container name pass the testing %s", containerName)
+	}
+}
+
 func TestAzureClientWriteAndReadCloser(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	containerName, err := randString(10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +139,7 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 
 func TestAzureClientExistContainer(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	containerName, err := randString(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +170,7 @@ func TestAzureClientExistContainer(t *testing.T) {
 
 func TestAzureClientExistBlob(t *testing.T) {
 	cli := setupAzureTest(t)
-	containerName, err := randString(32)
+	containerName, err := randString(10)
 	if err != nil {
 		t.Fatal(err)
 	}
