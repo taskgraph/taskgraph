@@ -3,41 +3,43 @@ package filesystem
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-var (
-	containerName, blobName, TestAzureAccountName, TestAzureAccountKey, TestAzureBlobServiceBaseUrl, apiVersion string
-	useHttps                                                                                                    bool
-)
-
-var baseBlockID = base64.StdEncoding.EncodeToString([]byte("foo"))
-
-// base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", 0)))
-
-// Example :
+// If testing, user should add at least AzureStorageAccountName,
+// AzureStorageAccountKey, AzureBlobServiceBaseUrl to env.
+// Azure Client setting example :
+// {
 // TestAzureAccountName : yourAccountName
 // TestAzureAccountKey : yourKey
 // TestAzureBlobServiceBaseUrl : "core.chinacloudapi.cn"
-// apiVersion : "2014-02-14"
-// useHttps : true
-
-func init() {
-	TestAzureAccountName = os.Getenv("TestAzureAccountName")
-	TestAzureAccountKey = os.Getenv("TestAzureAccountKey")
-	TestAzureBlobServiceBaseUrl = os.Getenv("TestAzureBlobServiceBaseUrl")
-	apiVersion = "2014-02-14"
-	useHttps = true
-	blobName = "textforexamination"
-}
+// }
 
 func TestAzureClientWriteAndReadCloser(t *testing.T) {
+	type nodeIO struct {
+		inputString []string
+	}
+
+	// import test cases
+	// add input content to check correctness of
+	// azure storage client read/write modules
+	var flagtests = []nodeIO{
+		{[]string{"some data", "some data", "some data"}},
+		{[]string{"a", "b", "c"}},
+	}
+	str := ""
+	for i := 0; i < 2000; i++ {
+		str = str + strconv.Itoa(i)
+	}
+	flagtests = append(flagtests, nodeIO{[]string{str}})
+
+	// testing
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
 	if err != nil {
@@ -49,33 +51,40 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 	}
 	defer cli.blobClient.DeleteContainer(containerName)
 
-	writeCloser, err := cli.OpenWriteCloser(containerName + "/" + blobName)
-	if err != nil {
-		t.Fatalf("OpenWriteCloser failed: %v", err)
-	}
-	defer cli.blobClient.DeleteBlob(containerName, blobName)
+	for i, tt := range flagtests {
+		blobName := "testcase" + strconv.Itoa(i)
+		writeCloser, err := cli.OpenWriteCloser(containerName + "/" + blobName)
+		if err != nil {
+			t.Fatalf("OpenWriteCloser failed: %v", err)
+		}
+		defer cli.blobClient.DeleteBlob(containerName, blobName)
+		var cmp []byte
+		for _, content := range tt.inputString {
+			data := []byte(content)
+			writeLen, err := writeCloser.Write(data)
+			if err != nil {
+				t.Fatalf("Write failed: %v", err)
+			}
+			if writeLen != len(data) {
+				t.Fatalf("Write num is not correct. Get = %d, Want = %d", writeLen, len(data))
+			}
+			cmp = append(cmp, data...)
+		}
+		writeCloser.Close()
 
-	data := []byte("some data")
-	_, err = writeCloser.Write(data)
-	_, err = writeCloser.Write(data)
-	data = []byte("some datasome data")
-	if err != nil {
-		t.Fatalf("Write failed: %v", err)
-	}
-	writeCloser.Close()
+		readCloser, err := cli.OpenReadCloser(containerName + "/" + blobName)
+		if err != nil {
+			t.Fatalf("OpenReadCloser failed: %v", err)
+		}
+		b, err := ioutil.ReadAll(readCloser)
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		readCloser.Close()
 
-	readCloser, err := cli.OpenReadCloser(containerName + "/" + blobName)
-	if err != nil {
-		t.Fatalf("OpenReadCloser failed: %v", err)
-	}
-	b, err := ioutil.ReadAll(readCloser)
-	if err != nil {
-		t.Fatalf("Read failed: %v", err)
-	}
-	readCloser.Close()
-
-	if bytes.Compare(b, data) != 0 {
-		t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(data))
+		if bytes.Compare(b, cmp) != 0 {
+			t.Fatalf("Read result isn't correct. Get = %s, Want = %s", string(b), string(cmp))
+		}
 	}
 
 }
@@ -83,6 +92,10 @@ func TestAzureClientWriteAndReadCloser(t *testing.T) {
 func TestAzureClientExistContainer(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobName, err := randString(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +130,10 @@ func TestAzureClientExistBlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	blobName, err := randString(5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
@@ -147,6 +164,10 @@ func TestAzureClientExistBlob(t *testing.T) {
 func TestAzureClientRemoveBlob(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobName, err := randString(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +220,10 @@ func TestAzureClientGlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	blobName, err := randString(5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = cli.blobClient.CreateContainerIfNotExists(containerName, storage.ContainerAccessTypeBlob)
 	if err != nil {
 		t.Fatal(err)
@@ -241,6 +266,10 @@ func TestAzureClientGlob(t *testing.T) {
 func TestAzureClientRenameBlob(t *testing.T) {
 	cli := setupAzureTest(t)
 	containerName, err := randString(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobName, err := randString(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,6 +347,11 @@ func TestAzureClientRenameContainer(t *testing.T) {
 }
 
 func setupAzureTest(t *testing.T) *AzureClient {
+	TestAzureAccountName := os.Getenv("TestAzureAccountName")
+	TestAzureAccountKey := os.Getenv("TestAzureAccountKey")
+	TestAzureBlobServiceBaseUrl := os.Getenv("TestAzureBlobServiceBaseUrl")
+	apiVersion := "2014-02-14"
+	useHttps := true
 	if TestAzureAccountName == "" || TestAzureAccountKey == "" || TestAzureBlobServiceBaseUrl == "" {
 		t.Skip("Azure config not specified.")
 	}
