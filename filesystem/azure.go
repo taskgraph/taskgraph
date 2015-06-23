@@ -109,7 +109,7 @@ func (c *AzureClient) moveBlob(dstContainerName, dstBlobName, srcContainerName, 
 }
 
 // AzureClient -> Rename function
-// support rename contianer and blob
+// support user renaming contianer/blob
 func (c *AzureClient) Rename(oldpath, newpath string) error {
 	exist, err := c.Exists(oldpath)
 	if err != nil {
@@ -193,57 +193,68 @@ func (c *AzureClient) OpenWriteCloser(name string) (io.WriteCloser, error) {
 	}, nil
 }
 
+// Follow io.Writer rules
+// use BlockList mechanism of Azure Blob to achieve this interface
+// BlockList divided block into committed block and uncommitted ones
+// For every write op of user,
+// it create new block list with old commited block and  user write content,
+// and commit this one to modifies the blob commited block list
+// If failed in the process, it would write nothing to blob
+// return 0, error to user
 func (f *AzureFile) Write(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, fmt.Errorf("Need write content")
+	}
 	cnt, blob, err := convertToAzurePath(f.path)
 	if err != nil {
-		return 0, nil
-	}
-	blockList, err := f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
-	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 
-	blocksLen := len(blockList.CommittedBlocks) + len(blockList.UncommittedBlocks)
+	blockList, err := f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
+	if err != nil {
+		return 0, err
+	}
+
+	// blockLen is a naming rule for block,
+	// uses base64.StdEncoding.EncodeToString(fmt.Sprintf("%011d\n", blocksLen)))
+
+	// blockLen initially set to committed block size
+	// if exist uncommitted block of same name,
+	// it will rewrite the uncommitted block content
+	blocksLen := len(blockList.CommittedBlocks)
+	amendList := []storage.Block{}
+	for _, v := range blockList.CommittedBlocks {
+		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusCommitted})
+	}
+
 	var chunkSize int = storage.MaxBlobBlockSize
 	inputSourceReader := bytes.NewReader(b)
 	chunk := make([]byte, chunkSize)
-	n, err := inputSourceReader.Read(chunk)
-	if err != nil && err != io.EOF {
-		return 0, err
-	}
-	if err == io.EOF {
-		return 0, fmt.Errorf("Need blob content")
-	}
-	for err != io.EOF {
-		blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen-1)))
+	for {
+		n, err := inputSourceReader.Read(chunk)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+
+		blockId := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%011d\n", blocksLen)))
 		data := chunk[:n]
 		err = f.client.PutBlock(cnt, blob, blockId, data)
 		if err != nil {
 			return 0, err
 		}
+		// Add current uncommitted block to temporary block list
+		amendList = append(amendList, storage.Block{blockId, storage.BlockStatusUncommitted})
 		blocksLen++
-		n, err = inputSourceReader.Read(chunk)
-		if err != nil && err != io.EOF {
-			return 0, err
-		}
 	}
-
-	blockList, err = f.client.GetBlockList(cnt, blob, storage.BlockListTypeAll)
-	if err != nil {
-		return 0, err
-	}
-	amendList := []storage.Block{}
-	for _, v := range blockList.CommittedBlocks {
-		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusCommitted})
-	}
-	for _, v := range blockList.UncommittedBlocks {
-		amendList = append(amendList, storage.Block{v.Name, storage.BlockStatusUncommitted})
-	}
+	// update block list ot blob committed block list.
 	err = f.client.PutBlockList(cnt, blob, amendList)
 	if err != nil {
 		return 0, err
 	}
-	return 0, nil
+	return len(b), nil
 }
 
 func (f *AzureFile) Close() error {
