@@ -81,6 +81,9 @@ func (f *framework) Start() {
 	f.run()
 	f.releaseResource()
 	f.task.Exit()
+	if err := etcdutil.SetJobStatus(f.etcdClient, f.name, 0); err != nil {
+		panic("SetJobStatus")
+	}
 }
 
 func (f *framework) setup() {
