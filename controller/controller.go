@@ -91,11 +91,16 @@ func (c *Controller) startFailureDetection() error {
 func (c *Controller) setupWatchOnJobStatus() {
 	c.jobStatusChan = make(chan string, 1)
 	key := etcdutil.JobStatusPath(c.name)
-	resp := etcdutil.MustCreate(c.etcdclient, c.logger, key, "", 0)
+	resp := etcdutil.MustCreate(c.etcdclient, c.logger, key, "0", 0)
 	go func() {
-		resp, err := c.etcdclient.Watch(key, resp.EtcdIndex+1, false, nil, nil)
-		if err != nil {
-			c.logger.Panicf("Watch on job status (%v) failed: %v", key, err)
+		for {
+			resp, err := c.etcdclient.Watch(key, 0, false, nil, nil)
+			if err != nil {
+				c.logger.Panicf("Watch on job status (%v) failed: %v", key, err)
+			}
+			if resp.Node.Value == strconv.FormatUint(c.numOfTasks, 10) {
+				break
+			}
 		}
 		c.jobStatusChan <- resp.Node.Value
 	}()

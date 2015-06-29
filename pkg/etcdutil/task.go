@@ -37,6 +37,6 @@ func GetAddress(client *etcd.Client, name string, id uint64) (string, error) {
 }
 
 func SetJobStatus(client *etcd.Client, name string, status int) error {
-	_, err := client.Set(JobStatusPath(name), "done", 0)
+	err := AtomicInc(client, JobStatusPath(name))
 	return err
 }
