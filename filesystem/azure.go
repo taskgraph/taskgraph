@@ -66,9 +66,14 @@ func (c *AzureClient) Remove(name string) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.blobClient.DeleteBlobIfExists(containerName, blobName)
+	exist, err := c.blobClient.ContainerExists(containerName)
+	if err != nil {
+		return err
+	}
+	if exist {
+		_, err = c.blobClient.DeleteBlobIfExists(containerName, blobName)
+	}
 	return err
-
 }
 
 // AzureClient -> Exist function
