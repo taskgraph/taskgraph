@@ -14,7 +14,7 @@ cleanup() {
   rm -r $ETCDTESTDIR
 }
 # cleanup on any kind of exit
-trap "cleanup" SIGINT SIGTERM EXIT
+trap cleanup INT TERM EXIT
 
 is_etcd_up_on_4001() {
   if curl -fs "http://localhost:4001/v2/machines" 2>/dev/null; then
