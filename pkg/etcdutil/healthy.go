@@ -30,7 +30,7 @@ func DetectFailure(client *etcd.Client, name string, stop chan bool) error {
 	receiver := make(chan *etcd.Response, 1)
 	go client.Watch(HealthyPath(name), 0, true, receiver, stop)
 	for resp := range receiver {
-		if resp.Action != "expire" && resp.Action != "delete" {
+		if resp.Action != "expire" {
 			continue
 		}
 		if err := ReportFailure(client, name, path.Base(resp.Node.Key)); err != nil {
