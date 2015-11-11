@@ -114,9 +114,6 @@ func (f *framework) ShutdownJob() {
 	if err := etcdutil.CASEpoch(f.etcdClient, f.name, f.epoch, exitEpoch); err != nil {
 		panic("TODO: we should do a set instead of CAS here.")
 	}
-	if err := etcdutil.SetJobStatus(f.etcdClient, f.name, 0); err != nil {
-		panic("SetJobStatus")
-	}
 }
 
 func (f *framework) GetLogger() *log.Logger { return f.log }
