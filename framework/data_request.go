@@ -21,7 +21,7 @@ func (f *framework) CheckGRPCContext(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("Can't get grpc.Metadata from context: %v", ctx)
 	}
-	epoch, err := strconv.ParseUint(md["epoch"], 10, 64)
+	epoch, err := strconv.ParseUint(md["epoch"][0], 10, 64)
 	if err != nil {
 		return err
 	}
@@ -70,8 +70,8 @@ func (f *framework) DataRequest(ctx context.Context, toID uint64, method string,
 // encode metadata to context in grpc specific way
 func (f *framework) makeGRPCContext(ctx context.Context) context.Context {
 	md := metadata.MD{
-		"taskID": strconv.FormatUint(f.taskID, 10),
-		"epoch":  strconv.FormatUint(f.epoch, 10),
+		"taskID": []string{strconv.FormatUint(f.taskID, 10)},
+		"epoch":  []string{strconv.FormatUint(f.epoch, 10)},
 	}
 	return metadata.NewContext(ctx, md)
 }
