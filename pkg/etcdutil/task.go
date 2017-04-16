@@ -24,6 +24,25 @@ func TryOccupyTask(client *etcd.Client, name string, taskID uint64, connection s
 	return true, nil
 }
 
+func TryOccupyNode(freeNodePath, healthyPath string, setPath string, client *etcd.Client, connection string) (bool, error) {
+	if healthyPath != "" {
+		_, err := client.Create(healthyPath, "health", 3)
+		if err != nil {
+			if strings.Contains(err.Error(), "Key already exists") {
+				return false, nil
+			}
+			return false, err
+		}
+	}
+	//
+	client.Delete(freeNodePath, false)
+	_, err := client.Set(setPath, connection, 0)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // getAddress will return the host:port address of the service taking care of
 // the task that we want to talk to.
 // Currently we grab the information from etcd every time. Local cache could be used.
